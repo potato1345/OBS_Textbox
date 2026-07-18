@@ -1,5 +1,12 @@
 # OBS_Textbox
-OBS browser view text field that can be customized via the "Custom CSS" tab
+
+OBS browser view text field that can be customized via the "Custom CSS" tab.
+
+## Preview
+
+You can view the HTML structure directly below. To use it, open `textbox.html` in your browser or copy the code into an OBS Browser source.
+
+```html
 <!DOCTYPE html>
 <html lang="de">
 <head>
@@ -7,115 +14,82 @@ OBS browser view text field that can be customized via the "Custom CSS" tab
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>OBS Textbox</title>
     <style>
-        /*  OBS CUSTOM CSS VARIABELEN */
         :root {
-            /* TEXTZEILEN (CSS-Eingabe) */
             --zeile-1: "";
             --zeile-2: "";
-            --zeile-3: ""; 
-
-            /* DESIGN-EINSTELLUNGEN */
-            --box-bg: rgba(255, 255, 255, 0.75);    
-            --box-border: rgba(0, 0, 0, 0.7);       
-            --triangle-color: #fce647;              
+            --zeile-3: "";
+            --box-bg: rgba(255, 255, 255, 0.75);
+            --box-border: rgba(0, 0, 0, 0.7);
+            --triangle-color: #fce647;
             --text-color: #000000;
         }
 
-
-
-      /* generelles Styling */
         body {
             background: transparent;
             margin: 0;
-            padding: 20px; 
+            padding: 20px;
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
         }
 
-      /* generelles Styling */
         .textbox-container {
-            /* Textbox-Container */
             position: relative;
             background-color: var(--box-bg);
-            /* Ecken /(Dreiecke) */
-            background-image: 
+            background-image:
                 linear-gradient(135deg, var(--triangle-color) 50%, transparent 50%),
                 linear-gradient(315deg, var(--triangle-color) 50%, transparent 50%);
             background-position: top left, bottom right;
             background-size: 50px 50px, 50px 50px;
             background-repeat: no-repeat;
-            /* Rand */
             border: 0px solid var(--box-border);
-            /* Ecken abrundungen */
-            border-radius: 4px 4px 4px 4px;
-
-            /* Größen und Abstände */
+            border-radius: 4px;
             min-width: 300px;
-            width: max-content; /* Passt sich der Textlänge an */
+            width: max-content;
             max-width: 800px;
-            min-height: 1.5em;  /* Schrumpft auf Minimum eine Zeile */
-            
-            /* Padding: Textabstand zum Rand bzw. den Dreiecken */
-            padding: 15px 60px 20px 50px; 
-            
+            min-height: 1.5em;
+            padding: 15px 60px 20px 50px;
             display: flex;
             flex-direction: column;
             justify-content: center;
         }
 
-        /* Styling der Textzeilen */
         .text-line {
             line-height: 1.2;
             color: var(--text-color);
         }
 
-        /* CSS Elemente um Text einzufügen */
         .text-line::before {
             display: inline-block;
-            white-space: pre-wrap; 
-            font-size: 32px;       
+            white-space: pre-wrap;
+            font-size: 32px;
         }
 
-        /* Zuweisung der CSS-Variablen zu den Zeilen */
         .line1::before { content: var(--zeile-1); }
         .line2::before { content: var(--zeile-2); }
         .line3::before { content: var(--zeile-3); }
 
-        /* Styling der ersten Zeile */
         .line1::before {
-            font-size: 38px;       
-            font-weight: 500;     
+            font-size: 38px;
+            font-weight: 500;
             margin-bottom: 5px;
         }
-        
-        /* Styling der zweiten Zeile */
+
         .line2::before {
             font-size: 32px;
             font-weight: 400;
         }
 
-        /* Styling der dritten Zeile */
         .line3::before {
             font-size: 32px;
             font-weight: 400;
         }
-
     </style>
 </head>
 <body>
-
-    <!-- HTML Struktur ohne Leerzeichen zwischen den Divs -->
     <div class="textbox-container">
-        
-        <div class="text-line line1">
-        </div>
-        
-        <div class="text-line line2">
-        </div>
-        
-        <div class="text-line line3">
-        </div>
-
+        <div class="text-line line1"></div>
+        <div class="text-line line2"></div>
+        <div class="text-line line3"></div>
     </div>
-
 </body>
 </html>
+```
