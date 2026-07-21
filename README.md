@@ -12,9 +12,9 @@ to configure the Textbox, paste the following Code in your OBS Custom-CSS Settin
 
 ```css
 :root {
-    --zeile-1: "";
-    --zeile-2: "";
-    --zeile-3: ""; 
+    --zeile-1: "erste Zeile";
+    --zeile-2: "zweite Zeile";
+    --zeile-3: "dritte Zeile"; 
 }
 ```
 
