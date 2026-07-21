@@ -9,9 +9,12 @@ OBS browser view text field that can be customized via the "Custom CSS" tab.
 ## Setup 
 
 to configure the Textbox, paste the following Code in your OBS Custom-CSS Settings, and paste the text in between the corresponding quotation marks like this:
-    :root {
-        --zeile-1: "";
-        --zeile-2: "";
-        --zeile-3: ""; 
-    }
+
+```css
+:root {
+    --zeile-1: "";
+    --zeile-2: "";
+    --zeile-3: ""; 
+}
+```
 
