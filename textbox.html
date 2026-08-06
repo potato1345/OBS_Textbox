@@ -5,9 +5,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>OBS Textbox</title>
     <style>
-        /*  OBS CUSTOM CSS VARIABELEN */
+        /*  OBS CUSTOM CSS VARIABLEN */
         :root {
-            /* TEXTZEILEN (CSS-Eingabe) */
+            /* BOX-ID: Wird in OBS im "Benutzerdefiniertes CSS" Feld pro Quelle gesetzt */
+            --box-id: "default";
+
+            /* TEXTZEILEN (CSS-Eingabe / Fallback) */
             --zeile-1: "";
             --zeile-2: "";
             --zeile-3: ""; 
@@ -15,15 +18,16 @@
             /* DESIGN-EINSTELLUNGEN */
             --box-bg: rgba(255, 255, 255, 0.75);    
             --box-border: rgba(0, 0, 0, 0.7);       
-            --triangle-color: #fce647;              
+            --triangle-color-a: #fce647;            
+            --triangle-color-b: #fce647;            
+            --triangle-background: linear-gradient(135deg, var(--triangle-color-a) 50%, transparent 50%), linear-gradient(315deg, var(--triangle-color-b) 50%, transparent 50%);
+            --triangle-animation: none;
             --text-color: #000000;
         }
 
-
-
       /* generelles Styling */
         body {
-            background: gray;
+            background: transparent;
             margin: 0;
             padding: 20px; 
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
@@ -35,12 +39,11 @@
             position: relative;
             background-color: var(--box-bg);
             /* Ecken /(Dreiecke) */
-            background-image: 
-                linear-gradient(135deg, var(--triangle-color) 50%, transparent 50%),
-                linear-gradient(315deg, var(--triangle-color) 50%, transparent 50%);
+            background-image: var(--triangle-background);
             background-position: top left, bottom right;
             background-size: 50px 50px, 50px 50px;
             background-repeat: no-repeat;
+            animation: var(--triangle-animation);
             /* Rand */
             border: 0px solid var(--box-border);
             /* Ecken abrundungen */
@@ -58,6 +61,10 @@
             display: flex;
             flex-direction: column;
             justify-content: center;
+
+            /* Smooth Ein-/Ausblenden gesteuert durch OBS WebSocket Custom CSS */
+            opacity: var(--box-opacity, 0);
+            transition: opacity 0.3s ease;
         }
 
         /* Styling der Textzeilen */
@@ -97,12 +104,16 @@
             font-weight: 400;
         }
 
+        @keyframes rainbow-shift {
+            from { background-position: top left, bottom right; }
+            to { background-position: 0px -30px, 100% calc(100% + 30px); }
+        }
     </style>
 </head>
 <body>
 
     <!-- HTML Struktur ohne Leerzeichen zwischen den Divs -->
-    <div class="textbox-container">
+    <div class="textbox-container" id="box-container">
         
         <div class="text-line line1">
         </div>

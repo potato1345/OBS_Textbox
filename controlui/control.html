@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OBS Textbox Dashboard</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="control.css">
+</head>
+<body>
+
+    <!-- ==================== HEADER ==================== -->
+    <header class="header" id="header">
+       <div class="header-right">
+            <div class="storage-status" id="storage-status">
+                <span class="storage-dot"></span>
+                <span id="storage-label">Getrennt</span>
+            </div>
+            <button class="btn" id="btn-connect-obs" onclick="connectOBS()">Verbinden</button>
+            <button class="btn" id="btn-export" onclick="exportJSON()">
+                <span class="btn-icon">�</span> Export
+            </button>
+            <button class="btn" id="btn-import" onclick="importJSON()">
+                <span class="btn-icon">📥</span> Import
+            </button>
+            <button class="btn" id="btn-settings" onclick="openSettingsModal()">
+                <span class="btn-icon">⚙</span> Einstellungen
+            </button>
+            <!-- Schnell-Profile: eigene Zeile -->
+            <div class="header-profiles-row">
+                <div class="section-title">Schnell-Profile</div>
+                <div class="profiles-bar" id="profiles-bar">
+                    <span id="custom-profiles-anchor"></span>
+                    <button class="profile-chip" onclick="openSaveProfileModal()" style="border-style: dashed;">
+                        <span class="chip-icon">＋</span> Profil speichern
+                    </button>
+                </div>
+            </div>
+
+            <!-- Toolbar: folgt auf neuer Zeile unter den Profilen -->
+            <div class="header-toolbar">
+                <div class="toolbar-left">
+                    <button class="btn btn-accent" id="btn-add-box" onclick="addNewCard()">
+                        <span class="btn-icon">＋</span> Neue Box
+                    </button>
+                    <button class="btn btn-green" id="btn-send-all" onclick="sendAllCards()">
+                        <span class="btn-icon">📡</span> Alle senden
+                    </button>
+                    <button class="btn btn-red" id="btn-clear-all" onclick="clearAllCards()">
+                        <span class="btn-icon">🗑</span> Alle leeren
+                    </button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- ==================== MAIN ==================== -->
+    <main class="main">
+
+        <!-- Schnell-Profile und Toolbar wurden in den Header verschoben -->
+
+        <!-- Dashboard Grid -->
+        <div class="dashboard" id="dashboard">
+            <!-- Cards rendered by JS -->
+        </div>
+
+    </main>
+
+    <!-- ==================== SETTINGS MODAL ==================== -->
+    <div class="modal-overlay" id="settings-modal" hidden>
+        <div class="modal modal-large">
+            <div class="modal-header">
+                <h2>Einstellungen</h2>
+                <button class="btn btn-red" onclick="closeSettingsModal()" title="Schließen">✕</button>
+            </div>
+            <p>Konfiguriere hier die OBS-Verbindung, Auto-Send und das Dashboard-Design.</p>
+            <div class="settings-section">
+                <div class="section-title">Verbindung & Verhalten</div>
+                <div class="field-group">
+                    <label class="field-label" for="ws-password">OBS WebSocket Passwort</label>
+                    <div class="password-input-wrap settings-password-wrap">
+                        <input type="password" id="ws-password" class="text-input" placeholder="OBS WebSocket Passwort..." title="In OBS unter Werkzeuge -> WebSocket-Servereinstellungen zu finden">
+                        <button type="button" class="password-toggle" id="btn-toggle-password" onclick="togglePasswordVisibility()" title="Passwort anzeigen/verstecken" aria-label="Passwort anzeigen/verstecken" aria-pressed="false">👁</button>
+                    </div>
+                </div>
+                <div class="field-group field-group-inline">
+                    <input type="checkbox" id="auto-send-toggle" onchange="toggleAutoSend()">
+                    <label for="auto-send-toggle" class="inline-label">Auto-Send bei Eingabe</label>
+                </div>
+                <div class="field-group">
+                    <button class="btn btn-accent" onclick="connectOBS()">Mit OBS verbinden</button>
+                </div>
+                <div class="status-info">
+                    <span class="storage-dot"></span>
+                    <span id="settings-status-label">Status: Getrennt</span>
+                </div>
+            </div>
+            <div class="settings-section">
+                <div class="section-title">Dashboard-Farben</div>
+                <div class="settings-grid">
+                    <label class="color-picker-label">Hintergrund</label>
+                    <div class="color-field">
+                        <input type="color" class="color-input" id="ui-color-bg-primary" title="Hintergrundfarbe des Dashboards">
+                        <input type="number" class="opacity-input" id="ui-opacity-bg-primary" min="0" max="255" placeholder="255" title="Deckkraft 0-255">
+                    </div>
+                    <label class="color-picker-label">Sekundär</label>
+                    <div class="color-field">
+                        <input type="color" class="color-input" id="ui-color-bg-secondary" title="Sekundärfarbe des Dashboards">
+                        <input type="number" class="opacity-input" id="ui-opacity-bg-secondary" min="0" max="255" placeholder="255" title="Deckkraft 0-255">
+                    </div>
+                    <label class="color-picker-label">Panel</label>
+                    <div class="color-field">
+                        <input type="color" class="color-input" id="ui-color-panel-bg" title="Panelfarbe der Karten">
+                        <input type="number" class="opacity-input" id="ui-opacity-panel-bg" min="0" max="255" placeholder="255" title="Deckkraft 0-255">
+                    </div>
+                    <label class="color-picker-label">Panel-Rand</label>
+                    <div class="color-field">
+                        <input type="color" class="color-input" id="ui-color-border" title="Randfarbe des Panels">
+                        <input type="number" class="opacity-input" id="ui-opacity-border" min="0" max="255" placeholder="255" title="Deckkraft 0-255">
+                    </div>
+                    <label class="color-picker-label">Großes Panel</label>
+                    <div class="color-field">
+                        <input type="color" class="color-input" id="ui-color-card-outer-bg" title="Farbe des äußeren Kartenrahmens">
+                        <input type="number" class="opacity-input" id="ui-opacity-card-outer-bg" min="0" max="255" placeholder="255" title="Deckkraft 0-255">
+                    </div>
+                    <label class="color-picker-label">Panel Hover</label>
+                    <div class="color-field">
+                        <input type="color" class="color-input" id="ui-color-panel-bg-alt" title="Hover-Farbe der Karten">
+                        <input type="number" class="opacity-input" id="ui-opacity-panel-bg-alt" min="0" max="255" placeholder="255" title="Deckkraft 0-255">
+                    </div>
+                    <label class="color-picker-label">Button Hover</label>
+                    <div class="color-field">
+                        <input type="color" class="color-input" id="ui-color-btn-hover-bg" title="Hover-Farbe der Buttons">
+                        <input type="number" class="opacity-input" id="ui-opacity-btn-hover-bg" min="0" max="255" placeholder="255" title="Deckkraft 0-255">
+                    </div>
+                    <label class="color-picker-label">Textfarbe</label>
+                    <div class="color-field">
+                        <input type="color" class="color-input" id="ui-color-text" title="Textfarbe des Dashboards">
+                        <input type="number" class="opacity-input" id="ui-opacity-text" min="0" max="255" placeholder="255" title="Deckkraft 0-255">
+                    </div>
+                    <label class="color-picker-label">Akzent</label>
+                    <div class="color-field">
+                        <input type="color" class="color-input" id="ui-color-accent-blue" title="Akzentfarbe für Buttons und Status">
+                        <input type="number" class="opacity-input" id="ui-opacity-accent-blue" min="0" max="255" placeholder="255" title="Deckkraft 0-255">
+                    </div>
+                </div>
+            </div>
+            <div class="modal-actions">
+                <button class="btn" onclick="closeSettingsModal()">Schließen</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ==================== SAVE PROFILE MODAL ==================== -->
+    <div class="modal-overlay" id="save-profile-modal" hidden>
+        <div class="modal">
+            <h2>Profil speichern</h2>
+            <p>Speichere den aktuellen Zustand aller Boxen als wiederverwendbares Profil.</p>
+            <div class="field-group">
+                <label class="field-label" for="profile-name-input">Profilname</label>
+                <input type="text" class="text-input" id="profile-name-input" placeholder="z.B. Interview Setup">
+            </div>
+            <div class="modal-actions" style="margin-top: 18px;">
+                <button class="btn" onclick="closeSaveProfileModal()">Abbrechen</button>
+                <button class="btn btn-accent" onclick="saveCurrentAsProfile()">Speichern</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast container -->
+    <div class="toast-container" id="toast-container"></div>
+
+    <!-- ==================== CARD TEMPLATE ==================== -->
+    <template id="card-template">
+        <div class="card-outer">
+            <div class="card-id-box">
+                <span class="card-id-prefix">ID</span>
+                <input type="text" class="id-input" value="box1" placeholder="Box-ID eingeben…" title="Diese ID muss mit --box-id in OBS übereinstimmen">
+            </div>
+            <div class="card card-inner">
+                <button class="card-delete" onclick="deleteCard(this)" title="Box entfernen">✕</button>
+                <div class="card-body">
+                    <div class="field-group">
+                        <label class="field-label">Zeile 1</label>
+                        <input type="text" class="text-input z1" placeholder="Haupttext…">
+                    </div>
+                    <div class="field-group">
+                        <label class="field-label">Zeile 2</label>
+                        <input type="text" class="text-input z2" placeholder="Untertext…">
+                    </div>
+                    <div class="field-group">
+                        <label class="field-label">Zeile 3</label>
+                        <input type="text" class="text-input z3" placeholder="Zusatz…">
+                    </div>
+                    <div class="field-group">
+                        <label class="field-label">Textfarbe</label>
+                        <div class="color-field">
+                            <input type="color" class="color-input text-color" value="#000000" title="Textfarbe der Box">
+                            <input type="number" class="opacity-input text-color-opacity" min="0" max="255" value="255" title="Deckkraft der Textfarbe 0-255">
+                        </div>
+                    </div>
+                    <div class="field-group">
+                        <label class="field-label">Box-Farbe</label>
+                        <div class="color-field">
+                            <input type="color" class="color-input box-color" value="#ffffff" title="Hintergrundfarbe der Box">
+                            <input type="number" class="opacity-input box-opacity" min="0" max="255" value="255" title="Deckkraft der Boxfarbe 0-255">
+                        </div>
+                    </div>
+                    <div class="field-group">
+                        <label class="field-label">Eckenfarbe 1</label>
+                        <div class="color-field">
+                            <input type="color" class="color-input corner-a-color" value="#fce647" title="Farbe der oberen linken Ecke">
+                            <input type="number" class="opacity-input corner-a-opacity" min="0" max="255" value="255" title="Deckkraft der Ecke 1 0-255">
+                        </div>
+                    </div>
+                    <div class="field-group">
+                        <label class="field-label">Eckenfarbe 2</label>
+                        <div class="color-field">
+                            <input type="color" class="color-input corner-b-color" value="#fce647" title="Farbe der unteren rechten Ecke">
+                            <input type="number" class="opacity-input corner-b-opacity" min="0" max="255" value="255" title="Deckkraft der Ecke 2 0-255">
+                        </div>
+                    </div>
+                </div>
+                <div class="card-actions">
+                    <button class="btn btn-green" onclick="sendCard(this)">
+                        <span class="btn-icon">▶</span> Senden
+                    </button>
+                    <button class="btn btn-red" onclick="clearCard(this)">
+                        <span class="btn-icon">✕</span> Leeren
+                    </button>
+                </div>
+            </div>
+        </div>
+    </template>
+
+    <script src="obs-ws.js"></script>
+    <script src="control.js"></script>
+</body>
+</html>
