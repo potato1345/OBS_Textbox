@@ -194,34 +194,39 @@
                         <label class="field-label">Zeile 3</label>
                         <input type="text" class="text-input z3" placeholder="Zusatz…">
                     </div>
-                    <div class="field-group">
-                        <label class="field-label">Textfarbe</label>
-                        <div class="color-field">
-                            <input type="color" class="color-input text-color" value="#000000" title="Textfarbe der Box">
-                            <input type="number" class="opacity-input text-color-opacity" min="0" max="255" value="255" title="Deckkraft der Textfarbe 0-255">
+                    <details class="card-color-dropdown">
+                        <summary class="card-color-summary">🎨 Farben &amp; Deckkraft</summary>
+                        <div class="card-color-content">
+                            <div class="field-group">
+                                <label class="field-label">Textfarbe</label>
+                                <div class="color-field">
+                                    <input type="color" class="color-input text-color" value="#000000" title="Textfarbe der Box">
+                                    <input type="number" class="opacity-input text-color-opacity" min="0" max="255" value="255" title="Deckkraft der Textfarbe 0-255">
+                                </div>
+                            </div>
+                            <div class="field-group">
+                                <label class="field-label">Box-Farbe</label>
+                                <div class="color-field">
+                                    <input type="color" class="color-input box-color" value="#ffffff" title="Hintergrundfarbe der Box">
+                                    <input type="number" class="opacity-input box-opacity" min="0" max="255" value="255" title="Deckkraft der Boxfarbe 0-255">
+                                </div>
+                            </div>
+                            <div class="field-group">
+                                <label class="field-label">Eckenfarbe 1</label>
+                                <div class="color-field">
+                                    <input type="color" class="color-input corner-a-color" value="#fce647" title="Farbe der oberen linken Ecke">
+                                    <input type="number" class="opacity-input corner-a-opacity" min="0" max="255" value="255" title="Deckkraft der Ecke 1 0-255">
+                                </div>
+                            </div>
+                            <div class="field-group">
+                                <label class="field-label">Eckenfarbe 2</label>
+                                <div class="color-field">
+                                    <input type="color" class="color-input corner-b-color" value="#fce647" title="Farbe der unteren rechten Ecke">
+                                    <input type="number" class="opacity-input corner-b-opacity" min="0" max="255" value="255" title="Deckkraft der Ecke 2 0-255">
+                                </div>
+                            </div>
                         </div>
-                    </div>
-                    <div class="field-group">
-                        <label class="field-label">Box-Farbe</label>
-                        <div class="color-field">
-                            <input type="color" class="color-input box-color" value="#ffffff" title="Hintergrundfarbe der Box">
-                            <input type="number" class="opacity-input box-opacity" min="0" max="255" value="255" title="Deckkraft der Boxfarbe 0-255">
-                        </div>
-                    </div>
-                    <div class="field-group">
-                        <label class="field-label">Eckenfarbe 1</label>
-                        <div class="color-field">
-                            <input type="color" class="color-input corner-a-color" value="#fce647" title="Farbe der oberen linken Ecke">
-                            <input type="number" class="opacity-input corner-a-opacity" min="0" max="255" value="255" title="Deckkraft der Ecke 1 0-255">
-                        </div>
-                    </div>
-                    <div class="field-group">
-                        <label class="field-label">Eckenfarbe 2</label>
-                        <div class="color-field">
-                            <input type="color" class="color-input corner-b-color" value="#fce647" title="Farbe der unteren rechten Ecke">
-                            <input type="number" class="opacity-input corner-b-opacity" min="0" max="255" value="255" title="Deckkraft der Ecke 2 0-255">
-                        </div>
-                    </div>
+                    </details>
                 </div>
                 <div class="card-actions">
                     <button class="btn btn-green" onclick="sendCard(this)">
