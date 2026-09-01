@@ -99,6 +99,23 @@
             </div>
             <div class="settings-section">
                 <div class="section-title">Dashboard-Farben</div>
+                <!-- Farbprofil-Auswahl -->
+                <div class="color-profile-bar">
+                    <select class="color-profile-select" id="color-profile-select" onchange="onColorProfileSelected()">
+                        <!-- Befüllt durch JS -->
+                    </select>
+                    <div class="color-profile-actions">
+                        <button class="btn" id="btn-save-color-profile" onclick="toggleColorProfileSaveForm()" title="Aktuelle Farben als neues Profil speichern">💾 Speichern</button>
+                        <button class="btn" id="btn-import-color-profile" onclick="importColorProfileYAML()" title="Farbprofil aus YAML importieren">📥 Import</button>
+                        <button class="btn" id="btn-export-color-profile" onclick="exportColorProfileYAML()" title="Gewähltes Farbprofil als YAML exportieren">📤 Export</button>
+                        <button class="btn btn-red" id="btn-delete-color-profile" onclick="deleteSelectedColorProfile()" title="Gewähltes Farbprofil löschen">🗑 Löschen</button>
+                    </div>
+                </div>
+                <div class="color-profile-save-inline" id="color-profile-save-form" hidden>
+                    <input type="text" class="text-input" id="color-profile-name-input" placeholder="Profilname eingeben…">
+                    <button class="btn btn-accent" onclick="saveAsColorProfile()">Speichern</button>
+                    <button class="btn" onclick="toggleColorProfileSaveForm()">Abbrechen</button>
+                </div>
                 <div class="settings-grid">
                     <label class="color-picker-label">Hintergrund</label>
                     <div class="color-field">
@@ -178,9 +195,9 @@
             <div class="card-id-box">
                 <span class="card-id-prefix">ID</span>
                 <input type="text" class="id-input" value="box1" placeholder="Box-ID eingeben…" title="Diese ID muss mit --box-id in OBS übereinstimmen">
+                <button class="card-delete" onclick="deleteCard(this)" title="Box entfernen">✕</button>
             </div>
             <div class="card card-inner">
-                <button class="card-delete" onclick="deleteCard(this)" title="Box entfernen">✕</button>
                 <div class="card-body">
                     <div class="field-group">
                         <label class="field-label">Zeile 1</label>

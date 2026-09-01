@@ -1,0 +1,134 @@
+# ============================================================
+# OBS Textbox – Default Farbprofile
+# Diese Datei dient als Referenz-Quelle in der IDE.
+# Die Inhalte werden als JS-Konstante in control.js eingebettet.
+# ============================================================
+
+profiles:
+
+  - name: "OBS Dark"
+    colors:
+      bgPrimary: "#1C1F26"
+      bgPrimaryOpacity: 255
+      bgSecondary: "#323a44"
+      bgSecondaryOpacity: 255
+      panelBg: "#272A33"
+      panelBgOpacity: 255
+      border: "#3C404D"
+      borderOpacity: 255
+      cardOuterBg: "#3C404D"
+      cardOuterBgOpacity: 255
+      panelBgAlt: "#414852"
+      panelBgAltOpacity: 255
+      btnHoverBg: "#414852"
+      btnHoverBgOpacity: 255
+      textColor: "#eff0f1"
+      textColorOpacity: 255
+      accentBlue: "#3daee9"
+      accentBlueOpacity: 255
+
+  - name: "OBS Light"
+    colors:
+      bgPrimary: "#f0f0f0"
+      bgPrimaryOpacity: 255
+      bgSecondary: "#ffffff"
+      bgSecondaryOpacity: 255
+      panelBg: "#e8e8e8"
+      panelBgOpacity: 255
+      border: "#c0c0c0"
+      borderOpacity: 255
+      cardOuterBg: "#d5d5d5"
+      cardOuterBgOpacity: 255
+      panelBgAlt: "#dcdcdc"
+      panelBgAltOpacity: 255
+      btnHoverBg: "#d0d0d0"
+      btnHoverBgOpacity: 255
+      textColor: "#1a1a1a"
+      textColorOpacity: 255
+      accentBlue: "#2980b9"
+      accentBlueOpacity: 255
+
+  - name: "Midnight Blue"
+    colors:
+      bgPrimary: "#0d1117"
+      bgPrimaryOpacity: 255
+      bgSecondary: "#161b22"
+      bgSecondaryOpacity: 255
+      panelBg: "#1c2333"
+      panelBgOpacity: 255
+      border: "#30363d"
+      borderOpacity: 255
+      cardOuterBg: "#252d3a"
+      cardOuterBgOpacity: 255
+      panelBgAlt: "#2a3342"
+      panelBgAltOpacity: 255
+      btnHoverBg: "#2d3748"
+      btnHoverBgOpacity: 255
+      textColor: "#c9d1d9"
+      textColorOpacity: 255
+      accentBlue: "#58a6ff"
+      accentBlueOpacity: 255
+
+  - name: "Forest Green"
+    colors:
+      bgPrimary: "#1a2318"
+      bgPrimaryOpacity: 255
+      bgSecondary: "#2a3528"
+      bgSecondaryOpacity: 255
+      panelBg: "#222d20"
+      panelBgOpacity: 255
+      border: "#3a4a36"
+      borderOpacity: 255
+      cardOuterBg: "#344530"
+      cardOuterBgOpacity: 255
+      panelBgAlt: "#3d4f38"
+      panelBgAltOpacity: 255
+      btnHoverBg: "#455a40"
+      btnHoverBgOpacity: 255
+      textColor: "#d4e0d0"
+      textColorOpacity: 255
+      accentBlue: "#6bcf7f"
+      accentBlueOpacity: 255
+
+  - name: "Sunset Warm"
+    colors:
+      bgPrimary: "#1f1510"
+      bgPrimaryOpacity: 255
+      bgSecondary: "#2d1f18"
+      bgSecondaryOpacity: 255
+      panelBg: "#261a14"
+      panelBgOpacity: 255
+      border: "#4a3228"
+      borderOpacity: 255
+      cardOuterBg: "#3d2a20"
+      cardOuterBgOpacity: 255
+      panelBgAlt: "#4a3428"
+      panelBgAltOpacity: 255
+      btnHoverBg: "#553d30"
+      btnHoverBgOpacity: 255
+      textColor: "#f0ddd0"
+      textColorOpacity: 255
+      accentBlue: "#f59e42"
+      accentBlueOpacity: 255
+
+  - name: "High Contrast"
+    colors:
+      bgPrimary: "#000000"
+      bgPrimaryOpacity: 255
+      bgSecondary: "#1a1a1a"
+      bgSecondaryOpacity: 255
+      panelBg: "#0d0d0d"
+      panelBgOpacity: 255
+      border: "#ffffff"
+      borderOpacity: 255
+      cardOuterBg: "#222222"
+      cardOuterBgOpacity: 255
+      panelBgAlt: "#2a2a2a"
+      panelBgAltOpacity: 255
+      btnHoverBg: "#333333"
+      btnHoverBgOpacity: 255
+      textColor: "#ffffff"
+      textColorOpacity: 255
+      accentBlue: "#00e5ff"
+      accentBlueOpacity: 255
+

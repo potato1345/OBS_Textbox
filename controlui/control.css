@@ -337,7 +337,6 @@ body {
     border-radius: 0px 0px 8px 8px;
     padding: 22px;
     position: relative;
-    overflow: hidden;
 }
 
 .card-inner:hover {
@@ -380,9 +379,6 @@ body {
 }
 
 .card-delete {
-    position: absolute;
-    top: 12px;
-    right: 12px;
     width: 28px;
     height: 28px;
     border-radius: 8px;
@@ -395,6 +391,7 @@ body {
     justify-content: center;
     font-size: 1.1rem;
     opacity: 0.7;
+    flex-shrink: 0;
 }
 
 .card-delete:hover {
@@ -657,6 +654,8 @@ body {
 
 .modal.modal-large {
     max-width: 720px;
+    max-height: 85vh;
+    overflow-y: auto;
 }
 
 .modal-header {
@@ -738,6 +737,122 @@ body {
 
 .settings-password-wrap {
     width: 100%;
+}
+
+/* ========================================
+   COLOR PROFILES (Settings)
+   ======================================== */
+.color-profile-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 16px;
+    flex-wrap: wrap;
+}
+
+.color-profile-select {
+    flex: 1 1 180px;
+    min-width: 160px;
+    height: 42px;
+    padding: 0 12px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+    font-family: inherit;
+    font-size: 0.85rem;
+    font-weight: 500;
+    cursor: pointer;
+    appearance: none;
+    -webkit-appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23b0b6bd' d='M2 4l4 4 4-4'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 12px center;
+    padding-right: 32px;
+}
+
+.color-profile-select:focus {
+    outline: none;
+    border-color: var(--accent-blue);
+}
+
+.color-profile-select option {
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+}
+
+.color-profile-select optgroup {
+    font-weight: 600;
+    color: var(--text-secondary);
+}
+
+.color-profile-actions {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+
+.color-profile-actions .btn {
+    padding: 8px 12px;
+    font-size: 0.78rem;
+}
+
+.color-profile-actions .btn:disabled {
+    opacity: 0.35;
+    cursor: not-allowed;
+    pointer-events: none;
+}
+
+.color-profile-save-inline {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    margin-top: 8px;
+    padding: 10px 14px;
+    background: var(--panel-bg);
+    border: 1px solid var(--accent-blue);
+    border-radius: 12px;
+}
+
+.color-profile-save-inline[hidden] {
+    display: none;
+}
+
+.color-profile-save-inline .text-input {
+    flex: 1;
+    margin: 0;
+    height: 36px;
+    padding: 6px 10px;
+    font-size: 0.85rem;
+}
+
+.color-profile-save-inline .btn {
+    padding: 6px 14px;
+    font-size: 0.8rem;
+    flex-shrink: 0;
+}
+
+.color-profile-badge {
+    display: inline-block;
+    font-size: 0.65rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    padding: 2px 6px;
+    border-radius: 4px;
+    margin-left: 6px;
+    vertical-align: middle;
+}
+
+.color-profile-badge.default {
+    background: var(--accent-blue-soft);
+    color: var(--accent-blue);
+}
+
+.color-profile-badge.custom {
+    background: rgba(251, 191, 36, 0.15);
+    color: #fbbf24;
 }
 
 /* ========================================
