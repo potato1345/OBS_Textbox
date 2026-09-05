@@ -15,13 +15,12 @@
             --zeile-2: "";
             --zeile-3: ""; 
 
-            /* DESIGN-EINSTELLUNGEN */
+            /* Design-Einstellungen */
             --box-bg: rgba(255, 255, 255, 0.75);    
             --box-border: rgba(0, 0, 0, 0.7);       
             --triangle-color-a: #fce647;            
             --triangle-color-b: #fce647;            
             --triangle-background: linear-gradient(135deg, var(--triangle-color-a) 50%, transparent 50%), linear-gradient(315deg, var(--triangle-color-b) 50%, transparent 50%);
-            --triangle-animation: none;
             --text-color: #000000;
         }
 
@@ -43,7 +42,6 @@
             background-position: top left, bottom right;
             background-size: 50px 50px, 50px 50px;
             background-repeat: no-repeat;
-            animation: var(--triangle-animation);
             /* Rand */
             border: 0px solid var(--box-border);
             /* Ecken abrundungen */
@@ -62,8 +60,9 @@
             flex-direction: column;
             justify-content: center;
 
-            /* Smooth Ein-/Ausblenden gesteuert durch OBS WebSocket Custom CSS */
-            opacity: var(--box-opacity, 0);
+            /* Sichtbarkeit: 1 = sichtbar (Default), wird von OBS/Control-Dashboard
+               auf 0 gesetzt, wenn die Box geleert werden soll */
+            opacity: var(--box-opacity, 1);
             transition: opacity 0.3s ease;
         }
 
@@ -126,5 +125,24 @@
 
     </div>
 
+    <script>
+        // Auto-verbirgt leere Textzeilen, damit sich die Box auf den
+        // tatsächlichen Inhalt schrumpft. Prüft alle 150ms, weil OBS
+        // die CSS-Variablen erst zur Laufzeit injiziert.
+        (function () {
+            function update() {
+                const cs = getComputedStyle(document.documentElement);
+                for (let n = 1; n <= 3; n++) {
+                    const raw = (cs.getPropertyValue('--zeile-' + n) || '').trim();
+                    // Umgebende Anführungszeichen des CSS-Strings entfernen
+                    const text = raw.replace(/^["']|["']$/g, '');
+                    const line = document.querySelector('.line' + n);
+                    if (line) line.style.display = text ? '' : 'none';
+                }
+            }
+            update();
+            setInterval(update, 150);
+        })();
+    </script>
 </body>
 </html>

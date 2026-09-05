@@ -134,16 +134,25 @@ let isAutoSendEnabled = true;
 // =====================================================
 const obs = new OBSWebSocket();
 let isObsConnected = false;
+// Merkt die letzte an OBS geschickte CSS-Zeichenkette pro Quelle,
+// damit unveränderte Pushes keine OBS-Reloads auslösen
+const lastAppliedCss = {};
+let reconnectTimer = null;
+let suppressReconnect = false;
 
 obs.onConnect = () => {
     isObsConnected = true;
+    if (reconnectTimer) {
+        clearTimeout(reconnectTimer);
+        reconnectTimer = null;
+    }
     updateConnectionUI(true);
     showToast('success', 'Mit OBS WebSocket verbunden');
     console.log("[OBS Sync] Erfolgreich mit OBS verbunden.");
     
     // Save password
     const pw = document.getElementById('ws-password').value;
-    localStorage.setItem('obs_ws_pw', pw);
+    if (pw) localStorage.setItem('obs_ws_pw', pw);
     
     // Initial sync
     pushDashboardStateToOBS();
@@ -153,6 +162,7 @@ obs.onDisconnect = () => {
     isObsConnected = false;
     updateConnectionUI(false);
     console.log("[OBS Sync] Verbindung zu OBS getrennt.");
+    scheduleReconnect();
 };
 
 obs.onError = (err) => {
@@ -160,6 +170,21 @@ obs.onError = (err) => {
     updateConnectionUI(false);
     console.warn("[OBS Sync] Verbindungsfehler:", err);
 };
+
+/**
+ * Reconnectet automatisch, wenn die Verbindung abbricht (z.B. OBS-Neustart).
+ */
+function scheduleReconnect() {
+    if (suppressReconnect || reconnectTimer || isObsConnected) return;
+    if (!localStorage.getItem('obs_ws_pw') && !document.getElementById('ws-password')?.value) return;
+    reconnectTimer = setTimeout(() => {
+        reconnectTimer = null;
+        if (!isObsConnected) {
+            console.log("[OBS Sync] Automatische Reconnect-Versuch...");
+            connectToOBSWebSocket();
+        }
+    }, 3000);
+}
 
 function togglePasswordVisibility() {
     const passwordInput = document.getElementById('ws-password');
@@ -179,19 +204,48 @@ function connectOBS() {
     connectToOBSWebSocket();
 }
 
+function toggleOBSConnection() {
+    if (isObsConnected) {
+        disconnectOBS();
+        return;
+    }
+    connectOBS();
+}
+
 function connectToOBSWebSocket() {
+    suppressReconnect = false;
     console.log("[OBS Sync] Verbindungsversuch gestartet...");
     const pw = document.getElementById('ws-password').value;
     obs.connect(pw).catch(err => {
-        showToast('error', 'Verbindung fehlgeschlagen: ' + err.message);
+        showToast('error', 'Verbindung fehlgeschlagen: ' + (err.message || err));
         console.error("[OBS Sync] Verbindung fehlgeschlagen:", err);
+        // Will re-try on next error/disconnect event via scheduleReconnect()
     });
+}
+
+function disconnectOBS() {
+    if (reconnectTimer) {
+        clearTimeout(reconnectTimer);
+        reconnectTimer = null;
+    }
+    suppressReconnect = true; // No auto-reconnect after a manual disconnect
+    obs.disconnect();
+    isObsConnected = false;
+    updateConnectionUI(false);
+    showToast('info', 'OBS-Verbindung getrennt');
+    console.log("[OBS Sync] Manuell getrennt.");
 }
 
 /**
  * Pushes the current dashboard state to OBS by modifying the Custom CSS of matching Browser Sources.
  * @param {string|null} specificBoxId - If provided, only updates the box with this ID.
  */
+function escapeCssString(str) {
+    // CSS String-Werte: Backslash und Anführungszeichen maskieren,
+    // sonst zerbricht das injizierte CSS bei z.B. "C:\\Temp" oder Umlaut-Escapes
+    return String(str).replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+}
+
 async function pushDashboardStateToOBS(specificBoxId = null) {
     if (!isObsConnected) {
         console.log("[OBS Sync] Abbruch: Nicht mit OBS verbunden.");
@@ -199,6 +253,9 @@ async function pushDashboardStateToOBS(specificBoxId = null) {
     }
     
     console.log(`[OBS Sync] Pushe Daten an OBS... ${specificBoxId ? '(Nur Box ID: ' + specificBoxId + ')' : '(Alle Boxen)'}`);
+    
+    let updated = 0;
+    let checked = 0;
     
     try {
         const { inputs } = await obs.call('GetInputList', { inputKind: 'browser_source' });
@@ -213,6 +270,7 @@ async function pushDashboardStateToOBS(specificBoxId = null) {
                 
                 if (match && match[1]) {
                     const targetId = match[1];
+                    checked++;
                     
                     // Skip if we only want to update a specific box and this isn't it
                     if (specificBoxId && specificBoxId !== targetId) continue;
@@ -220,8 +278,6 @@ async function pushDashboardStateToOBS(specificBoxId = null) {
                     const boxData = dashboardState.boxes.find(b => b.id === targetId);
                     
                     if (boxData) {
-                        console.log(`[OBS Sync] Aktualisiere Textbox-Quelle: "${input.inputName}" (ID: ${targetId})`);
-                        
                         // Remove old injected block
                         css = css.replace(/\/\* OBS_TEXTBOX_INJECT_START \*\/[\s\S]*?\/\* OBS_TEXTBOX_INJECT_END \*\//, '');
                         
@@ -231,9 +287,9 @@ async function pushDashboardStateToOBS(specificBoxId = null) {
                         const injectedCss = `
 /* OBS_TEXTBOX_INJECT_START */
 :root {
-  --zeile-1: "${(boxData.zeile1 || '').replace(/"/g, '\\"')}";
-  --zeile-2: "${(boxData.zeile2 || '').replace(/"/g, '\\"')}";
-  --zeile-3: "${(boxData.zeile3 || '').replace(/"/g, '\\"')}";
+  --zeile-1: "${escapeCssString(boxData.zeile1 || '')}";
+  --zeile-2: "${escapeCssString(boxData.zeile2 || '')}";
+  --zeile-3: "${escapeCssString(boxData.zeile3 || '')}";
   --box-bg: ${hexToRgba(boxData.boxColor || '#ffffff', boxData.boxColorOpacity ?? 255)};
   --triangle-color-a: ${hexToRgba(boxData.cornerColorA || '#fce647', boxData.cornerColorAOpacity ?? 255)};
   --triangle-color-b: ${hexToRgba(boxData.cornerColorB || '#fce647', boxData.cornerColorBOpacity ?? 255)};
@@ -242,20 +298,39 @@ async function pushDashboardStateToOBS(specificBoxId = null) {
 }
 /* OBS_TEXTBOX_INJECT_END */`;
                         
-                        css = css.trim() + '\n' + injectedCss;
+                        const newCss = css.trim() + '\n' + injectedCss;
+                        
+                        // Skip the OBS round-trip when nothing changed
+                        if (newCss === lastAppliedCss[input.inputName]) {
+                            console.log(`[OBS Sync] Quelle "${input.inputName}" unverändert, übersprungen.`);
+                            continue;
+                        }
+                        
+                        console.log(`[OBS Sync] Aktualisiere Textbox-Quelle: "${input.inputName}" (ID: ${targetId})`);
                         
                         await obs.call('SetInputSettings', {
                             inputName: input.inputName,
-                            inputSettings: { css: css },
+                            inputSettings: { css: newCss },
                             overlay: true
                         });
+                        lastAppliedCss[input.inputName] = newCss;
+                        updated++;
                     }
                 }
             }
         }
-        console.log("[OBS Sync] Push an OBS abgeschlossen.");
+        
+        if (specificBoxId && updated === 0 && checked === 0) {
+            showToast('error', `Keine Browser-Quelle mit --box-id "${specificBoxId}" gefunden`);
+        } else if (specificBoxId && updated === 0) {
+            showToast('error', `Keine Karte mit der ID "${specificBoxId}" im Dashboard gefunden`);
+        } else if (!specificBoxId && checked === 0) {
+            showToast('info', 'Keine Textbox-Quellen in OBS gefunden (brauchen --box-id im Custom CSS)');
+        }
+        console.log(`[OBS Sync] Push an OBS abgeschlossen. (${updated}/${checked} Quellen aktualisiert)`);
     } catch (e) {
         console.error("[OBS Sync] Fehler beim Senden an OBS:", e);
+        showToast('error', 'OBS-Sync-Fehler: ' + (e.message || e));
     }
 }
 
@@ -299,16 +374,18 @@ function handleDataChange() {
 function updateConnectionUI(connected) {
     const statusEl = document.getElementById('storage-status');
     const labelEl = document.getElementById('storage-label');
+    const btnEl = document.getElementById('btn-connect-obs');
+    if (btnEl) btnEl.textContent = connected ? 'Trennen' : 'Verbinden';
     if (connected) {
         statusEl.classList.add('connected');
-        labelEl.textContent = 'Aktiv (Lokal)';
+        labelEl.textContent = 'Verbunden';
         const settingsStatus = document.getElementById('settings-status-label');
-        if (settingsStatus) settingsStatus.textContent = 'Status: Aktiv (Lokal)';
+        if (settingsStatus) settingsStatus.textContent = 'Status: Verbunden';
     } else {
         statusEl.classList.remove('connected');
-        labelEl.textContent = 'Fehler / Getrennt';
+        labelEl.textContent = 'Getrennt';
         const settingsStatus = document.getElementById('settings-status-label');
-        if (settingsStatus) settingsStatus.textContent = 'Status: Fehler / Getrennt';
+        if (settingsStatus) settingsStatus.textContent = 'Status: Getrennt';
     }
 }
 
@@ -443,6 +520,8 @@ function deleteCard(btn) {
         cardWrapper.remove();
         syncDOMToState();
         handleDataChange();
+        // Karten-Löschen soll die zugehörige OBS-Box ausblenden
+        pushDashboardStateToOBS(id);
     }, 250);
 }
 
@@ -657,17 +736,24 @@ function parseOpacityInputFromElement(element) {
 }
 
 function hexToRgba(hex, opacity255 = 255) {
-    const normalized = (hex || '#000000').trim();
-    const match = normalized.match(/^#?([a-f\d]{6})$/i);
+    const normalized = String(hex || '#000000').trim();
+    // 3- und 6-stellige HEX-Werte (#abc, #aabbcc) — ohne #, mit oder ohne Präfix
+    const match = normalized.match(/^#?([a-f\d]{3}|[a-f\d]{6})$/i);
     if (!match) return normalized;
 
-    const intVal = parseInt(match[1], 16);
+    let hexVal = match[1];
+    if (hexVal.length === 3) {
+        hexVal = hexVal.split('').map(c => c + c).join('');
+    }
+    const intVal = parseInt(hexVal, 16);
     const r = (intVal >> 16) & 255;
     const g = (intVal >> 8) & 255;
     const b = intVal & 255;
-    const alpha = Math.max(0, Math.min(255, Number(opacity255))) / 255;
+    const alpha = Math.max(0, Math.min(255, Number(opacity255) || 0)) / 255;
 
-    return alpha === 1 ? `rgb(${r}, ${g}, ${b})` : `rgba(${r}, ${g}, ${b}, ${alpha.toFixed(3)})`;
+    // parseFloat räumt überflüssige Nachkommastellen ein (0.5 statt 0.500)
+    const a = parseFloat(alpha.toFixed(3));
+    return a >= 1 ? `rgb(${r}, ${g}, ${b})` : `rgba(${r}, ${g}, ${b}, ${a})`;
 }
 
 function updateSettingsFromModal() {
@@ -1288,7 +1374,8 @@ document.addEventListener('keydown', (e) => {
     if (!document.getElementById('save-profile-modal').hidden && e.key === 'Enter') {
         saveCurrentAsProfile();
     }
-    // Color profile save form: Enter to save, Escape to close
+    // Color profile save form: Enter to save, Escape to close (works even if the
+    // element is currently hidden, so no focus is required)
     const cpForm = document.getElementById('color-profile-save-form');
     if (cpForm && !cpForm.hidden) {
         if (e.key === 'Enter') {
@@ -1302,6 +1389,11 @@ document.addEventListener('keydown', (e) => {
         }
     }
     if (e.key === 'Escape') {
+        const settingsModal = document.getElementById('settings-modal');
+        if (settingsModal && !settingsModal.hidden) {
+            closeSettingsModal();
+            return;
+        }
         closeSaveProfileModal();
     }
 });

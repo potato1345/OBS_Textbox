@@ -19,6 +19,12 @@ class OBSWebSocket {
 
     connect(password = '', port = 4455) {
         return new Promise((resolve, reject) => {
+            // Don't spawn a second socket while one is already open/connecting
+            if (this.ws && (this.ws.readyState === WebSocket.OPEN || this.ws.readyState === WebSocket.CONNECTING)) {
+                reject(new Error("Schon verbunden"));
+                return;
+            }
+
             try {
                 this.ws = new WebSocket(`ws://127.0.0.1:${port}`);
             } catch (err) {

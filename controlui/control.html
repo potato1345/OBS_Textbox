@@ -18,9 +18,9 @@
                 <span class="storage-dot"></span>
                 <span id="storage-label">Getrennt</span>
             </div>
-            <button class="btn" id="btn-connect-obs" onclick="connectOBS()">Verbinden</button>
+            <button class="btn" id="btn-connect-obs" onclick="toggleOBSConnection()">Verbinden</button>
             <button class="btn" id="btn-export" onclick="exportJSON()">
-                <span class="btn-icon">�</span> Export
+                <span class="btn-icon">📤</span> Export
             </button>
             <button class="btn" id="btn-import" onclick="importJSON()">
                 <span class="btn-icon">📥</span> Import
@@ -90,7 +90,7 @@
                     <label for="auto-send-toggle" class="inline-label">Auto-Send bei Eingabe</label>
                 </div>
                 <div class="field-group">
-                    <button class="btn btn-accent" onclick="connectOBS()">Mit OBS verbinden</button>
+                    <button class="btn btn-accent" onclick="toggleOBSConnection()">Mit OBS verbinden</button>
                 </div>
                 <div class="status-info">
                     <span class="storage-dot"></span>
