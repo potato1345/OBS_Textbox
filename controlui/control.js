@@ -609,6 +609,19 @@ function syncDOMToState() {
     });
 }
 
+/**
+ * Sucht im Dashboard nach einer Karte mit der angegebenen Box-ID.
+ * @param {string} boxId - Die gesuchte Box-ID
+ * @returns {HTMLElement|null} - Das .card-outer Element oder null
+ */
+function findCardByBoxId(boxId) {
+    const cards = dashboard.querySelectorAll('.card-outer');
+    for (const card of cards) {
+        if (card.querySelector('.id-input').value.trim() === boxId) return card;
+    }
+    return null;
+}
+
 function renderCardsFromState() {
     console.log("[UI] Rendere Karten aus dem State...");
     dashboard.innerHTML = ''; // Clear existing cards
@@ -1389,6 +1402,11 @@ document.addEventListener('keydown', (e) => {
         }
     }
     if (e.key === 'Escape') {
+        const aiModal = document.getElementById('ai-import-modal');
+        if (aiModal && !aiModal.hidden) {
+            closeAIImportModal();
+            return;
+        }
         const settingsModal = document.getElementById('settings-modal');
         if (settingsModal && !settingsModal.hidden) {
             closeSettingsModal();

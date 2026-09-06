@@ -51,6 +51,9 @@
                     <button class="btn btn-red" id="btn-clear-all" onclick="clearAllCards()">
                         <span class="btn-icon">🗑</span> Alle leeren
                     </button>
+                    <button class="btn btn-purple" id="btn-ai-import" onclick="openAIImportModal()">
+                        <span class="btn-icon">🤖</span> AI Import
+                    </button>
                 </div>
             </div>
         </div>
@@ -186,6 +189,87 @@
         </div>
     </div>
 
+    <!-- ==================== AI IMPORT MODAL ==================== -->
+    <div class="modal-overlay" id="ai-import-modal" hidden>
+        <div class="modal modal-large">
+            <div class="modal-header">
+                <h2>🤖 AI Import</h2>
+                <button class="btn btn-red" onclick="closeAIImportModal()" title="Schließen">✕</button>
+            </div>
+
+            <!-- Settings Section -->
+            <div class="settings-section">
+                <div class="section-title">Einstellungen</div>
+
+                <div class="field-group">
+                    <label class="field-label" for="ai-api-key">OpenRouter API Key</label>
+                    <div class="password-input-wrap settings-password-wrap">
+                        <input type="password" id="ai-api-key" class="text-input"
+                               placeholder="sk-or-v1-..."
+                               title="Kostenloser OpenRouter API Key (openrouter.ai/keys)">
+                        <button type="button" class="password-toggle" id="btn-toggle-ai-key"
+                                onclick="toggleAIKeyVisibility()" title="Key anzeigen/verstecken">👁</button>
+                    </div>
+                    <small class="field-hint">
+                        Nur kostenlose Modelle werden verwendet.
+                        <a href="https://openrouter.ai/keys" target="_blank">Key erstellen →</a>
+                    </small>
+                </div>
+
+                <div class="field-group field-group-inline">
+                    <input type="checkbox" id="ai-create-new-cards" checked>
+                    <label for="ai-create-new-cards" class="inline-label">
+                        Neue Karten erstellen (eine pro Programmpunkt)
+                    </label>
+                </div>
+
+                <div class="field-group field-group-inline">
+                    <input type="checkbox" id="ai-replace-existing" checked>
+                    <label for="ai-replace-existing" class="inline-label">
+                        Vorhandene Karten vorher leeren
+                    </label>
+                </div>
+            </div>
+
+            <!-- Upload Section -->
+            <div class="settings-section">
+                <div class="section-title">PDF hochladen</div>
+                <div class="pdf-dropzone" id="pdf-dropzone">
+                    <span class="pdf-dropzone-icon">📄</span>
+                    <span class="pdf-dropzone-text">PDF hierher ziehen oder klicken</span>
+                    <input type="file" id="pdf-file-input" accept=".pdf" hidden>
+                </div>
+            </div>
+
+            <!-- Progress Section (hidden until processing starts) -->
+            <div class="settings-section" id="ai-progress-section" hidden>
+                <div class="section-title">Verarbeitung</div>
+                <div class="pdf-progress">
+                    <div class="pdf-progress-step" id="ai-step-extract">
+                        <span class="step-icon">⏳</span> Text extrahieren…
+                    </div>
+                    <div class="pdf-progress-step" id="ai-step-llm">
+                        <span class="step-icon">⏳</span> LLM verarbeitet…
+                    </div>
+                    <div class="pdf-progress-step" id="ai-step-apply">
+                        <span class="step-icon">⏳</span> Karten befüllen…
+                    </div>
+                </div>
+                <div id="ai-result-info" hidden>
+                    <p id="ai-result-message"></p>
+                    <details id="ai-raw-details" hidden>
+                        <summary>Rohe LLM-Ausgabe anzeigen</summary>
+                        <pre id="ai-raw-output" class="pdf-raw-output"></pre>
+                    </details>
+                </div>
+            </div>
+
+            <div class="modal-actions">
+                <button class="btn" onclick="closeAIImportModal()">Schließen</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Toast container -->
     <div class="toast-container" id="toast-container"></div>
 
@@ -259,5 +343,7 @@
 
     <script src="obs-ws.js"></script>
     <script src="control.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <script src="pdf-automation.js"></script>
 </body>
 </html>
