@@ -5,6 +5,37 @@
 
 let cachedSongReference = null;
 
+const DEFAULT_SYSTEM_PROMPT = `Du bist ein Parser für Gottesdienstprogramme.
+Du erhältst extrahierten Text aus einem PDF und eine Gotteslob-Liedreferenz (Nummer: Titel).
+Identifiziere alle Programmpunkte (Lieder, Lesungen, Predigt, Gebete, etc.).
+Für Lieder: Schlage den vollen Titel aus der Referenz anhand der Nummer nach, falls vorhanden.
+Gib AUSSCHLIESSLICH gültiges JSON zurück im folgenden Format:
+{ "items": [{ "zeile1": "...", "zeile2": "...", "zeile3": "..." }] }
+- zeile1 = Titel/Name des Programmpunkts
+- zeile2 = GL-Nummer/Details
+- zeile3 = optionale Zusatzinformationen`.trim();
+
+/**
+ * Gibt den aktuellen System Prompt zurück (aus Textarea oder Default).
+ */
+function getSystemPrompt() {
+    const textarea = document.getElementById('ai-system-prompt');
+    const value = textarea ? textarea.value.trim() : '';
+    return value || DEFAULT_SYSTEM_PROMPT;
+}
+
+/**
+ * Setzt den System Prompt im Textarea auf den Standardwert zurück.
+ */
+function resetSystemPrompt() {
+    const textarea = document.getElementById('ai-system-prompt');
+    if (textarea) {
+        textarea.value = DEFAULT_SYSTEM_PROMPT;
+        localStorage.setItem('ai_system_prompt', DEFAULT_SYSTEM_PROMPT);
+    }
+    if (typeof showToast === 'function') showToast('info', 'System Prompt auf Standard zurückgesetzt');
+}
+
 /**
  * Lädt die Gotteslob-Referenz aus lieder.md.
  * @returns {Promise<Object>} Ein Objekt mit Liednummern als Schlüssel und Titeln als Wert.
@@ -98,17 +129,7 @@ async function callOpenRouter(apiKey, extractedText, songReference) {
         compactSongRef[num] = data.title;
     }
     
-    const systemPrompt = `
-Du bist ein Parser für Gottesdienstprogramme.
-Du erhältst extrahierten Text aus einem PDF und eine Gotteslob-Liedreferenz (Nummer: Titel).
-Identifiziere alle Programmpunkte (Lieder, Lesungen, Predigt, Gebete, etc.).
-Für Lieder: Schlage den vollen Titel aus der Referenz anhand der Nummer nach, falls vorhanden.
-Gib AUSSCHLIESSLICH gültiges JSON zurück im folgenden Format:
-{ "items": [{ "zeile1": "...", "zeile2": "...", "zeile3": "..." }] }
-- zeile1 = Titel/Name des Programmpunkts
-- zeile2 = GL-Nummer/Details
-- zeile3 = optionale Zusatzinformationen
-`.trim();
+    const systemPrompt = getSystemPrompt();
 
     const userPrompt = `
 Liedreferenz: ${JSON.stringify(compactSongRef)}
@@ -231,6 +252,13 @@ function openAIImportModal() {
         replaceExistingInput.checked = localStorage.getItem('ai-replace-existing') !== 'false';
     }
     
+    // System Prompt laden
+    const systemPromptInput = document.getElementById('ai-system-prompt');
+    if (systemPromptInput) {
+        const savedPrompt = localStorage.getItem('ai_system_prompt');
+        systemPromptInput.value = savedPrompt || DEFAULT_SYSTEM_PROMPT;
+    }
+    
     resetProgress();
 }
 
@@ -256,6 +284,12 @@ function closeAIImportModal() {
     const replaceExistingInput = document.getElementById('ai-replace-existing');
     if (replaceExistingInput) {
         localStorage.setItem('ai-replace-existing', replaceExistingInput.checked);
+    }
+    
+    // System Prompt speichern
+    const systemPromptInput = document.getElementById('ai-system-prompt');
+    if (systemPromptInput) {
+        localStorage.setItem('ai_system_prompt', systemPromptInput.value);
     }
 }
 

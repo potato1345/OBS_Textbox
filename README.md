@@ -8,14 +8,15 @@ OBS browser view text field that can be customized via the "Custom CSS" tab — 
 
 ## How It Works
 
-The system is completely serverless and runs entirely within OBS:
-
 | File | Purpose |
 |------|---------|
 | `textbox.html` | The OBS Browser Source overlay — shows text from CSS variables |
 | `controlui/control.html` | A browser dashboard (OBS Custom Dock) to control multiple textboxes simultaneously |
+| `start_server.bat` / `.sh` | Lightweight local web server scripts to run the dashboard |
 
-The dashboard talks to OBS over the **OBS WebSocket server** (built into OBS 28+). Each time you type in a card, the dashboard rewrites the *Custom CSS* of the matching browser source — text and colors update live, without a Python server or any external service. All state is saved in the browser's local storage and survives OBS restarts; if the connection drops (e.g. OBS restarts), the dashboard reconnects automatically.
+The dashboard talks to OBS over the **OBS WebSocket server** (built into OBS 28+). Each time you type in a card, the dashboard rewrites the *Custom CSS* of the matching browser source — text and colors update live. All state is saved in the browser's local storage and survives OBS restarts; if the connection drops, the dashboard reconnects automatically.
+
+While the core text system works offline and serverless, using advanced features like **AI PDF Import** requires the dashboard to be served via the local web server (`start_server` scripts) because the OBS browser strictly blocks external API requests from local `file:///` paths.
 
 ## Setup
 
@@ -25,13 +26,21 @@ The dashboard talks to OBS over the **OBS WebSocket server** (built into OBS 28+
 2. Check **Enable WebSocket server** and optionally set a **Password**.
 3. Click OK and (if asked) restart OBS.
 
-### 2. Add the Control Dashboard to OBS
+### 2. Start the Local Server & Add Dashboard to OBS
 
-1. In OBS, go to **Docks** -> **Custom Browser Docks...**
-2. Name the dock (e.g., "Textbox Control").
-3. For the URL, enter the local, absolute file path to the `controlui/control.html` file, formatted as a file URL. Example: `file:///Users/deinName/Pfad/Zu/OBS_Textbox/controlui/control.html` (Windows: `file:///C:/Pfad/Zu/OBS_Textbox/controlui/control.html`)
-4. Apply and place the dock anywhere in your OBS UI.
-5. Open **Einstellungen** in the dashboard, enter the WebSocket password and click **Mit OBS verbinden** (auto-reconnect is on by default).
+*To ensure all features (including the AI PDF Import) work without browser security errors, you should run the dashboard via the local web server.*
+
+1. Run the included start script for your OS (requires Python):
+   - **Windows:** Double-click `start_server.bat`
+   - **Mac/Linux:** Open terminal and run `./start_server.sh`
+   *(This starts a local background server on port 8080. Leave the black console window open while streaming).*
+2. In OBS, go to **Docks** -> **Custom Browser Docks...**
+3. Name the dock (e.g., "Textbox Control").
+4. For the URL, enter exactly: `http://localhost:8080/controlui/control.html`
+5. Apply and place the dock anywhere in your OBS UI.
+6. Open **Einstellungen** in the dashboard, enter the WebSocket password and click **Mit OBS verbinden** (auto-reconnect is on by default).
+
+> **Offline Mode (No AI PDF Import):** If you don't need the AI PDF features, you can skip starting the server and just enter the local file path directly as the URL (e.g. `file:///C:/Path/To/OBS_Textbox/controlui/control.html`).
 
 ### 3. Add the Textbox to OBS
 

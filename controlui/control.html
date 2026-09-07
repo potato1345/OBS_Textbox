@@ -231,6 +231,15 @@
                         Vorhandene Karten vorher leeren
                     </label>
                 </div>
+
+                <div class="field-group">
+                    <label class="field-label" for="ai-system-prompt">System Prompt</label>
+                    <textarea id="ai-system-prompt" class="text-input" rows="6" placeholder="System Prompt für die LLM-Verarbeitung…" style="resize: vertical; font-family: monospace; font-size: 0.85em;"></textarea>
+                    <small class="field-hint">
+                        Beschreibt, wie die AI den PDF-Text verarbeiten soll.
+                        <button type="button" class="btn" style="padding: 2px 8px; font-size: 0.85em; margin-left: 6px;" onclick="resetSystemPrompt()">↺ Standard</button>
+                    </small>
+                </div>
             </div>
 
             <!-- Upload Section -->
@@ -259,7 +268,7 @@
                 </div>
                 <div id="ai-result-info" hidden>
                     <p id="ai-result-message"></p>
-                    <details id="ai-raw-details" hidden>
+                    <details id="ai-raw-details" open hidden>
                         <summary>Rohe LLM-Ausgabe anzeigen</summary>
                         <pre id="ai-raw-output" class="pdf-raw-output"></pre>
                     </details>
