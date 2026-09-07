@@ -1,4 +1,6 @@
 // Minimal OBS WebSocket v5 Client
+const OBS_WEBSOCKET_TIMEOUT_MS = 10000;
+
 class OBSWebSocket {
     constructor() {
         this.ws = null;
@@ -19,6 +21,14 @@ class OBSWebSocket {
 
     connect(password = '', port = 4455) {
         return new Promise((resolve, reject) => {
+            let handshakeTimeout = null;
+            const clearHandshakeTimeout = () => {
+                if (handshakeTimeout) {
+                    clearTimeout(handshakeTimeout);
+                    handshakeTimeout = null;
+                }
+            };
+
             // Don't spawn a second socket while one is already open/connecting
             if (this.ws && (this.ws.readyState === WebSocket.OPEN || this.ws.readyState === WebSocket.CONNECTING)) {
                 reject(new Error("Schon verbunden"));
@@ -28,7 +38,7 @@ class OBSWebSocket {
             try {
                 this.ws = new WebSocket(`ws://127.0.0.1:${port}`);
             } catch (err) {
-                reject(err);
+                reject(err instanceof Error ? err : new Error(String(err)));
                 return;
             }
 
@@ -37,7 +47,18 @@ class OBSWebSocket {
             };
 
             this.ws.onmessage = async (event) => {
-                const msg = JSON.parse(event.data);
+                let msg;
+                try {
+                    msg = JSON.parse(event.data);
+                } catch (err) {
+                    clearHandshakeTimeout();
+                    const parseError = new Error(`Invalid OBS WebSocket message: ${err.message || err}`);
+                    if (this.onError) this.onError(parseError);
+                    this.resolvers.forEach(r => r.reject(parseError));
+                    this.resolvers.clear();
+                    reject(parseError);
+                    return;
+                }
                 
                 if (msg.op === 0) {
                     // Hello received
@@ -47,8 +68,10 @@ class OBSWebSocket {
                     if (authReq) {
                         if (!password) {
                             this.ws.close();
-                            if (this.onError) this.onError("Passwort benötigt, aber keines angegeben.");
-                            reject(new Error("Auth required"));
+                            const authError = new Error("Passwort benötigt, aber keines angegeben.");
+                            clearHandshakeTimeout();
+                            if (this.onError) this.onError(authError);
+                            reject(authError);
                             return;
                         }
                         const passHash = await this.hashSHA256(password + authReq.salt);
@@ -67,6 +90,7 @@ class OBSWebSocket {
                 } 
                 else if (msg.op === 2) {
                     // Identified (Success)
+                    clearHandshakeTimeout();
                     if (this.onConnect) this.onConnect();
                     resolve();
                 }
@@ -78,7 +102,8 @@ class OBSWebSocket {
                         if (msg.d.requestStatus.result) {
                             resolver.resolve(msg.d.responseData);
                         } else {
-                            resolver.reject(msg.d.requestStatus.code);
+                            const status = msg.d.requestStatus;
+                            resolver.reject(new Error(`OBS request failed (${status.code}): ${status.comment || 'Unknown error'}`));
                         }
                         this.resolvers.delete(reqId);
                     }
@@ -86,6 +111,7 @@ class OBSWebSocket {
             };
 
             this.ws.onclose = () => {
+                clearHandshakeTimeout();
                 if (this.onDisconnect) this.onDisconnect();
                 // Reject pending requests
                 this.resolvers.forEach(r => r.reject(new Error("Disconnected")));
@@ -93,9 +119,18 @@ class OBSWebSocket {
             };
 
             this.ws.onerror = (err) => {
-                if (this.onError) this.onError(err);
-                reject(err);
+                clearHandshakeTimeout();
+                const connectionError = new Error(err?.message || 'OBS WebSocket connection error');
+                if (this.onError) this.onError(connectionError);
+                reject(connectionError);
             };
+
+            handshakeTimeout = setTimeout(() => {
+                const timeoutError = new Error('OBS WebSocket handshake timed out');
+                clearHandshakeTimeout();
+                if (this.ws) this.ws.close();
+                reject(timeoutError);
+            }, OBS_WEBSOCKET_TIMEOUT_MS);
         });
     }
 
@@ -107,7 +142,22 @@ class OBSWebSocket {
             }
 
             const reqId = (this.messageId++).toString();
-            this.resolvers.set(reqId, { resolve, reject });
+            let timeoutId = null;
+            const resolver = {
+                resolve: value => {
+                    if (timeoutId) clearTimeout(timeoutId);
+                    resolve(value);
+                },
+                reject: error => {
+                    if (timeoutId) clearTimeout(timeoutId);
+                    reject(error);
+                }
+            };
+            this.resolvers.set(reqId, resolver);
+            timeoutId = setTimeout(() => {
+                if (!this.resolvers.delete(reqId)) return;
+                resolver.reject(new Error(`OBS request timed out: ${requestType}`));
+            }, OBS_WEBSOCKET_TIMEOUT_MS);
 
             this.ws.send(JSON.stringify({
                 op: 6,

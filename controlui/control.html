@@ -16,7 +16,7 @@
        <div class="header-right">
             <div class="storage-status" id="storage-status">
                 <span class="storage-dot"></span>
-                <span id="storage-label">Getrennt</span>
+                <span id="storage-label">Nicht verbunden</span>
             </div>
             <button class="btn" id="btn-connect-obs" onclick="toggleOBSConnection()">Verbinden</button>
             <button class="btn" id="btn-export" onclick="exportJSON()">
@@ -97,7 +97,7 @@
                 </div>
                 <div class="status-info">
                     <span class="storage-dot"></span>
-                    <span id="settings-status-label">Status: Getrennt</span>
+                    <span id="settings-status-label">Status: Nicht verbunden</span>
                 </div>
             </div>
             <div class="settings-section">
@@ -285,15 +285,15 @@
                 <div class="card-body">
                     <div class="field-group">
                         <label class="field-label">Zeile 1</label>
-                        <input type="text" class="text-input z1" placeholder="Haupttext…">
+                        <input type="text" class="text-input z1" placeholder="Haupttext…" aria-label="Zeile 1">
                     </div>
                     <div class="field-group">
                         <label class="field-label">Zeile 2</label>
-                        <input type="text" class="text-input z2" placeholder="Untertext…">
+                        <input type="text" class="text-input z2" placeholder="Untertext…" aria-label="Zeile 2">
                     </div>
                     <div class="field-group">
                         <label class="field-label">Zeile 3</label>
-                        <input type="text" class="text-input z3" placeholder="Zusatz…">
+                        <input type="text" class="text-input z3" placeholder="Zusatz…" aria-label="Zeile 3">
                     </div>
                     <details class="card-color-dropdown">
                         <summary class="card-color-summary">🎨 Farben &amp; Deckkraft</summary>
@@ -301,29 +301,29 @@
                             <div class="field-group">
                                 <label class="field-label">Textfarbe</label>
                                 <div class="color-field">
-                                    <input type="color" class="color-input text-color" value="#000000" title="Textfarbe der Box">
-                                    <input type="number" class="opacity-input text-color-opacity" min="0" max="255" value="255" title="Deckkraft der Textfarbe 0-255">
+                                    <input type="color" class="color-input text-color" value="#000000" title="Textfarbe der Box" aria-label="Textfarbe">
+                                    <input type="number" class="opacity-input text-color-opacity" min="0" max="255" value="255" title="Deckkraft der Textfarbe 0-255" aria-label="Deckkraft der Textfarbe">
                                 </div>
                             </div>
                             <div class="field-group">
                                 <label class="field-label">Box-Farbe</label>
                                 <div class="color-field">
-                                    <input type="color" class="color-input box-color" value="#ffffff" title="Hintergrundfarbe der Box">
-                                    <input type="number" class="opacity-input box-opacity" min="0" max="255" value="255" title="Deckkraft der Boxfarbe 0-255">
+                                    <input type="color" class="color-input box-color" value="#ffffff" title="Hintergrundfarbe der Box" aria-label="Box-Farbe">
+                                    <input type="number" class="opacity-input box-opacity" min="0" max="255" value="255" title="Deckkraft der Boxfarbe 0-255" aria-label="Deckkraft der Box-Farbe">
                                 </div>
                             </div>
                             <div class="field-group">
                                 <label class="field-label">Eckenfarbe 1</label>
                                 <div class="color-field">
-                                    <input type="color" class="color-input corner-a-color" value="#fce647" title="Farbe der oberen linken Ecke">
-                                    <input type="number" class="opacity-input corner-a-opacity" min="0" max="255" value="255" title="Deckkraft der Ecke 1 0-255">
+                                    <input type="color" class="color-input corner-a-color" value="#fce647" title="Farbe der oberen linken Ecke" aria-label="Eckenfarbe 1">
+                                    <input type="number" class="opacity-input corner-a-opacity" min="0" max="255" value="255" title="Deckkraft der Ecke 1 0-255" aria-label="Deckkraft der Eckenfarbe 1">
                                 </div>
                             </div>
                             <div class="field-group">
                                 <label class="field-label">Eckenfarbe 2</label>
                                 <div class="color-field">
-                                    <input type="color" class="color-input corner-b-color" value="#fce647" title="Farbe der unteren rechten Ecke">
-                                    <input type="number" class="opacity-input corner-b-opacity" min="0" max="255" value="255" title="Deckkraft der Ecke 2 0-255">
+                                    <input type="color" class="color-input corner-b-color" value="#fce647" title="Farbe der unteren rechten Ecke" aria-label="Eckenfarbe 2">
+                                    <input type="number" class="opacity-input corner-b-opacity" min="0" max="255" value="255" title="Deckkraft der Ecke 2 0-255" aria-label="Deckkraft der Eckenfarbe 2">
                                 </div>
                             </div>
                         </div>

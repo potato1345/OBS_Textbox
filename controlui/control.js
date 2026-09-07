@@ -181,7 +181,7 @@ function scheduleReconnect() {
         reconnectTimer = null;
         if (!isObsConnected) {
             console.log("[OBS Sync] Automatische Reconnect-Versuch...");
-            connectToOBSWebSocket();
+            connectToOBSWebSocket(false);
         }
     }, 3000);
 }
@@ -212,12 +212,14 @@ function toggleOBSConnection() {
     connectOBS();
 }
 
-function connectToOBSWebSocket() {
+function connectToOBSWebSocket(showError = true) {
     suppressReconnect = false;
     console.log("[OBS Sync] Verbindungsversuch gestartet...");
     const pw = document.getElementById('ws-password').value;
     obs.connect(pw).catch(err => {
-        showToast('error', 'Verbindung fehlgeschlagen: ' + (err.message || err));
+        if (showError) {
+            showToast('error', 'Verbindung fehlgeschlagen: ' + (err.message || err));
+        }
         console.error("[OBS Sync] Verbindung fehlgeschlagen:", err);
         // Will re-try on next error/disconnect event via scheduleReconnect()
     });
@@ -241,9 +243,12 @@ function disconnectOBS() {
  * @param {string|null} specificBoxId - If provided, only updates the box with this ID.
  */
 function escapeCssString(str) {
-    // CSS String-Werte: Backslash und Anführungszeichen maskieren,
+    // CSS String-Werte: Steuerzeichen entfernen und Backslash sowie Anführungszeichen maskieren,
     // sonst zerbricht das injizierte CSS bei z.B. "C:\\Temp" oder Umlaut-Escapes
-    return String(str).replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+    return String(str)
+        .replace(/[\u0000-\u001F\u007F-\u009F]/g, '')
+        .replace(/\\/g, '\\\\')
+        .replace(/"/g, '\\"');
 }
 
 async function pushDashboardStateToOBS(specificBoxId = null) {
@@ -378,14 +383,14 @@ function updateConnectionUI(connected) {
     if (btnEl) btnEl.textContent = connected ? 'Trennen' : 'Verbinden';
     if (connected) {
         statusEl.classList.add('connected');
-        labelEl.textContent = 'Verbunden';
+        labelEl.textContent = 'Mit OBS verbunden';
         const settingsStatus = document.getElementById('settings-status-label');
-        if (settingsStatus) settingsStatus.textContent = 'Status: Verbunden';
+        if (settingsStatus) settingsStatus.textContent = 'Status: Mit OBS verbunden';
     } else {
         statusEl.classList.remove('connected');
-        labelEl.textContent = 'Getrennt';
+        labelEl.textContent = 'Nicht verbunden';
         const settingsStatus = document.getElementById('settings-status-label');
-        if (settingsStatus) settingsStatus.textContent = 'Status: Getrennt';
+        if (settingsStatus) settingsStatus.textContent = 'Status: Nicht verbunden';
     }
 }
 
@@ -711,7 +716,8 @@ function loadSettingsToModal() {
     const colors = settings.uiColors || {};
 
     document.getElementById('ws-password').value = settings.obsPassword || '';
-    document.getElementById('auto-send-toggle').checked = isAutoSendEnabled;
+    const autoSendToggle = document.getElementById('auto-send-toggle');
+    if (autoSendToggle) autoSendToggle.checked = isAutoSendEnabled;
     document.getElementById('ui-color-bg-primary').value = colors.bgPrimary || '#1C1F26';
     document.getElementById('ui-opacity-bg-primary').value = colors.bgPrimaryOpacity !== undefined ? colors.bgPrimaryOpacity : 255;
     document.getElementById('ui-color-bg-secondary').value = colors.bgSecondary || '#323a44';
@@ -1332,24 +1338,33 @@ function deleteCustomProfile(index) {
 }
 
 function renderCustomProfiles() {
-    document.querySelectorAll('.profile-chip.custom').forEach(el => el.remove());
+    document.querySelectorAll('.profile-chip.custom, .delete-profile.custom').forEach(el => el.remove());
 
     const anchor = document.getElementById('custom-profiles-anchor');
     if (!dashboardState.profiles) return;
 
     dashboardState.profiles.forEach((profile, idx) => {
         const chip = document.createElement('button');
+        chip.type = 'button';
         chip.className = 'profile-chip custom';
         chip.innerHTML = `
             <span class="chip-icon">📋</span>
             ${escapeHtml(profile.name)}
-            <button class="delete-profile" onclick="event.stopPropagation(); deleteCustomProfile(${idx})" title="Profil löschen">✕</button>
         `;
-        chip.onclick = (e) => {
-            if (e.target.classList.contains('delete-profile')) return;
-            applyProfileData(profile);
+        chip.onclick = () => applyProfileData(profile);
+
+        const deleteButton = document.createElement('button');
+        deleteButton.type = 'button';
+        deleteButton.className = 'delete-profile custom';
+        deleteButton.title = 'Profil löschen';
+        deleteButton.textContent = '✕';
+        deleteButton.onclick = (event) => {
+            event.stopPropagation();
+            deleteCustomProfile(idx);
         };
+
         anchor.parentNode.insertBefore(chip, anchor);
+        anchor.parentNode.insertBefore(deleteButton, anchor);
     });
 }
 
@@ -1427,10 +1442,11 @@ async function init() {
     const savedAutoSend = localStorage.getItem('obs_auto_send');
     if (savedAutoSend !== null) {
         isAutoSendEnabled = (savedAutoSend === 'true');
-        const toggleEl = document.getElementById('auto-send-toggle');
-        if (toggleEl) toggleEl.checked = isAutoSendEnabled;
         console.log(`[Init] Auto-Send Einstellung geladen: ${isAutoSendEnabled}`);
     }
+
+    const autoSendToggle = document.getElementById('auto-send-toggle');
+    if (autoSendToggle) autoSendToggle.checked = isAutoSendEnabled;
     
     // Load State
     try {
