@@ -377,10 +377,12 @@ function handleDataChange() {
 
 // Update the connection status UI
 function updateConnectionUI(connected) {
+    const connectionControlEl = document.getElementById('obs-connection-control');
     const statusEl = document.getElementById('storage-status');
     const labelEl = document.getElementById('storage-label');
     const btnEl = document.getElementById('btn-connect-obs');
     if (btnEl) btnEl.textContent = connected ? 'Trennen' : 'Verbinden';
+    if (connectionControlEl) connectionControlEl.classList.toggle('connected', connected);
     if (connected) {
         statusEl.classList.add('connected');
         labelEl.textContent = 'Mit OBS verbunden';

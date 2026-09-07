@@ -14,11 +14,13 @@
     <!-- ==================== HEADER ==================== -->
     <header class="header" id="header">
        <div class="header-right">
-            <div class="storage-status" id="storage-status">
-                <span class="storage-dot"></span>
-                <span id="storage-label">Nicht verbunden</span>
+            <div class="obs-connection-control" id="obs-connection-control">
+                <div class="storage-status" id="storage-status">
+                    <span class="storage-dot"></span>
+                    <span id="storage-label">Nicht verbunden</span>
+                </div>
+                <button class="btn" id="btn-connect-obs" onclick="toggleOBSConnection()">Verbinden</button>
             </div>
-            <button class="btn" id="btn-connect-obs" onclick="toggleOBSConnection()">Verbinden</button>
             <button class="btn" id="btn-export" onclick="exportJSON()">
                 <span class="btn-icon">📤</span> Export
             </button>

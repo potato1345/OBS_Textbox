@@ -70,6 +70,35 @@ body {
     flex-wrap: wrap;
 }
 
+.obs-connection-control {
+    display: inline-flex;
+    align-items: stretch;
+    background: var(--panel-bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+}
+
+.obs-connection-control.connected {
+    border-color: var(--accent-blue);
+}
+
+.obs-connection-control .storage-status {
+    border: none;
+    border-radius: 0;
+    background: transparent;
+}
+
+.obs-connection-control #btn-connect-obs {
+    border: none;
+    border-left: 1px solid var(--border);
+    border-radius: 0;
+}
+
+.obs-connection-control.connected #btn-connect-obs {
+    border-left-color: var(--accent-blue);
+}
+
 .obs-ws-config {
     display: flex;
     align-items: center;
