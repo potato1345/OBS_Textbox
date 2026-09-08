@@ -120,16 +120,21 @@ body {
     position: relative;
     display: flex;
     align-items: center;
+    width: 100%;
 }
 
 .password-input-wrap input {
     border: 1px solid var(--border);
     background: var(--bg-secondary);
     padding: 8px 34px 8px 10px;
+    padding: 10px 34px 10px 12px;
     color: var(--text-primary);
     outline: none;
     font-size: 13px;
     width: 170px;
+    font-size: 0.9rem;
+    width: 100%;
+    border-radius: 12px;
 }
 
 .password-toggle {
@@ -981,14 +986,14 @@ body {
    AI IMPORT / PDF AUTOMATION
    ===================================================== */
 
-/* Purple accent button for AI Import */
-.btn-purple {
-    background: #7c3aed;
-    color: #fff;
-    border-color: #6d28d9;
+/* AI Import button */
+.btn-ai {
+    background: var(--accent-blue);
+    border-color: var(--accent-blue);
+    color: var(--text-primary);
 }
-.btn-purple:hover {
-    background: #6d28d9;
+.btn-ai:hover {
+    background: var(--accent-blue);
 }
 
 /* PDF Dropzone - dashed border area for drag & drop */
@@ -1012,7 +1017,7 @@ body {
     opacity: 1;
 }
 .pdf-dropzone.dragover {
-    border-color: #7c3aed;
+    border-color: var(--accent-blue);
     background: rgba(124, 58, 237, 0.08);
     opacity: 1;
 }
