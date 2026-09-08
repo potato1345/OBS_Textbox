@@ -21,14 +21,14 @@
                 </div>
                 <button class="btn" id="btn-connect-obs" onclick="toggleOBSConnection()">Verbinden</button>
             </div>
+            <button class="btn" id="btn-settings" onclick="openSettingsModal()">
+                <span class="btn-icon">⚙</span> Einstellungen
+            </button>
             <button class="btn" id="btn-export" onclick="exportJSON()">
                 <span class="btn-icon">📤</span> Export
             </button>
             <button class="btn" id="btn-import" onclick="importJSON()">
                 <span class="btn-icon">📥</span> Import
-            </button>
-            <button class="btn" id="btn-settings" onclick="openSettingsModal()">
-                <span class="btn-icon">⚙</span> Einstellungen
             </button>
             <!-- Schnell-Profile: eigene Zeile -->
             <div class="header-profiles-row">
@@ -124,48 +124,48 @@
                 <div class="settings-grid">
                     <label class="color-picker-label">Hintergrund</label>
                     <div class="color-field">
-                        <input type="color" class="color-input" id="ui-color-bg-primary" title="Hintergrundfarbe des Dashboards">
-                        <input type="number" class="opacity-input" id="ui-opacity-bg-primary" min="0" max="255" placeholder="255" title="Deckkraft 0-255">
+                        <input type="color" class="color-input" id="ui-color-bg-primary" value="#1C1F26" title="Hintergrundfarbe des Dashboards">
+                        <input type="number" class="opacity-input" id="ui-opacity-bg-primary" min="0" max="255" value="255" placeholder="255" title="Deckkraft 0-255">
                     </div>
                     <label class="color-picker-label">Sekundär</label>
                     <div class="color-field">
-                        <input type="color" class="color-input" id="ui-color-bg-secondary" title="Sekundärfarbe des Dashboards">
-                        <input type="number" class="opacity-input" id="ui-opacity-bg-secondary" min="0" max="255" placeholder="255" title="Deckkraft 0-255">
+                        <input type="color" class="color-input" id="ui-color-bg-secondary" value="#323a44" title="Sekundärfarbe des Dashboards">
+                        <input type="number" class="opacity-input" id="ui-opacity-bg-secondary" min="0" max="255" value="255" placeholder="255" title="Deckkraft 0-255">
                     </div>
                     <label class="color-picker-label">Panel</label>
                     <div class="color-field">
-                        <input type="color" class="color-input" id="ui-color-panel-bg" title="Panelfarbe der Karten">
-                        <input type="number" class="opacity-input" id="ui-opacity-panel-bg" min="0" max="255" placeholder="255" title="Deckkraft 0-255">
+                        <input type="color" class="color-input" id="ui-color-panel-bg" value="#272A33" title="Panelfarbe der Karten">
+                        <input type="number" class="opacity-input" id="ui-opacity-panel-bg" min="0" max="255" value="255" placeholder="255" title="Deckkraft 0-255">
                     </div>
                     <label class="color-picker-label">Panel-Rand</label>
                     <div class="color-field">
-                        <input type="color" class="color-input" id="ui-color-border" title="Randfarbe des Panels">
-                        <input type="number" class="opacity-input" id="ui-opacity-border" min="0" max="255" placeholder="255" title="Deckkraft 0-255">
+                        <input type="color" class="color-input" id="ui-color-border" value="#3C404D" title="Randfarbe des Panels">
+                        <input type="number" class="opacity-input" id="ui-opacity-border" min="0" max="255" value="255" placeholder="255" title="Deckkraft 0-255">
                     </div>
                     <label class="color-picker-label">Großes Panel</label>
                     <div class="color-field">
-                        <input type="color" class="color-input" id="ui-color-card-outer-bg" title="Farbe des äußeren Kartenrahmens">
-                        <input type="number" class="opacity-input" id="ui-opacity-card-outer-bg" min="0" max="255" placeholder="255" title="Deckkraft 0-255">
+                        <input type="color" class="color-input" id="ui-color-card-outer-bg" value="#3C404D" title="Farbe des äußeren Kartenrahmens">
+                        <input type="number" class="opacity-input" id="ui-opacity-card-outer-bg" min="0" max="255" value="255" placeholder="255" title="Deckkraft 0-255">
                     </div>
                     <label class="color-picker-label">Panel Hover</label>
                     <div class="color-field">
-                        <input type="color" class="color-input" id="ui-color-panel-bg-alt" title="Hover-Farbe der Karten">
-                        <input type="number" class="opacity-input" id="ui-opacity-panel-bg-alt" min="0" max="255" placeholder="255" title="Deckkraft 0-255">
+                        <input type="color" class="color-input" id="ui-color-panel-bg-alt" value="#414852" title="Hover-Farbe der Karten">
+                        <input type="number" class="opacity-input" id="ui-opacity-panel-bg-alt" min="0" max="255" value="255" placeholder="255" title="Deckkraft 0-255">
                     </div>
                     <label class="color-picker-label">Button Hover</label>
                     <div class="color-field">
-                        <input type="color" class="color-input" id="ui-color-btn-hover-bg" title="Hover-Farbe der Buttons">
-                        <input type="number" class="opacity-input" id="ui-opacity-btn-hover-bg" min="0" max="255" placeholder="255" title="Deckkraft 0-255">
+                        <input type="color" class="color-input" id="ui-color-btn-hover-bg" value="#414852" title="Hover-Farbe der Buttons">
+                        <input type="number" class="opacity-input" id="ui-opacity-btn-hover-bg" min="0" max="255" value="255" placeholder="255" title="Deckkraft 0-255">
                     </div>
                     <label class="color-picker-label">Textfarbe</label>
                     <div class="color-field">
-                        <input type="color" class="color-input" id="ui-color-text" title="Textfarbe des Dashboards">
-                        <input type="number" class="opacity-input" id="ui-opacity-text" min="0" max="255" placeholder="255" title="Deckkraft 0-255">
+                        <input type="color" class="color-input" id="ui-color-text" value="#eff0f1" title="Textfarbe des Dashboards">
+                        <input type="number" class="opacity-input" id="ui-opacity-text" min="0" max="255" value="255" placeholder="255" title="Deckkraft 0-255">
                     </div>
                     <label class="color-picker-label">Akzent</label>
                     <div class="color-field">
-                        <input type="color" class="color-input" id="ui-color-accent-blue" title="Akzentfarbe für Buttons und Status">
-                        <input type="number" class="opacity-input" id="ui-opacity-accent-blue" min="0" max="255" placeholder="255" title="Deckkraft 0-255">
+                        <input type="color" class="color-input" id="ui-color-accent-blue" value="#3daee9" title="Akzentfarbe für Buttons und Status">
+                        <input type="number" class="opacity-input" id="ui-opacity-accent-blue" min="0" max="255" value="255" placeholder="255" title="Deckkraft 0-255">
                     </div>
                 </div>
             </div>

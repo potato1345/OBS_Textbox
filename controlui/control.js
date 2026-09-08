@@ -200,7 +200,12 @@ function togglePasswordVisibility() {
 }
 
 function connectOBS() {
-    updateSettingsFromModal();
+    const pwInput = document.getElementById('ws-password');
+    if (pwInput) {
+        dashboardState.settings = dashboardState.settings || {};
+        dashboardState.settings.obsPassword = pwInput.value;
+        saveStateLocally();
+    }
     connectToOBSWebSocket();
 }
 
@@ -440,9 +445,23 @@ function importJSON() {
 }
 
 function registerSettingsInputListeners() {
-    const settingsInputs = [
-        'ws-password',
-        'auto-send-toggle',
+    const pwInput = document.getElementById('ws-password');
+    if (pwInput) {
+        pwInput.addEventListener('input', () => {
+            dashboardState.settings = dashboardState.settings || {};
+            dashboardState.settings.obsPassword = pwInput.value;
+            saveStateLocally();
+        });
+    }
+
+    const autoSendToggle = document.getElementById('auto-send-toggle');
+    if (autoSendToggle) {
+        autoSendToggle.addEventListener('change', () => {
+            toggleAutoSend();
+        });
+    }
+
+    const colorInputs = [
         'ui-color-bg-primary',
         'ui-opacity-bg-primary',
         'ui-color-bg-secondary',
@@ -463,15 +482,11 @@ function registerSettingsInputListeners() {
         'ui-opacity-accent-blue'
     ];
 
-    settingsInputs.forEach(id => {
+    colorInputs.forEach(id => {
         const element = document.getElementById(id);
         if (!element) return;
 
         element.addEventListener('input', () => {
-            if (id === 'auto-send-toggle') {
-                toggleAutoSend();
-            }
-
             updateSettingsFromModal();
         });
     });
@@ -744,6 +759,7 @@ function loadSettingsToModal() {
 
 function parseOpacityInput(id) {
     const raw = document.getElementById(id)?.value;
+    if (raw === undefined || raw === null || String(raw).trim() === '') return 255;
     const value = Number(raw);
     if (Number.isNaN(value)) return 255;
     return Math.max(0, Math.min(255, Math.round(value)));
@@ -751,7 +767,9 @@ function parseOpacityInput(id) {
 
 function parseOpacityInputFromElement(element) {
     if (!element) return 255;
-    const value = Number(element.value);
+    const raw = element.value;
+    if (raw === undefined || raw === null || String(raw).trim() === '') return 255;
+    const value = Number(raw);
     if (Number.isNaN(value)) return 255;
     return Math.max(0, Math.min(255, Math.round(value)));
 }
@@ -770,34 +788,71 @@ function hexToRgba(hex, opacity255 = 255) {
     const r = (intVal >> 16) & 255;
     const g = (intVal >> 8) & 255;
     const b = intVal & 255;
-    const alpha = Math.max(0, Math.min(255, Number(opacity255) || 0)) / 255;
+    const numOpacity = Number(opacity255);
+    const validOpacity = (opacity255 !== undefined && opacity255 !== null && !isNaN(numOpacity)) ? numOpacity : 255;
+    const alpha = Math.max(0, Math.min(255, validOpacity)) / 255;
 
     // parseFloat räumt überflüssige Nachkommastellen ein (0.5 statt 0.500)
     const a = parseFloat(alpha.toFixed(3));
     return a >= 1 ? `rgb(${r}, ${g}, ${b})` : `rgba(${r}, ${g}, ${b}, ${a})`;
 }
 
+function sanitizeThemeSettings() {
+    const defaultColors = DEFAULT_COLOR_PROFILES[0].colors;
+    dashboardState.settings = dashboardState.settings || {};
+
+    if (!dashboardState.settings.uiColors) {
+        dashboardState.settings.uiColors = { ...defaultColors };
+        return;
+    }
+
+    const c = dashboardState.settings.uiColors;
+    const isCorrupted = (c.textColorOpacity === 0) ||
+                        (c.bgPrimaryOpacity === 0 && c.textColorOpacity === 0) ||
+                        (c.bgPrimary === '#000000' && c.bgPrimaryOpacity === 0 && c.panelBgOpacity === 0);
+
+    if (isCorrupted) {
+        console.warn("[Theme] Korrupte UI-Farben in Einstellungen erkannt (Deckkraft 0). Setze auf Standardfarben zurück.");
+        const activeProf = findColorProfile(dashboardState.settings.activeColorProfile);
+        dashboardState.settings.uiColors = activeProf ? { ...activeProf.colors } : { ...defaultColors };
+        if (!activeProf) {
+            dashboardState.settings.activeColorProfile = 'OBS Dark';
+        }
+        saveStateLocally();
+    }
+}
+
 function updateSettingsFromModal() {
     dashboardState.settings = dashboardState.settings || {};
-    dashboardState.settings.obsPassword = document.getElementById('ws-password').value;
+    const pwInput = document.getElementById('ws-password');
+    if (pwInput) {
+        dashboardState.settings.obsPassword = pwInput.value;
+    }
+
+    const currentColors = dashboardState.settings.uiColors || DEFAULT_COLOR_PROFILES[0].colors;
+    const bgPrimaryEl = document.getElementById('ui-color-bg-primary');
+    if (!bgPrimaryEl || !bgPrimaryEl.value) {
+        return;
+    }
+
     dashboardState.settings.uiColors = {
-        bgPrimary: document.getElementById('ui-color-bg-primary').value,
+        bgPrimary: document.getElementById('ui-color-bg-primary')?.value || currentColors.bgPrimary || '#1C1F26',
         bgPrimaryOpacity: parseOpacityInput('ui-opacity-bg-primary'),
-        bgSecondary: document.getElementById('ui-color-bg-secondary').value,
+        bgSecondary: document.getElementById('ui-color-bg-secondary')?.value || currentColors.bgSecondary || '#323a44',
         bgSecondaryOpacity: parseOpacityInput('ui-opacity-bg-secondary'),
-        panelBg: document.getElementById('ui-color-panel-bg').value,
+        panelBg: document.getElementById('ui-color-panel-bg')?.value || currentColors.panelBg || '#272A33',
         panelBgOpacity: parseOpacityInput('ui-opacity-panel-bg'),
-        border: document.getElementById('ui-color-border').value,
+        border: document.getElementById('ui-color-border')?.value || currentColors.border || '#3C404D',
         borderOpacity: parseOpacityInput('ui-opacity-border'),
-        cardOuterBg: document.getElementById('ui-color-card-outer-bg').value,
+        cardOuterBg: document.getElementById('ui-color-card-outer-bg')?.value || currentColors.cardOuterBg || '#3C404D',
         cardOuterBgOpacity: parseOpacityInput('ui-opacity-card-outer-bg'),
-        panelBgAlt: document.getElementById('ui-color-panel-bg-alt').value,
+        panelBgAlt: document.getElementById('ui-color-panel-bg-alt')?.value || currentColors.panelBgAlt || '#414852',
         panelBgAltOpacity: parseOpacityInput('ui-opacity-panel-bg-alt'),
-        btnHoverBg: document.getElementById('ui-color-btn-hover-bg').value,
+        btnHoverBg: document.getElementById('ui-color-btn-hover-bg')?.value || currentColors.btnHoverBg || '#414852',
         btnHoverBgOpacity: parseOpacityInput('ui-opacity-btn-hover-bg'),
-        textColor: document.getElementById('ui-color-text').value,
+        textColor: document.getElementById('ui-color-text')?.value || currentColors.textColor || '#eff0f1',
         textColorOpacity: parseOpacityInput('ui-opacity-text'),
-        accentBlue: document.getElementById('ui-color-accent-blue').value,
+        accentBlue: document.getElementById('ui-color-accent-blue')?.value || currentColors.accentBlue || '#3daee9',
         accentBlueOpacity: parseOpacityInput('ui-opacity-accent-blue')
     };
     applyThemeSettings();
@@ -1325,6 +1380,10 @@ function saveCurrentAsProfile() {
     saveStateLocally();
     renderCustomProfiles();
     closeSaveProfileModal();
+    const profilesBar = document.getElementById('profiles-bar');
+    if (profilesBar) {
+        profilesBar.scrollTo({ left: profilesBar.scrollWidth, behavior: 'smooth' });
+    }
     showToast('success', `Profil "${name}" gespeichert`);
 }
 
@@ -1464,11 +1523,27 @@ async function init() {
         console.warn("[Init] Fehler beim Lesen von localStorage:", e);
     }
 
+    // Auto-heal corrupted UI colors (e.g. from previous empty-modal bug)
+    sanitizeThemeSettings();
+
     renderCardsFromState();
     applyThemeSettings();
     renderColorProfileDropdown();
+    loadSettingsToModal();
     registerSettingsInputListeners();
     updateConnectionUI(false);
+    
+    // Horizontal wheel scroll on Schnell-Profile bar
+    const profilesRow = document.querySelector('.header-profiles-row');
+    const profilesBar = document.getElementById('profiles-bar');
+    if (profilesBar && profilesRow) {
+        profilesRow.addEventListener('wheel', (e) => {
+            if (e.deltaY !== 0 && e.deltaX === 0 && profilesBar.scrollWidth > profilesBar.clientWidth) {
+                e.preventDefault();
+                profilesBar.scrollLeft += e.deltaY;
+            }
+        }, { passive: false });
+    }
     
     // Auto-Connect OBS WebSocket
     const savedPw = localStorage.getItem('obs_ws_pw');
