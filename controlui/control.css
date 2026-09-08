@@ -140,7 +140,7 @@ body {
 .password-toggle {
     position: absolute;
     right: 6px;
-    top: 50%;
+    top: 35%;
     transform: translateY(-50%);
     border: none;
     background: transparent;
