@@ -305,7 +305,7 @@ async function pushDashboardStateToOBS(specificBoxId = null) {
   --zeile-3: "${escapeCssString(boxData.zeile3 || '')}";
   --box-bg: ${hexToRgba(boxData.boxColor || '#ffffff', boxData.boxColorOpacity ?? 255)};
   --triangle-color-a: ${hexToRgba(boxData.cornerColorA || '#fce647', boxData.cornerColorAOpacity ?? 255)};
-  --triangle-color-b: ${hexToRgba(boxData.cornerColorA || '#fce647', boxData.cornerColorAOpacity ?? 255)};
+    --triangle-color-b: ${hexToRgba(boxData.cornerColorB || '#fce647', boxData.cornerColorBOpacity ?? 255)};
   --text-color: ${hexToRgba(boxData.textColor || '#000000', boxData.textColorOpacity ?? 255)};
   --box-opacity: ${hasText ? 1 : 0};
 }
@@ -361,11 +361,6 @@ async function pushDashboardStateToOBS(specificBoxId = null) {
   --triangle-color-b: ${hexToRgba(boxData.cornerColorB || '#fce647', boxData.cornerColorBOpacity ?? 255)};
   --text-color: ${hexToRgba(boxData.textColor || '#000000', boxData.textColorOpacity ?? 255)};
   --box-opacity: ${hasText ? 1 : 0};
-}
-.textbox-container::before,
-.textbox-container::after {
-  content: none !important;
-  display: none !important;
 }
 /* OBS_TEXTBOX_INJECT_END */`;
                         }
