@@ -323,19 +323,25 @@
                                     <input type="number" class="opacity-input box-opacity" min="0" max="255" value="255" title="Deckkraft der Boxfarbe 0-255" aria-label="Deckkraft der Box-Farbe">
                                 </div>
                             </div>
-                            <div class="field-group">
-                                <label class="field-label">Eckenfarbe 1</label>
-                                <div class="color-field">
-                                    <input type="color" class="color-input corner-a-color" value="#fce647" title="Farbe der oberen linken Ecke" aria-label="Eckenfarbe 1">
-                                    <input type="number" class="opacity-input corner-a-opacity" min="0" max="255" value="255" title="Deckkraft der Ecke 1 0-255" aria-label="Deckkraft der Eckenfarbe 1">
+                            <div class="corner-color-fields">
+                                <div class="field-group">
+                                    <label class="field-label">Eckenfarbe 1</label>
+                                    <div class="color-field">
+                                        <input type="color" class="color-input corner-a-color" value="#fce647" title="Farbe der oberen linken Ecke" aria-label="Eckenfarbe 1">
+                                        <input type="number" class="opacity-input corner-a-opacity" min="0" max="255" value="255" title="Deckkraft der Ecke 1 0-255" aria-label="Deckkraft der Eckenfarbe 1">
+                                    </div>
+                                </div>
+                                <div class="field-group">
+                                    <label class="field-label">Eckenfarbe 2</label>
+                                    <div class="color-field">
+                                        <input type="color" class="color-input corner-b-color" value="#fce647" title="Farbe der unteren rechten Ecke" aria-label="Eckenfarbe 2">
+                                        <input type="number" class="opacity-input corner-b-opacity" min="0" max="255" value="255" title="Deckkraft der Ecke 2 0-255" aria-label="Deckkraft der Eckenfarbe 2">
+                                    </div>
                                 </div>
                             </div>
-                            <div class="field-group">
-                                <label class="field-label">Eckenfarbe 2</label>
-                                <div class="color-field">
-                                    <input type="color" class="color-input corner-b-color" value="#fce647" title="Farbe der unteren rechten Ecke" aria-label="Eckenfarbe 2">
-                                    <input type="number" class="opacity-input corner-b-opacity" min="0" max="255" value="255" title="Deckkraft der Ecke 2 0-255" aria-label="Deckkraft der Eckenfarbe 2">
-                                </div>
+                            <div class="field-group field-group-inline">
+                                <input type="checkbox" class="rainbow-toggle" onchange="onRainbowToggle(this)">
+                                <label class="inline-label">🌈 Regenbogen-Ecken (animiert)</label>
                             </div>
                         </div>
                     </details>

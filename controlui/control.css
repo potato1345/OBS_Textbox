@@ -962,6 +962,21 @@ body {
     font-size: 0.85rem;
 }
 
+/* ========================================
+   RAINBOW CORNERS TOGGLE
+   ======================================== */
+.rainbow-toggle {
+    accent-color: #f59e42;
+    cursor: pointer;
+}
+
+.card-color-dropdown .field-group-inline {
+    flex-direction: row;
+    gap: 8px;
+    margin-top: 6px;
+    margin-bottom: 4px;
+}
+
 /* =====================================================
    AI IMPORT / PDF AUTOMATION
    ===================================================== */

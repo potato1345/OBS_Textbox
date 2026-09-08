@@ -102,27 +102,15 @@
             font-size: 32px;
             font-weight: 400;
         }
-
-        @keyframes rainbow-shift {
-            from { background-position: top left, bottom right; }
-            to { background-position: 0px -30px, 100% calc(100% + 30px); }
-        }
     </style>
 </head>
 <body>
 
     <!-- HTML Struktur ohne Leerzeichen zwischen den Divs -->
     <div class="textbox-container" id="box-container">
-        
-        <div class="text-line line1">
-        </div>
-        
-        <div class="text-line line2">
-        </div>
-        
-        <div class="text-line line3">
-        </div>
-
+        <div class="text-line line1"></div>
+        <div class="text-line line2"></div>
+        <div class="text-line line3"></div>
     </div>
 
     <script>
@@ -130,7 +118,7 @@
         // tatsächlichen Inhalt schrumpft. Prüft alle 150ms, weil OBS
         // die CSS-Variablen erst zur Laufzeit injiziert.
         (function () {
-            function update() {
+            function updateLines() {
                 const cs = getComputedStyle(document.documentElement);
                 for (let n = 1; n <= 3; n++) {
                     const raw = (cs.getPropertyValue('--zeile-' + n) || '').trim();
@@ -140,8 +128,8 @@
                     if (line) line.style.display = text ? '' : 'none';
                 }
             }
-            update();
-            setInterval(update, 150);
+            updateLines();
+            setInterval(updateLines, 150);
         })();
     </script>
 </body>

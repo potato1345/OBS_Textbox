@@ -98,7 +98,7 @@ const DEFAULT_COLOR_PROFILES = [
 //  DASHBOARD STATE
 // =====================================================
 let dashboardState = {
-    boxes: [],       // Array of { id, zeile1, zeile2, zeile3, boxColor, cornerColorA, cornerColorB }
+    boxes: [],       // Array of { id, zeile1, zeile2, zeile3, boxColor, cornerColorA, cornerColorB, rainbowCorners }
     profiles: [],    // Array of { name, boxes: [...] }
     settings: {
         obsPassword: '',
@@ -294,7 +294,63 @@ async function pushDashboardStateToOBS(specificBoxId = null) {
                         const hasText = !!(boxData.zeile1 || boxData.zeile2 || boxData.zeile3);
                         
                         // Inject new block
-                        const injectedCss = `
+                        let injectedCss;
+                        if (boxData.rainbowCorners) {
+                            // Smooth rainbow corners: GPU-accelerated hue-rotate over 12s
+                            injectedCss = `
+/* OBS_TEXTBOX_INJECT_START */
+:root {
+  --zeile-1: "${escapeCssString(boxData.zeile1 || '')}";
+  --zeile-2: "${escapeCssString(boxData.zeile2 || '')}";
+  --zeile-3: "${escapeCssString(boxData.zeile3 || '')}";
+  --box-bg: ${hexToRgba(boxData.boxColor || '#ffffff', boxData.boxColorOpacity ?? 255)};
+  --triangle-color-a: ${hexToRgba(boxData.cornerColorA || '#fce647', boxData.cornerColorAOpacity ?? 255)};
+  --triangle-color-b: ${hexToRgba(boxData.cornerColorA || '#fce647', boxData.cornerColorAOpacity ?? 255)};
+  --text-color: ${hexToRgba(boxData.textColor || '#000000', boxData.textColorOpacity ?? 255)};
+  --box-opacity: ${hasText ? 1 : 0};
+}
+.textbox-container {
+  background-image: none !important;
+}
+.textbox-container::before {
+  content: "" !important;
+  display: block !important;
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 50px;
+  height: 50px;
+  border-top-left-radius: 4px;
+  background: linear-gradient(135deg, var(--triangle-color-a) 50%, transparent 50%);
+  pointer-events: none;
+  z-index: 0;
+  animation: rainbow-rotate 12s linear infinite;
+}
+.textbox-container::after {
+  content: "" !important;
+  display: block !important;
+  position: absolute;
+  bottom: 0;
+  right: 0;
+  width: 50px;
+  height: 50px;
+  border-bottom-right-radius: 4px;
+  background: linear-gradient(315deg, var(--triangle-color-b) 50%, transparent 50%);
+  pointer-events: none;
+  z-index: 0;
+  animation: rainbow-rotate 12s linear infinite;
+}
+.text-line {
+  position: relative;
+  z-index: 1;
+}
+@keyframes rainbow-rotate {
+  from { filter: hue-rotate(0deg); }
+  to   { filter: hue-rotate(360deg); }
+}
+/* OBS_TEXTBOX_INJECT_END */`;
+                        } else {
+                            injectedCss = `
 /* OBS_TEXTBOX_INJECT_START */
 :root {
   --zeile-1: "${escapeCssString(boxData.zeile1 || '')}";
@@ -306,7 +362,13 @@ async function pushDashboardStateToOBS(specificBoxId = null) {
   --text-color: ${hexToRgba(boxData.textColor || '#000000', boxData.textColorOpacity ?? 255)};
   --box-opacity: ${hasText ? 1 : 0};
 }
+.textbox-container::before,
+.textbox-container::after {
+  content: none !important;
+  display: none !important;
+}
 /* OBS_TEXTBOX_INJECT_END */`;
+                        }
                         
                         const newCss = css.trim() + '\n' + injectedCss;
                         
@@ -498,7 +560,7 @@ function registerSettingsInputListeners() {
 const dashboard = document.getElementById('dashboard');
 const template = document.getElementById('card-template');
 
-function addNewCard(id = 'neue_box', z1 = '', z2 = '', z3 = '', boxColor = '#ffffff', boxColorOpacity = 255, cornerColorA = '#fce647', cornerColorAOpacity = 255, cornerColorB = '#fce647', cornerColorBOpacity = 255, textColor = '#000000', textColorOpacity = 255) {
+function addNewCard(id = 'neue_box', z1 = '', z2 = '', z3 = '', boxColor = '#ffffff', boxColorOpacity = 255, cornerColorA = '#fce647', cornerColorAOpacity = 255, cornerColorB = '#fce647', cornerColorBOpacity = 255, textColor = '#000000', textColorOpacity = 255, rainbowCorners = false) {
     console.log(`[UI] Füge neue Karte hinzu (ID: ${id})...`);
     const clone = template.content.cloneNode(true);
     const cardWrapper = clone.querySelector('.card-outer');
@@ -515,6 +577,16 @@ function addNewCard(id = 'neue_box', z1 = '', z2 = '', z3 = '', boxColor = '#fff
     cardInner.querySelector('.corner-b-opacity').value = cornerColorBOpacity;
     cardInner.querySelector('.text-color').value = textColor;
     cardInner.querySelector('.text-color-opacity').value = textColorOpacity;
+
+    // Rainbow corners toggle
+    const rainbowToggle = cardInner.querySelector('.rainbow-toggle');
+    if (rainbowToggle) {
+        rainbowToggle.checked = !!rainbowCorners;
+        const cornerFields = cardInner.querySelector('.corner-color-fields');
+        if (cornerFields && rainbowCorners) {
+            cornerFields.classList.add('rainbow-active');
+        }
+    }
 
     // Trigger changes when typing or color picking
     clone.querySelectorAll('input').forEach(input => {
@@ -545,6 +617,21 @@ function deleteCard(btn) {
         // Karten-Löschen soll die zugehörige OBS-Box ausblenden
         pushDashboardStateToOBS(id);
     }, 250);
+}
+
+/**
+ * Toggles rainbow corners mode for a card.
+ * Hides the static corner color pickers when active.
+ */
+function onRainbowToggle(checkbox) {
+    const cardOuter = checkbox.closest('.card-outer');
+    if (!cardOuter) return;
+    const cornerFields = cardOuter.querySelector('.corner-color-fields');
+    if (cornerFields) {
+        cornerFields.classList.toggle('rainbow-active', checkbox.checked);
+    }
+    syncDOMToState();
+    handleDataChange();
 }
 
 function sendCard(btn) {
@@ -614,6 +701,7 @@ function syncDOMToState() {
     const cardWrappers = dashboard.querySelectorAll('.card-outer');
     dashboardState.boxes = [];
     cardWrappers.forEach(wrapper => {
+        const rainbowToggle = wrapper.querySelector('.rainbow-toggle');
         dashboardState.boxes.push({
             id: wrapper.querySelector('.id-input').value.trim(),
             zeile1: wrapper.querySelector('.z1').value,
@@ -626,7 +714,8 @@ function syncDOMToState() {
             cornerColorB: wrapper.querySelector('.corner-b-color').value,
             cornerColorBOpacity: parseOpacityInputFromElement(wrapper.querySelector('.corner-b-opacity')),
             textColor: wrapper.querySelector('.text-color').value,
-            textColorOpacity: parseOpacityInputFromElement(wrapper.querySelector('.text-color-opacity'))
+            textColorOpacity: parseOpacityInputFromElement(wrapper.querySelector('.text-color-opacity')),
+            rainbowCorners: rainbowToggle ? rainbowToggle.checked : false
         });
     });
 }
@@ -662,7 +751,8 @@ function renderCardsFromState() {
                 box.cornerColorB || '#fce647',
                 box.cornerColorBOpacity !== undefined ? box.cornerColorBOpacity : 255,
                 box.textColor || '#000000',
-                box.textColorOpacity !== undefined ? box.textColorOpacity : 255
+                box.textColorOpacity !== undefined ? box.textColorOpacity : 255,
+                box.rainbowCorners || false
             );
         });
     } else {
@@ -696,7 +786,8 @@ function applyProfileData(profile) {
             box.cornerColorB || '#fce647',
             box.cornerColorBOpacity !== undefined ? box.cornerColorBOpacity : 255,
             box.textColor || '#000000',
-            box.textColorOpacity !== undefined ? box.textColorOpacity : 255
+            box.textColorOpacity !== undefined ? box.textColorOpacity : 255,
+            box.rainbowCorners || false
         );
     });
     
