@@ -303,6 +303,11 @@ async function pushDashboardStateToOBS(specificBoxId = null) {
   --zeile-1: "${escapeCssString(boxData.zeile1 || '')}";
   --zeile-2: "${escapeCssString(boxData.zeile2 || '')}";
   --zeile-3: "${escapeCssString(boxData.zeile3 || '')}";
+  --anim-file: "${escapeCssString(boxData.animFile || '')}";
+  --show-anim: ${boxData.showAnim ? 1 : 0};
+  --anim-scale: ${boxData.animScale || 3};
+  --anim-x: ${boxData.animX || 0}px;
+  --anim-y: ${boxData.animY || 0}px;
   --box-bg: ${hexToRgba(boxData.boxColor || '#ffffff', boxData.boxColorOpacity ?? 255)};
   --triangle-color-a: ${hexToRgba(boxData.cornerColorA || '#fce647', boxData.cornerColorAOpacity ?? 255)};
     --triangle-color-b: ${hexToRgba(boxData.cornerColorB || '#fce647', boxData.cornerColorBOpacity ?? 255)};
@@ -356,6 +361,11 @@ async function pushDashboardStateToOBS(specificBoxId = null) {
   --zeile-1: "${escapeCssString(boxData.zeile1 || '')}";
   --zeile-2: "${escapeCssString(boxData.zeile2 || '')}";
   --zeile-3: "${escapeCssString(boxData.zeile3 || '')}";
+  --anim-file: "${escapeCssString(boxData.animFile || '')}";
+  --show-anim: ${boxData.showAnim ? 1 : 0};
+  --anim-scale: ${boxData.animScale || 3};
+  --anim-x: ${boxData.animX || 0}px;
+  --anim-y: ${boxData.animY || 0}px;
   --box-bg: ${hexToRgba(boxData.boxColor || '#ffffff', boxData.boxColorOpacity ?? 255)};
   --triangle-color-a: ${hexToRgba(boxData.cornerColorA || '#fce647', boxData.cornerColorAOpacity ?? 255)};
   --triangle-color-b: ${hexToRgba(boxData.cornerColorB || '#fce647', boxData.cornerColorBOpacity ?? 255)};
@@ -555,7 +565,7 @@ function registerSettingsInputListeners() {
 const dashboard = document.getElementById('dashboard');
 const template = document.getElementById('card-template');
 
-function addNewCard(id = 'neue_box', z1 = '', z2 = '', z3 = '', boxColor = '#ffffff', boxColorOpacity = 255, cornerColorA = '#fce647', cornerColorAOpacity = 255, cornerColorB = '#fce647', cornerColorBOpacity = 255, textColor = '#000000', textColorOpacity = 255, rainbowCorners = false) {
+function addNewCard(id = 'neue_box', z1 = '', z2 = '', z3 = '', boxColor = '#ffffff', boxColorOpacity = 255, cornerColorA = '#fce647', cornerColorAOpacity = 255, cornerColorB = '#fce647', cornerColorBOpacity = 255, textColor = '#000000', textColorOpacity = 255, rainbowCorners = false, animFile = '', showAnim = false, animScale = 3, animX = 0, animY = 0) {
     console.log(`[UI] Füge neue Karte hinzu (ID: ${id})...`);
     const clone = template.content.cloneNode(true);
     const cardWrapper = clone.querySelector('.card-outer');
@@ -572,6 +582,34 @@ function addNewCard(id = 'neue_box', z1 = '', z2 = '', z3 = '', boxColor = '#fff
     cardInner.querySelector('.corner-b-opacity').value = cornerColorBOpacity;
     cardInner.querySelector('.text-color').value = textColor;
     cardInner.querySelector('.text-color-opacity').value = textColorOpacity;
+    
+    // Animation fields
+    const animFileInput = cardInner.querySelector('.anim-file');
+    if (animFileInput) animFileInput.value = animFile;
+    const animScaleInput = cardInner.querySelector('.anim-scale');
+    if (animScaleInput) animScaleInput.value = animScale;
+    const animToggle = cardInner.querySelector('.anim-toggle');
+    if (animToggle) animToggle.checked = !!showAnim;
+
+    const xSlider = cardInner.querySelector('.anim-x-slider');
+    const xVal = cardInner.querySelector('.anim-x-val');
+    if (xSlider) {
+        xSlider.value = animX;
+        if (xVal) xVal.textContent = `${animX}px`;
+        xSlider.addEventListener('input', () => {
+            if (xVal) xVal.textContent = `${xSlider.value}px`;
+        });
+    }
+
+    const ySlider = cardInner.querySelector('.anim-y-slider');
+    const yVal = cardInner.querySelector('.anim-y-val');
+    if (ySlider) {
+        ySlider.value = animY;
+        if (yVal) yVal.textContent = `${animY}px`;
+        ySlider.addEventListener('input', () => {
+            if (yVal) yVal.textContent = `${ySlider.value}px`;
+        });
+    }
 
     // Rainbow corners toggle
     const rainbowToggle = cardInner.querySelector('.rainbow-toggle');
@@ -584,7 +622,7 @@ function addNewCard(id = 'neue_box', z1 = '', z2 = '', z3 = '', boxColor = '#fff
     }
 
     // Trigger changes when typing or color picking
-    clone.querySelectorAll('input').forEach(input => {
+    clone.querySelectorAll('input, select').forEach(input => {
         input.addEventListener('input', () => {
             syncDOMToState();
             handleDataChange();
@@ -697,6 +735,11 @@ function syncDOMToState() {
     dashboardState.boxes = [];
     cardWrappers.forEach(wrapper => {
         const rainbowToggle = wrapper.querySelector('.rainbow-toggle');
+        const animFile = wrapper.querySelector('.anim-file');
+        const animScale = wrapper.querySelector('.anim-scale');
+        const animX = wrapper.querySelector('.anim-x-slider');
+        const animY = wrapper.querySelector('.anim-y-slider');
+        const animToggle = wrapper.querySelector('.anim-toggle');
         dashboardState.boxes.push({
             id: wrapper.querySelector('.id-input').value.trim(),
             zeile1: wrapper.querySelector('.z1').value,
@@ -710,7 +753,12 @@ function syncDOMToState() {
             cornerColorBOpacity: parseOpacityInputFromElement(wrapper.querySelector('.corner-b-opacity')),
             textColor: wrapper.querySelector('.text-color').value,
             textColorOpacity: parseOpacityInputFromElement(wrapper.querySelector('.text-color-opacity')),
-            rainbowCorners: rainbowToggle ? rainbowToggle.checked : false
+            rainbowCorners: rainbowToggle ? rainbowToggle.checked : false,
+            animFile: animFile ? animFile.value.trim() : '',
+            showAnim: animToggle ? animToggle.checked : false,
+            animScale: animScale ? (parseInt(animScale.value) || 3) : 3,
+            animX: animX ? (parseInt(animX.value) || 0) : 0,
+            animY: animY ? (parseInt(animY.value) || 0) : 0
         });
     });
 }
@@ -747,7 +795,12 @@ function renderCardsFromState() {
                 box.cornerColorBOpacity !== undefined ? box.cornerColorBOpacity : 255,
                 box.textColor || '#000000',
                 box.textColorOpacity !== undefined ? box.textColorOpacity : 255,
-                box.rainbowCorners || false
+                box.rainbowCorners || false,
+                box.animFile || '',
+                box.showAnim || false,
+                box.animScale || 3,
+                box.animX || 0,
+                box.animY || 0
             );
         });
     } else {
@@ -782,7 +835,12 @@ function applyProfileData(profile) {
             box.cornerColorBOpacity !== undefined ? box.cornerColorBOpacity : 255,
             box.textColor || '#000000',
             box.textColorOpacity !== undefined ? box.textColorOpacity : 255,
-            box.rainbowCorners || false
+            box.rainbowCorners || false,
+            box.animFile || '',
+            box.showAnim || false,
+            box.animScale || 3,
+            box.animX || 0,
+            box.animY || 0
         );
     });
     

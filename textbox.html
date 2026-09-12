@@ -25,10 +25,23 @@
         }
 
       /* generelles Styling */
+        html, body {
+            overflow: hidden !important;
+            scrollbar-width: none;
+            -ms-overflow-style: none;
+        }
+        ::-webkit-scrollbar {
+            display: none !important;
+            width: 0 !important;
+            height: 0 !important;
+        }
+
         body {
             background: transparent;
             margin: 0;
             padding: 20px; 
+            padding-top: 350px; /* Großzügiger Platz nach oben für große Animationen */
+            padding-left: 250px; /* Platz nach links, damit Animationen nicht abschneiden */
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
         }
 
@@ -102,12 +115,30 @@
             font-size: 32px;
             font-weight: 400;
         }
+
+        /* Animation Container */
+        .anim-wrapper {
+            position: absolute;
+            bottom: 100%;
+            right: 0;
+            margin-bottom: 15px;
+            z-index: 10;
+            /* Translation und Skalierung. Translate zuerst, damit die X/Y Pixel absolut sind */
+            transform: translate(var(--anim-x, 0px), var(--anim-y, 0px)) scale(var(--anim-scale, 3));
+            transform-origin: bottom right;
+        }
+        .anim-wrapper img, .anim-wrapper video {
+            display: block;
+            /* Pixelperfect Rendering, damit es beim Vergrößern nicht unscharf wird */
+            image-rendering: pixelated;
+        }
     </style>
 </head>
 <body>
 
     <!-- HTML Struktur ohne Leerzeichen zwischen den Divs -->
     <div class="textbox-container" id="box-container">
+        <div class="anim-wrapper" id="anim-wrapper" style="display: none;"></div>
         <div class="text-line line1"></div>
         <div class="text-line line2"></div>
         <div class="text-line line3"></div>
@@ -118,6 +149,8 @@
         // tatsächlichen Inhalt schrumpft. Prüft alle 150ms, weil OBS
         // die CSS-Variablen erst zur Laufzeit injiziert.
         (function () {
+            let currentAnimFile = '';
+            
             function updateLines() {
                 const cs = getComputedStyle(document.documentElement);
                 for (let n = 1; n <= 3; n++) {
@@ -126,6 +159,38 @@
                     const text = raw.replace(/^["']|["']$/g, '');
                     const line = document.querySelector('.line' + n);
                     if (line) line.style.display = text ? '' : 'none';
+                }
+                
+                // Animation Logic
+                const showAnimRaw = (cs.getPropertyValue('--show-anim') || '').trim();
+                const animFileRaw = (cs.getPropertyValue('--anim-file') || '').trim();
+                const animFile = animFileRaw.replace(/^["']|["']$/g, '');
+                const animWrapper = document.getElementById('anim-wrapper');
+                
+                if (showAnimRaw === '1' && animFile) {
+                    animWrapper.style.display = 'block';
+                    if (animFile !== currentAnimFile) {
+                        currentAnimFile = animFile;
+                        animWrapper.innerHTML = ''; // clear old
+                        if (animFile.toLowerCase().endsWith('.webm') || animFile.toLowerCase().endsWith('.mp4')) {
+                            const vid = document.createElement('video');
+                            vid.src = animFile;
+                            vid.autoplay = true;
+                            vid.loop = true;
+                            vid.muted = true;
+                            animWrapper.appendChild(vid);
+                        } else {
+                            const img = document.createElement('img');
+                            img.src = animFile;
+                            animWrapper.appendChild(img);
+                        }
+                    }
+                } else {
+                    animWrapper.style.display = 'none';
+                    if (currentAnimFile !== '') {
+                        currentAnimFile = '';
+                        animWrapper.innerHTML = '';
+                    }
                 }
             }
             updateLines();
