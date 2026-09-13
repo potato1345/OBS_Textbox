@@ -306,6 +306,50 @@
                         <label class="field-label">Zeile 3</label>
                         <input type="text" class="text-input z3" placeholder="Zusatz…" aria-label="Zeile 3">
                     </div>
+                    <details class="card-animation-dropdown">
+                        <summary class="card-color-summary">🎬 Animation</summary>
+                        <div class="card-color-content" style="padding: 10px;">
+                            <div class="field-group">
+                                <label class="field-label">Dateiname</label>
+                                <input type="text" class="text-input anim-file" placeholder="z.B. stern.gif oder feuer.webm" title="Muss im Ordner OBS_Textbox liegen">
+                            </div>
+                            
+                            <div class="field-group field-group-inline" style="gap: 14px; margin-bottom: 10px;">
+                                <div style="flex: 1;">
+                                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                                        <label class="field-label" style="margin-bottom: 0;">X-Offset (↔)</label>
+                                        <span class="anim-x-val" style="font-size: 0.75rem; color: var(--accent-blue); font-weight: 600; font-variant-numeric: tabular-nums;">0px</span>
+                                    </div>
+                                    <input type="range" class="anim-x-slider" min="-1500" max="1500" step="1" value="0" style="width: 100%; cursor: pointer;">
+                                </div>
+                                <div style="flex: 1;">
+                                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                                        <label class="field-label" style="margin-bottom: 0;">Y-Offset (↕)</label>
+                                        <span class="anim-y-val" style="font-size: 0.75rem; color: var(--accent-blue); font-weight: 600; font-variant-numeric: tabular-nums;">0px</span>
+                                    </div>
+                                    <input type="range" class="anim-y-slider" min="-1500" max="1500" step="1" value="0" style="width: 100%; cursor: pointer;">
+                                </div>
+                            </div>
+
+                            <div class="field-group">
+                                <label class="field-label">Größe (Skalierung)</label>
+                                <select class="text-input anim-scale">
+                                    <option value="1">1x (Original)</option>
+                                    <option value="2">2x</option>
+                                    <option value="3" selected>3x</option>
+                                    <option value="4">4x</option>
+                                    <option value="6">6x</option>
+                                    <option value="8">8x</option>
+                                    <option value="10">10x</option>
+                                    <option value="12">12x</option>
+                                </select>
+                            </div>
+                            <div class="field-group field-group-inline">
+                                <input type="checkbox" class="anim-toggle" aria-label="Animation anzeigen">
+                                <label class="inline-label">Animation sichtbar</label>
+                            </div>
+                        </div>
+                    </details>
                     <details class="card-color-dropdown">
                         <summary class="card-color-summary">🎨 Farben &amp; Deckkraft</summary>
                         <div class="card-color-content">
