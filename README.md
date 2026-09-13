@@ -47,6 +47,7 @@ While the core text system works offline and serverless, using advanced features
 1. Add a new **Browser Source** in OBS.
 2. Check the **"Local file"** box and select the `textbox.html` file from this folder.
 3. Set the dimensions (e.g. Width: 800, Height: 300)
+3. Set the dimensions to at least **Width: 1200, Height: 600** (the overlay uses large padding to leave room for animations above the box — smaller values may push the textbox out of the visible area).
 4. Scroll down to the **"Custom CSS"** field.
 5. Define your `--box-id` exactly like this:
 
@@ -109,4 +110,5 @@ body { background-color: rgba(0, 0, 0, 0); margin: 0px auto; overflow: hidden; }
 
 - **"Verbindung fehlgeschlagen"** — check that the WebSocket server is enabled, OBS is running, and the password in the dashboard matches (`Tools -> WebSocket Server Settings`).
 - **Nothing updates in OBS** — make sure the browser source's Custom CSS contains `--box-id: "…"` (with quotes) and that the card ID in the dashboard matches exactly.
+- **Black or invisible textbox** — the overlay needs at least **1200×600 px** in the browser source properties. The HTML uses large internal padding (`padding-top: 350px`) to leave room for animations; a smaller source pushes the box out of the visible area.
 - **OBS restarts** — the dashboard reconnects automatically after ~3 seconds and re-applies all boxes.

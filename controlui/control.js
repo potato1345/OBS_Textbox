@@ -314,6 +314,7 @@ async function pushDashboardStateToOBS(specificBoxId = null) {
   --text-color: ${hexToRgba(boxData.textColor || '#000000', boxData.textColorOpacity ?? 255)};
   --box-opacity: ${hasText ? 1 : 0};
 }
+html, body { background-color: rgba(0, 0, 0, 0) !important; }
 .textbox-container {
   background-image: none !important;
 }
@@ -372,6 +373,7 @@ async function pushDashboardStateToOBS(specificBoxId = null) {
   --text-color: ${hexToRgba(boxData.textColor || '#000000', boxData.textColorOpacity ?? 255)};
   --box-opacity: ${hasText ? 1 : 0};
 }
+html, body { background-color: rgba(0, 0, 0, 0) !important; }
 /* OBS_TEXTBOX_INJECT_END */`;
                         }
                         
