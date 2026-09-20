@@ -8,11 +8,12 @@ let cachedSongReference = null;
 const DEFAULT_SYSTEM_PROMPT = `Du bist ein Parser für Gottesdienstprogramme.
 Du erhältst extrahierten Text aus einem PDF und eine Gotteslob-Liedreferenz (Nummer: Titel).
 Identifiziere alle Programmpunkte (Lieder, Lesungen, Predigt, Gebete, etc.).
+Erselle für jeden Programmpunkt ein JSON-Objekt mit den folgenden IDs/Items: eingang, kyrie gloria, antwortgesang, credo, gabenbereitung, sanctus, agnusdei, kommunion, danklied, schlusslied
 Für Lieder: Schlage den vollen Titel aus der Referenz anhand der Nummer nach, falls vorhanden.
 Gib AUSSCHLIESSLICH gültiges JSON zurück im folgenden Format:
 { "items": [{ "zeile1": "...", "zeile2": "...", "zeile3": "..." }] }
-- zeile1 = Titel/Name des Programmpunkts
-- zeile2 = GL-Nummer/Details
+- zeile1 = GL-Nummer/Space/Absatz bzw. Unternummern im Fomrat 3+4+5+6
+- zeile2 = Titel/Name des Programmpunkts
 - zeile3 = optionale Zusatzinformationen`.trim();
 
 /**
