@@ -714,3 +714,195 @@
 | 666,3 | Regina caeli (gre)                                                  | 574      | Tagzeitenliturgie (Stundengebet) | Komplet                                            |            |
 | 666,4 | Salve Regina (gre)                                                  | 570      | Tagzeitenliturgie (Stundengebet) | Komplet                                            |            |
 | 670,8 | Dir sei Preis und Dank und Ehre (Kv)                                |          | Gottesdienstliche Feiern         | Die Wort-Gottes-Feier                              |            |
+| 710   | Beim frühen Morgenlicht (L)                                         |          | Gesänge - Tag                    | Morgen                                             |            |
+| 711   | Du hast uns, Herr, gerufen (L)                                      |          | Gesänge - Woche                  | Gesänge zur Eröffnung                              | ö          |
+| 712   | Wo zwei oder drei (Kan)                                             |          | Gesänge - Woche                  | Gesänge zur Eröffnung                              |            |
+| 713   | Zu dir, Herr, erhebe ich meine Seele (Kv)                           |          | Gesänge - Woche                  | Gesänge zur Eröffnung                              |            |
+| 714   | Gott soll gepriesen werden (L)                                      |          | Gesänge - Woche                  | Gloria                                             |            |
+| 715   | Halleluja (Hummel)                                                  |          | Gesänge - Woche                  | Rufe vor dem Evangelium (Halleluja)                |            |
+| 716   | Hallelu, Hallelu, Hallelu, Halleluja, preiset den Herrn (R, m)      |          | Gesänge - Woche                  | Rufe vor dem Evangelium (Halleluja)                |            |
+| 717   | Halleluja (Vulpius)                                                 |          | Gesänge - Woche                  | Rufe vor dem Evangelium (Halleluja)                |            |
+| 718   | Halleluja (irisch)                                                  |          | Gesänge - Woche                  | Rufe vor dem Evangelium (Halleluja)                |            |
+| 719   | Halleluja (Damjakob)                                                |          | Gesänge - Woche                  | Rufe vor dem Evangelium (Halleluja)                |            |
+| 720   | Halleluja (Tambling F)                                              |          | Gesänge - Woche                  | Rufe vor dem Evangelium (Halleluja)                |            |
+| 721   | Halleluja (Tambling D)                                              |          | Gesänge - Woche                  | Rufe vor dem Evangelium (Halleluja)                |            |
+| 722   | Halleluja (Frey)                                                    |          | Gesänge - Woche                  | Rufe vor dem Evangelium (Halleluja)                |            |
+| 723   | Halleluja (nach „Christ ist erstanden“)                             |          | Gesänge - Woche                  | Rufe vor dem Evangelium (Halleluja)                |            |
+| 724   | Wenn wir unsre Gaben bringen (L)                                    |          | Gesänge - Woche                  | Gesänge zur Gabenbereitung                         |            |
+| 725   | Bringet, ihr Völker herbei (Kv)                                     |          | Gesänge - Woche                  | Gesänge zur Gabenbereitung                         |            |
+| 726   | Alles, was wir haben (L)                                            |          | Gesänge - Woche                  | Gesänge zur Gabenbereitung                         |            |
+| 727   | Herr, wir bringen Brot und Wein (L)                                 |          | Gesänge - Woche                  | Gesänge zur Gabenbereitung                         |            |
+| 728   | Kommt mit Gaben und Lobgesang (L)                                   |          | Gesänge - Woche                  | Gesänge zur Gabenbereitung                         |            |
+| 729   | Heilig (G, Gen Rosso)                                               |          | Gesänge - Woche                  | Sanctus                                            |            |
+| 730   | Heilig (G, Heino Schubert)                                          |          | Gesänge - Woche                  | Sanctus                                            |            |
+| 731   | Heilig ist Gott Zebaot (L)                                          |          | Gesänge - Woche                  | Sanctus                                            |            |
+| 732   | Heilig, heilig, heilig ist der Herr Gott Zebaot (G)                 |          | Gesänge - Woche                  | Sanctus                                            |            |
+| 733   | Singt: Heilig, heilig (L)                                           |          | Gesänge - Woche                  | Sanctus                                            |            |
+| 734   | Heilig (G, Reulein)                                                 |          | Gesänge - Woche                  | Sanctus                                            |            |
+| 735   | Heilig, heilig lasst uns singen (G)                                 |          | Gesänge - Woche                  | Sanctus                                            |            |
+| 736   | Heilig, heilig, dreimal heilig (L)                                  |          | Gesänge - Woche                  | Sanctus                                            |            |
+| 737   | Wir preisen deinen Tod (Kan)                                        |          | Gesänge - Woche                  | Akklamationen zum Hochgebet                        |            |
+| 738   | Gottes Lamm, das da starb (G)                                       |          | Gesänge - Woche                  | Agnus Dei                                          |            |
+| 739   | Jesus Christus, Gottes Lamm (G)                                     |          | Gesänge - Woche                  | Agnus Dei                                          |            |
+| 740   | O du Lamm Gottes, welches du hinwegnimmst (G)                       |          | Gesänge - Woche                  | Agnus Dei                                          |            |
+| 741   | Lamm Gottes, für uns gegeben (G)                                    |          | Gesänge - Woche                  | Agnus Dei                                          |            |
+| 742   | O du Lamm Gottes, das du hinwegnimmst (G)                           |          | Gesänge - Woche                  | Agnus Dei                                          |            |
+| 743   | Lob sei dem Herrn (G)                                               |          | Gesänge - Woche                  | Gesänge zur Kommunion / Dank nach der Kommunion    |            |
+| 744   | Der Herr ernährt uns mit dem Brote des Lebens (Kv)                  |          | Gesänge - Woche                  | Gesänge zur Kommunion / Dank nach der Kommunion    |            |
+| 745   | Wenn wir jetzt weitergehen (L)                                      |          | Gesänge - Woche                  | Gesänge zur Kommunion / Dank nach der Kommunion    | ö          |
+| 746   | Tauet, Himmel, den Gerechten (L)                                    |          | Gesänge - Jahr                   | Advent                                             |            |
+| 747   | O komm, o komm, Immanuel (L)                                        |          | Gesänge - Jahr                   | Advent                                             |            |
+| 748   | Mit Ernst, o Menschenkinder (L)                                     |          | Gesänge - Jahr                   | Advent                                             | (ö)        |
+| 749   | Seht, neuer Morgen (L)                                              |          | Gesänge - Jahr                   | Advent                                             |            |
+| 750   | Im Advent, im Advent (L)                                            |          | Gesänge - Jahr                   | Advent                                             |            |
+| 751   | Auf, Christen, singt festliche Lieder (L)                           |          | Gesänge - Jahr                   | Weihnachtszeit                                     |            |
+| 752   | Freu dich, Erd und Sternenzelt (L)                                  |          | Gesänge - Jahr                   | Weihnachtszeit                                     | ö          |
+| 753   | Singen wir mit Fröhlichkeit (L)                                     |          | Gesänge - Jahr                   | Weihnachtszeit                                     | (ö)        |
+| 754   | Kommet, ihr Hirten (L)                                              |          | Gesänge - Jahr                   | Weihnachtszeit                                     | ö          |
+| 755   | Christus ist uns heute geboren (Kv zu Ps 95)                        |          | Gesänge - Jahr                   | Weihnachtszeit                                     |            |
+| 756   | Kundgetan hat der Herr sein Heil (Kv zu Ps 98)                      |          | Gesänge - Jahr                   | Weihnachtszeit                                     |            |
+| 757   | Ein Kind ist uns geboren (Kv zu Ps 100)                             |          | Gesänge - Jahr                   | Weihnachtszeit                                     |            |
+| 758   | Heute ist uns der König der Himmel (Kv zu Ps 72)                    |          | Gesänge - Jahr                   | Weihnachtszeit                                     |            |
+| 759   | Das alte Jahr verflossen ist (L)                                    |          | Gesänge - Jahr                   | Jahresschluss - Neujahr                            |            |
+| 760   | Ein Kind geborn zu Betlehem (L)                                     |          | Gesänge - Jahr                   | Erscheinung des Herrn                              | ö          |
+| 761   | Zion auf, werde licht (L)                                           |          | Gesänge - Jahr                   | Erscheinung des Herrn                              |            |
+| 762   | Wir kommen daher aus dem Morgenland (L)                             |          | Gesänge - Jahr                   | Erscheinung des Herrn                              | ö          |
+| 763   | Aus der Tiefe rufen wir zu dir (L)                                  |          | Gesänge - Jahr                   | Österliche Bußzeit - Fastenzeit                    |            |
+| 764   | Korn, das in die Erde (L)                                           |          | Gesänge - Jahr                   | Österliche Bußzeit - Fastenzeit                    | ö          |
+| 765   | Gottes Lamm, Herr Jesu Christ (G)                                   |          | Gesänge - Jahr                   | Österliche Bußzeit - Fastenzeit                    |            |
+| 766   | O du hochheilig Kreuze (G)                                          |          | Gesänge - Jahr                   | Österliche Bußzeit - Fastenzeit                    |            |
+| 767   | O höre, Herr, erhöre mich (G)                                       |          | Gesänge - Jahr                   | Österliche Bußzeit - Fastenzeit                    |            |
+| 768   | O Sonn des Heiles Jesus Christ (L)                                  |          | Gesänge - Jahr                   | Österliche Bußzeit - Fastenzeit                    |            |
+| 769   | Sag ja zu mir, wenn alles nein sagt (L)                             |          | Gesänge - Jahr                   | Österliche Bußzeit - Fastenzeit                    |            |
+| 770   | Alle Menschen höret (L)                                             |          | Gesänge - Jahr                   | Die Feier der Heiligen Woche                       |            |
+| 771   | O heilges Kreuz, sei uns gegrüßt (G)                                |          | Gesänge - Jahr                   | Die Feier der Heiligen Woche                       |            |
+| 772   | Ich sehe dich, o Jesus, schweigen (L)                               |          | Gesänge - Jahr                   | Die Feier der Heiligen Woche                       |            |
+| 773   | Du schweigst, Herr (L)                                              |          | Gesänge - Jahr                   | Die Feier der Heiligen Woche                       |            |
+| 774   | O du mein Volk, was tat ich dir (G)                                 |          | Gesänge - Jahr                   | Die Feier der Heiligen Woche                       |            |
+| 775   | Das neue Morgenrot erglüht (L)                                      |          | Gesänge - Jahr                   | Osterzeit                                          |            |
+| 776   | Nun freue dich du Christenheit (L)                                  |          | Gesänge - Jahr                   | Osterzeit                                          |            |
+| 777   | Heil uns, Heil (L)                                                  |          | Gesänge - Jahr                   | Osterzeit                                          |            |
+| 778   | Halleluja (nach O filii et filiae)                                  |          | Gesänge - Jahr                   | Osterzeit                                          |            |
+| 779   | Wahrer Gott, wir glauben dir (L)                                    |          | Gesänge - Jahr                   | Osterzeit                                          |            |
+| 780   | Preis dem Todesüberwinder (L)                                       |          | Gesänge - Jahr                   | Osterzeit                                          |            |
+| 781   | Komm, o Geist der Heiligkeit (L)                                    |          | Gesänge - Jahr                   | Pfingsten – Heiliger Geist                         |            |
+| 782   | Der Heilige Geist erfüllet das All (Kv)                             |          | Gesänge - Jahr                   | Pfingsten – Heiliger Geist                         |            |
+| 783   | Dein Geist weht, wo er will (L)                                     |          | Gesänge - Jahr                   | Pfingsten – Heiliger Geist                         |            |
+| 784   | Komm Heiliger Geist, mit deiner Kraft (G)                           |          | Gesänge - Jahr                   | Pfingsten – Heiliger Geist                         |            |
+| 785   | O komm herab, du heiliger Geist (G)                                 |          | Gesänge - Jahr                   | Pfingsten – Heiliger Geist                         |            |
+| 786   | Kommt, lasst uns unsern Gott und Herren preisen (L)                 |          | Leben in Gott                    | Der Dreieine Gott                                  |            |
+| 787   | Ich glaube, Herr, dass du es bist (L)                               |          | Leben in Gott                    | Der Dreieine Gott                                  |            |
+| 788   | Sei gelobt und hochgepriesen (L)                                    |          | Leben in Gott                    | Der Dreieine Gott                                  |            |
+| 789   | Wir glauben Gott im höchsten Thron (L)                              |          | Leben in Gott                    | Der Dreieine Gott                                  | ö          |
+| 790   | Ich glaube an den Vater (L)                                         |          | Leben in Gott                    | Der Dreieine Gott                                  |            |
+| 791   | Wir glauben an den großen, dreieinigen Gott (G)                     |          | Leben in Gott                    | Der Dreieine Gott                                  |            |
+| 792   | Christus, Schöpfer aller Welt (L)                                   |          | Leben in Gott                    | Jesus Christus                                     |            |
+| 793   | Zum ewgen Hohenpriester (L)                                         |          | Leben in Gott                    | Jesus Christus                                     |            |
+| 794   | Du höchstes Licht, du ewger Schein (L)                              |          | Leben in Gott                    | Jesus Christus                                     | (ö)        |
+| 795   | Christus vincit (Kv)                                                |          | Leben in Gott                    | Jesus Christus                                     |            |
+| 796   | Ein neues Zion leuchtet (L)                                         |          | Leben in Gott                    | Jesus Christus                                     |            |
+| 797   | Jesu, meine Freude (L)                                              |          | Leben in Gott                    | Jesus Christus                                     |            |
+| 798   | O Schöpfer, dessen Allmachtswort (L)                                |          | Leben in Gott                    | Jesus Christus                                     |            |
+| 799   | Du König auf dem Kreuzesthron (L)                                   |          | Leben in Gott                    | Jesus Christus                                     |            |
+| 800   | Lasst uns Gott dem Herrn lobsingen (L)                              |          | Leben in Gott                    | Lob, Dank und Anbetung                             |            |
+| 801   | Wir wollen Gott, den Vater, loben (L)                               |          | Leben in Gott                    | Lob, Dank und Anbetung                             |            |
+| 802   | Sing, sing, sing (G)                                                |          | Leben in Gott                    | Lob, Dank und Anbetung                             |            |
+| 803   | Unser Leben sei ein Fest (G)                                        |          | Leben in Gott                    | Lob, Dank und Anbetung                             | (ö)        |
+| 804   | Danket Gott, denn er ist gut (G)                                    |          | Leben in Gott                    | Lob, Dank und Anbetung                             |            |
+| 805   | Sing mit mir ein Halleluja (G)                                      |          | Leben in Gott                    | Lob, Dank und Anbetung                             |            |
+| 806   | Preiset den Herrn, denn er ist gut (G)                              |          | Leben in Gott                    | Lob, Dank und Anbetung                             |            |
+| 807   | Anbetung, Dank und Ehre (L)                                         |          | Leben in Gott                    | Lob, Dank und Anbetung                             |            |
+| 808   | Unser Lied nun erklingt (G)                                         |          | Leben in Gott                    | Lob, Dank und Anbetung                             |            |
+| 809   | Laudato si (G)                                                      |          | Leben in Gott                    | Lob, Dank und Anbetung                             |            |
+| 810   | Ehre dir, Gott im heilgen Thron (L)                                 |          | Leben in Gott                    | Lob, Dank und Anbetung                             |            |
+| 811   | Vergiss nicht zu danken (G)                                         |          | Leben in Gott                    | Lob, Dank und Anbetung                             |            |
+| 812   | Kleines Senfkorn Hoffnung (L)                                       |          | Leben in Gott                    | Vertrauen und Trost                                |            |
+| 813   | In der Mitte der Nacht (G)                                          |          | Leben in Gott                    | Vertrauen und Trost                                |            |
+| 814   | Da wohnt ein Sehnen tief in uns (G)                                 |          | Leben in Gott                    | Vertrauen und Trost                                |            |
+| 815   | Auf dich allein ich baue (L)                                        |          | Leben in Gott                    | Vertrauen und Trost                                |            |
+| 816   | Meine Zeit steht in deinen Händen (G)                               |          | Leben in Gott                    | Vertrauen und Trost                                |            |
+| 817   | Das wünsch’ ich sehr (Kan)                                          |          | Leben in Gott                    | Vertrauen und Trost                                |            |
+| 818   | Du bist das Licht der Welt (G)                                      |          | Leben in Gott                    | Vertrauen und Trost                                |            |
+| 819   | Gott sagt uns immer wieder (G)                                      |          | Leben in Gott                    | Vertrauen und Trost                                |            |
+| 820   | Meine Seele ist stille in dir (G)                                   |          | Leben in Gott                    | Vertrauen und Trost                                |            |
+| 821   | Wir haben Gottes Spuren festgestellt (G)                            |          | Leben in Gott                    | Vertrauen und Trost                                | ö          |
+| 822   | Von guten Mächten treu und still umgeben (L)                        |          | Leben in Gott                    | Vertrauen und Trost                                |            |
+| 823   | Nicht durch Zufall steh ich da (G)                                  |          | Leben in Gott                    | Vertrauen und Trost                                |            |
+| 824   | Vertraut auf den Herrn (Kv)                                         |          | Leben in Gott                    | Vertrauen und Trost                                |            |
+| 825   | Danke, Herr Jesus (G)                                               |          | Leben in Gott                    | Vertrauen und Trost                                |            |
+| 826   | Gottes Liebe ist so wunderbar (G)                                   |          | Leben in Gott                    | Glaube – Hoffnung – Liebe                          |            |
+| 827   | Wo die Liebe wohnt (Kan)                                            |          | Leben in Gott                    | Glaube – Hoffnung – Liebe                          |            |
+| 828   | Liebe ist nicht nur ein Wort (L)                                    |          | Leben in Gott                    | Glaube – Hoffnung – Liebe                          |            |
+| 829   | Gib, Herr, uns deinen Segen (L)                                     |          | Leben in Gott                    | Segen                                              |            |
+| 830   | Halte zu mir, guter Gott (G)                                        |          | Leben in Gott                    | Segen                                              |            |
+| 831   | Gott, dein guter Segen (G)                                          |          | Leben in Gott                    | Segen                                              |            |
+| 832   | Herr, wir bitten: Komm und segne uns (G)                            |          | Leben in Gott                    | Segen                                              |            |
+| 833   | Möge die Straße uns zusammenführen (G)                              |          | Leben in Gott                    | Segen                                              |            |
+| 834   | Geh mit uns (Kv)                                                    |          | Leben in der Welt                | Sendung und Nachfolge                              |            |
+| 835   | Wer glaubt, ist nie allein (G)                                      |          | Leben in der Welt                | Sendung und Nachfolge                              |            |
+| 836   | Tragt in die Welt nun ein Licht (G)                                 |          | Leben in der Welt                | Sendung und Nachfolge                              |            |
+| 837   | Dein Wort, o Herr, ist Licht (Kv)                                   |          | Leben in der Welt                | Sendung und Nachfolge                              |            |
+| 838   | Erd und Himmel sollen singen (L)                                    |          | Leben in der Welt                | Schöpfung                                          |            |
+| 839   | Alle Kinder dieser Erde (L)                                         |          | Leben in der Welt                | Schöpfung                                          |            |
+| 840   | Schalom chaverim (Kan)                                              |          | Leben in der Welt                | Gerechtigkeit und Friede                           | ö          |
+| 841   | Wo Menschen sich vergessen (G)                                      |          | Leben in der Welt                | Gerechtigkeit und Friede                           |            |
+| 842   | Gib uns Frieden jeden Tag (L)                                       |          | Leben in der Welt                | Gerechtigkeit und Friede                           | (ö)        |
+| 843   | Herr, gib uns deinen Frieden (Kan)                                  |          | Leben in der Welt                | Gerechtigkeit und Friede                           |            |
+| 844   | Gott baut ein Haus, das lebt (L)                                    |          | Leben in der Kirche              | Kirche - Ökumene                                   |            |
+| 845   | Kind, du bist uns anvertraut (L)                                    |          | Leben in der Kirche              | Taufe                                              |            |
+| 846   | Fest soll mein Taufbund immer stehn (L)                             |          | Leben in der Kirche              | Taufe                                              |            |
+| 847   | O Seligkeit, getauft zu sein (L)                                    |          | Leben in der Kirche              | Taufe                                              |            |
+| 848   | Wahrer Leib, o sei gegrüßet (L)                                     |          | Leben in der Kirche              | Eucharistie                                        |            |
+| 849   | Deinem Heiland, deinem Lehrer (L)                                   |          | Leben in der Kirche              | Eucharistie                                        |            |
+| 850   | Lobe, Zion, deinen Hirten (gre)                                     |          | Leben in der Kirche              | Eucharistie                                        |            |
+| 851   | Kommt her, ihr Kreaturen all (L)                                    |          | Leben in der Kirche              | Eucharistie                                        |            |
+| 852   | In Brots- und Weinsgestalten (L)                                    |          | Leben in der Kirche              | Eucharistie                                        |            |
+| 853   | O heilger Leib des Herrn (L)                                        |          | Leben in der Kirche              | Eucharistie                                        |            |
+| 854   | Mein Heiland Jesus Christ, der Tisch bereitet ist (G)               |          | Leben in der Kirche              | Eucharistie                                        |            |
+| 855   | Preiset, Lippen, das Geheimnis (L)                                  |          | Leben in der Kirche              | Eucharistie                                        |            |
+| 856   | Tantum ergo (Ett)                                                   |          | Leben in der Kirche              | Eucharistie                                        |            |
+| 857   | Tantum ergo (Witt)                                                  |          | Leben in der Kirche              | Eucharistie                                        |            |
+| 858   | O heilge Seelenspeise (L)                                           |          | Leben in der Kirche              | Eucharistie                                        |            |
+| 859   | Du bist heilig, du bringst Heil (Kan)                               |          | Leben in der Kirche              | Eucharistie                                        |            |
+| 860   | Lasst, Christen, hoch den Jubel schallen (G)                        |          | Leben in der Kirche              | Eucharistie                                        |            |
+| 861   | Christen, singt mit frohem Herzen (L)                               |          | Leben in der Kirche              | Eucharistie                                        |            |
+| 862   | Du sprachst, o Herr, ein Gnadenwort (L)                             |          | Leben in der Kirche              | Tod und Vollendung                                 |            |
+| 863   | Herr, du bist meine Zuversicht (L)                                  |          | Leben in der Kirche              | Tod und Vollendung                                 |            |
+| 864   | Ach wie flüchtig (L)                                                |          | Leben in der Kirche              | Tod und Vollendung                                 | ö          |
+| 865   | Reinste Jungfrau (L)                                                |          | Leben in der Kirche              | Maria                                              |            |
+| 866   | Gruß dir, Mutter, in Gottes Herrlichkeit (G)                        |          | Leben in der Kirche              | Maria                                              |            |
+| 867   | Sei Mutter der Barmherzigkeit (L)                                   |          | Leben in der Kirche              | Maria                                              |            |
+| 868   | Ave Maria klare (L)                                                 |          | Leben in der Kirche              | Maria                                              |            |
+| 869   | Maria, sei gegrüßt mit deinem lieben Sohn (G)                       |          | Leben in der Kirche              | Maria                                              |            |
+| 870   | Rosenkranzkönigin (L)                                               |          | Leben in der Kirche              | Maria                                              |            |
+| 871   | Stern auf diesem Lebensmeere (L)                                    |          | Leben in der Kirche              | Maria                                              |            |
+| 872   | O himmlische Frau Königin (L)                                       |          | Leben in der Kirche              | Maria                                              |            |
+| 873   | Nun, Brüder, sind wir frohgemut (L)                                 |          | Leben in der Kirche              | Maria                                              |            |
+| 874   | Groß sein lässt meine Seele den Herrn (G)                           |          | Leben in der Kirche              | Maria                                              |            |
+| 875   | Kommt, Christen, kommt zu loben (L)                                 |          | Leben in der Kirche              | Maria                                              |            |
+| 876   | Maria, Maienkönigin (L)                                             |          | Leben in der Kirche              | Maria                                              |            |
+| 877   | Wunderschön prächtige (L)                                           |          | Leben in der Kirche              | Maria                                              |            |
+| 878   | Gott hat mir längst einen Engel gesandt (L)                         |          | Leben in der Kirche              | Engel                                              |            |
+| 879   | Unüberwindlich starker Held (L)                                     |          | Leben in der Kirche              | Engel                                              |            |
+| 880   | Herr, sei gelobt durch deinen Knecht (L)                            |          | Leben in der Kirche              | Heilige                                            |            |
+| 881   | O heilger Josef, Schutzpatron (L)                                   |          | Leben in der Kirche              | Heilige                                            |            |
+| 882   | Gelobt sei Gott in aller Welt (L)                                   |          | Leben in der Kirche              | Heilige                                            |            |
+| 883   | O Zierde der Apostelschar (L)                                       |          | Leben in der Kirche              | Heilige                                            |            |
+| 884   | Johannes auserkoren (L)                                             |          | Leben in der Kirche              | Heilige                                            |            |
+| 885   | Herr, heilger Liebe fester Grund (L)                                |          | Leben in der Kirche              | Heilige                                            |            |
+| 886   | Sei, heilger Stephan, heut gegrüßt (L)                              |          | Leben in der Kirche              | Heilige                                            |            |
+| 887   | Lasst uns Sankt Bruno ehren (L)                                     |          | Leben in der Kirche              | Heilige                                            |            |
+| 888   | Zu dir, Sankt Burkard, in schwerer Zeit (L)                         |          | Leben in der Kirche              | Heilige                                            |            |
+| 889   | Selger Liborius (L)                                                 |          | Leben in der Kirche              | Heilige                                            |            |
+| 890   | Wir rufen an den teuren Mann (L)                                    |          | Leben in der Kirche              | Heilige                                            |            |
+| 891   | Einst in schwerer Zeit (L)                                          |          | Leben in der Kirche              | Heilige                                            |            |
+| 892   | Du wolltest Zeuge sein (L)                                          |          | Leben in der Kirche              | Heilige                                            |            |
+| 893   | Jerusalem, du selge Stadt (L)                                       |          | Leben in der Kirche              | Die himmlische Stadt                               |            |
+| 894   | Freut euch, freut euch, Menschenkinder (L) 4stg                     |          | Mehrstimmige Gesänge             | Mehrstimmige Gesänge                               |            |
+| 895   | Es ist ein Ros entsprungen (L) 4stg                                 |          | Mehrstimmige Gesänge             | Mehrstimmige Gesänge                               | (ö)        |
+| 896   | Heilig, heilig, heilig, heilig ist der Herr (L) 4stg                |          | Mehrstimmige Gesänge             | Mehrstimmige Gesänge                               |            |
+| 897   | Nun danket alle Gott (L) 4stg                                       |          | Mehrstimmige Gesänge             | Mehrstimmige Gesänge                               | ö          |
+| 898   | Näher, mein Gott, zu dir (L) 4stg                                   |          | Mehrstimmige Gesänge             | Mehrstimmige Gesänge                               | ö          |
+| 899   | Du lässt den Tag, o Gott, nun enden (L) 4stg                        |          | Mehrstimmige Gesänge             | Mehrstimmige Gesänge                               |            |
+| 900   | Herr, mein Beten steige zu dir auf (Kv) 4stg                        |          | Mehrstimmige Gesänge             | Mehrstimmige Gesänge                               |            |
+| 901   | Wer glaubt ist nie allein (Kv) 4stg                                 |          | Mehrstimmige Gesänge             | Mehrstimmige Gesänge                               |            |
