@@ -129,7 +129,7 @@ async function extractTextFromPDF(file) {
         let pageText = '';
         for (const item of textContent.items) {
             if (item.hasEOL) {
-                pageText += (pageText.endsWith(' ') ? pageText.slice(0, -1) : pageText) + '\n';
+                pageText = (pageText.endsWith(' ') ? pageText.slice(0, -1) : pageText) + '\n';
             } else {
                 pageText += (item.str || '') + ' ';
             }
