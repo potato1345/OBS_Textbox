@@ -236,7 +236,7 @@
                     <label class="field-label" for="ai-system-prompt">System Prompt</label>
                     <textarea id="ai-system-prompt" class="text-input" rows="6" placeholder="System Prompt für die LLM-Verarbeitung…" style="resize: vertical; font-family: monospace; font-size: 0.85em;"></textarea>
                     <small class="field-hint">
-                        Beschreibt, wie die AI den PDF-Text verarbeiten soll.
+                        Beschreibt, wie die AI den Liedplan (PDF / Word) verarbeiten soll.
                         <button type="button" class="btn" style="padding: 2px 8px; font-size: 0.85em; margin-left: 6px;" onclick="resetSystemPrompt()">↺ Standard</button>
                     </small>
                 </div>
@@ -244,11 +244,11 @@
 
             <!-- Upload Section -->
             <div class="settings-section">
-                <div class="section-title">PDF hochladen</div>
+                <div class="section-title">Liedplan hochladen (PDF / Word)</div>
                 <div class="pdf-dropzone" id="pdf-dropzone">
                     <span class="pdf-dropzone-icon">📄</span>
-                    <span class="pdf-dropzone-text">PDF hierher ziehen oder klicken</span>
-                    <input type="file" id="pdf-file-input" accept=".pdf" hidden>
+                    <span class="pdf-dropzone-text">PDF oder Word (.docx) hierher ziehen oder klicken</span>
+                    <input type="file" id="pdf-file-input" accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document" hidden>
                 </div>
             </div>
 
@@ -257,7 +257,7 @@
                 <div class="section-title">Verarbeitung</div>
                 <div class="pdf-progress">
                     <div class="pdf-progress-step" id="ai-step-extract">
-                        <span class="step-icon">⏳</span> Text extrahieren…
+                        <span class="step-icon">⏳</span> Text & Layout extrahieren (MarkItDown)…
                     </div>
                     <div class="pdf-progress-step" id="ai-step-llm">
                         <span class="step-icon">⏳</span> LLM verarbeitet…
@@ -266,6 +266,7 @@
                         <span class="step-icon">⏳</span> Karten befüllen…
                     </div>
                 </div>
+                <div id="ai-llm-progress" style="margin-top:8px; font-size:0.82em; color:#9aa4b2; min-height:1.2em; font-family:ui-monospace,monospace; word-break:break-word;"></div>
                 <div id="ai-result-info" hidden>
                     <p id="ai-result-message"></p>
                     <details id="ai-raw-details" open hidden>

@@ -3,6 +3,9 @@ import sys
 import time
 import socket
 import threading
+import tempfile
+import json
+import urllib.parse
 from http.server import HTTPServer, SimpleHTTPRequestHandler
 from collections import defaultdict
 from datetime import datetime
@@ -28,8 +31,8 @@ if os.name == 'nt':
 
 BANNER = f"""{C_GREEN}
  ██████╗ ██████╗ ███████╗     ████████╗███████╗██╗  ██╗████████╗██████╗  ██████╗ ██╗  ██╗
-██╔═══██╗██╔══██╗██╔════╝     ╚══██╔══╝██╔════╝╚██╗██╔╝╚══██╔══╝██╔══██╗██╔═══██╗╚██╗██╔╝
-██║   ██║██████╔╝███████╗        ██║   █████╗   ╚███╔╝    ██║   ██████╔╝██║   ██║ ╚███╔╝ 
+██╔════╝ ██╔══██╗██╔════╝     ╚══██╔══╝██╔════╝╚██╗██╔╝╚══██╔══╝██╔══██╗██╔═══██╗╚██╗██╔╝
+██║  ███╗██████╔╝███████╗        ██║   █████╗   ╚███╔╝    ██║   ██████╔╝██║   ██║ ╚███╔╝ 
 ██║   ██║██╔══██╗╚════██║        ██║   ██╔══╝   ██╔██╗    ██║   ██╔══██╗██║   ██║ ██╔██╗ 
 ╚██████╔╝██████╔╝███████║███████╗██║   ███████╗██╔╝ ██╗   ██║   ██████╔╝╚██████╔╝██╔╝ ██╗
  ╚═════╝ ╚═════╝ ╚══════╝╚══════╝╚═╝   ╚══════╝╚═╝  ╚═╝   ╚═╝   ╚═════╝  ╚═════╝ ╚═╝  ╚═╝{C_RESET}
@@ -94,6 +97,74 @@ class StatsHandler(SimpleHTTPRequestHandler):
             if len(stats["recent_activity"]) > 10:
                 stats["recent_activity"].pop(0)
 
+    def do_OPTIONS(self):
+        self.send_response(204)
+        self.send_header('Access-Control-Allow-Origin', '*')
+        self.send_header('Access-Control-Allow-Methods', 'POST, GET, OPTIONS')
+        self.send_header('Access-Control-Allow-Headers', 'Content-Type, X-Filename')
+        self.end_headers()
+
+    def do_POST(self):
+        if self.path == '/api/parse-document':
+            try:
+                content_length = int(self.headers.get('Content-Length', 0))
+                if content_length == 0:
+                    self._send_json(400, {'success': False, 'error': 'Keine Datei empfangen'})
+                    return
+                
+                raw_filename = self.headers.get('X-Filename', 'document.pdf')
+                filename = urllib.parse.unquote(raw_filename)
+                _, ext = os.path.splitext(filename)
+                if not ext:
+                    ext = '.pdf'
+                
+                file_bytes = self.rfile.read(content_length)
+                
+                with tempfile.NamedTemporaryFile(delete=False, suffix=ext) as tmp:
+                    tmp.write(file_bytes)
+                    tmp_path = tmp.name
+
+                try:
+                    from markitdown import MarkItDown
+                    md = MarkItDown()
+                    result = md.convert(tmp_path)
+                    markdown_text = result.text_content
+                    self._send_json(200, {
+                        'success': True,
+                        'markdown': markdown_text,
+                        'filename': filename
+                    })
+                except ImportError:
+                    self._send_json(500, {
+                        'success': False,
+                        'error': 'MarkItDown ist nicht installiert. Bitte `pip install "markitdown[all]"` ausführen.'
+                    })
+                except Exception as conv_err:
+                    self._send_json(500, {
+                        'success': False,
+                        'error': f'Fehler bei der Konvertierung: {str(conv_err)}'
+                    })
+                finally:
+                    if os.path.exists(tmp_path):
+                        try:
+                            os.remove(tmp_path)
+                        except Exception:
+                            pass
+            except Exception as e:
+                self._send_json(500, {'success': False, 'error': f'Serverfehler: {str(e)}'})
+            return
+            
+        self.send_error(404, 'Endpoint not found')
+
+    def _send_json(self, status_code, data):
+        response_bytes = json.dumps(data, ensure_ascii=False).encode('utf-8')
+        self.send_response(status_code)
+        self.send_header('Content-Type', 'application/json; charset=utf-8')
+        self.send_header('Content-Length', str(len(response_bytes)))
+        self.send_header('Access-Control-Allow-Origin', '*')
+        self.end_headers()
+        self.wfile.write(response_bytes)
+
 def format_bytes(b):
     for unit in ['B', 'KB', 'MB', 'GB', 'TB']:
         if b < 1024.0:
@@ -138,9 +209,9 @@ def draw_dashboard(port, lan_ip):
         
         # Banner (ohne leere Zeilen am Anfang/Ende)
         out += line(f"{C_WHITE} ██████╗ ██████╗ ███████╗     ████████╗███████╗██╗  ██╗████████╗██████╗  ██████╗ ██╗  ██╗{C_RESET}")
-        out += line(f"{C_WHITE}██╔═══██╗██╔══██╗██╔════╝     ╚══██╔══╝██╔════╝╚██╗██╔╝╚══██╔══╝██╔══██╗██╔═══██╗╚██╗██╔╝{C_RESET}")
-        out += line(f"{C_WHITE}██║   ██║██████╔╝███████╗        ██║   █████╗   ╚███╔╝    ██║   ██████╔╝██║   ██║ ╚███╔╝{C_RESET}")
-        out += line(f"{C_WHITE}██║   ██║██╔══██╗╚════██║        ██║   ██╔══╝   ██╔██╗    ██║   ██╔══██╗██║   ██║ ██╔██╗{C_RESET}")
+        out += line(f"{C_WHITE}██╔════╝ ██╔══██╗██╔════╝     ╚══██╔══╝██╔════╝╚██╗██╔╝╚══██╔══╝██╔══██╗██╔═══██╗╚██╗██╔╝{C_RESET}")
+        out += line(f"{C_WHITE}██║  ███╗██████╔╝███████╗        ██║   █████╗   ╚███╔╝    ██║   ██████╔╝██║   ██║ ╚███╔╝ {C_RESET}")
+        out += line(f"{C_WHITE}██║   ██║██╔══██╗╚════██║        ██║   ██╔══╝   ██╔██╗    ██║   ██╔══██╗██║   ██║ ██╔██╗ {C_RESET}")
         out += line(f"{C_WHITE}╚██████╔╝██████╔╝███████║███████╗██║   ███████╗██╔╝ ██╗   ██║   ██████╔╝╚██████╔╝██╔╝ ██╗{C_RESET}")
         out += line(f"{C_WHITE} ╚═════╝ ╚═════╝ ╚══════╝╚══════╝╚═╝   ╚══════╝╚═╝  ╚═╝   ╚═╝   ╚═════╝  ╚═════╝ ╚═╝  ╚═╝{C_RESET}")
         out += line(f"{C_CYAN}{'='*75}{C_RESET}")
@@ -235,4 +306,3 @@ def main():
 
 if __name__ == '__main__':
     main()
-

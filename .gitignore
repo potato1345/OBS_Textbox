@@ -3,3 +3,7 @@ api.env
 changes.md
 OBS Textbox_ Dynamische Textsteuerung - Google Gemini.md
 node_modules/
+.venv/
+venv/
+__pycache__/
+*.pyc
