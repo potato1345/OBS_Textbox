@@ -6,6 +6,7 @@ import threading
 import tempfile
 import json
 import urllib.parse
+import forms_import
 from http.server import HTTPServer, SimpleHTTPRequestHandler
 from collections import defaultdict
 from datetime import datetime
@@ -153,8 +154,75 @@ class StatsHandler(SimpleHTTPRequestHandler):
             except Exception as e:
                 self._send_json(500, {'success': False, 'error': f'Serverfehler: {str(e)}'})
             return
-            
+
+        if self.path == '/api/import/answers':
+            try:
+                content_length = int(self.headers.get('Content-Length', 0))
+                if content_length == 0:
+                    self._send_json(400, {'success': False, 'error': 'Keine Datei empfangen'})
+                    return
+
+                raw_filename = self.headers.get('X-Filename', 'antwort.csv')
+                filename = urllib.parse.unquote(raw_filename)
+                _, ext = os.path.splitext(filename)
+                if ext.lower() not in ('.csv', '.xlsx', '.zip'):
+                    self._send_json(400, {
+                        'success': False,
+                        'error': 'Nicht unterstütztes Format. Bitte CSV, XLSX oder ZIP des Google-Formulars hochladen.'
+                    })
+                    return
+
+                file_bytes = self.rfile.read(content_length)
+                with tempfile.NamedTemporaryFile(delete=False, suffix=ext.lower()) as tmp:
+                    tmp.write(file_bytes)
+                    tmp_path = tmp.name
+
+                try:
+                    from forms_import import parse_answers_file, to_gottesdienst
+                    rows = parse_answers_file(tmp_path, filename)
+                    if not rows:
+                        self._send_json(400, {'success': False, 'error': 'Keine Antworten in der Datei gefunden.'})
+                        return
+                    dienst = to_gottesdienst(rows[-1])
+                    self._send_json(200, {
+                        'success': True,
+                        'filename': filename,
+                        'anzahl_antworten': len(rows),
+                        'gottesdienst': dienst
+                    })
+                except ValueError as ve:
+                    self._send_json(400, {'success': False, 'error': str(ve)})
+                except Exception as imp_err:
+                    self._send_json(500, {'success': False, 'error': f'Fehler beim Import: {str(imp_err)}'})
+                finally:
+                    if os.path.exists(tmp_path):
+                        try:
+                            os.remove(tmp_path)
+                        except Exception:
+                            pass
+            except Exception as e:
+                self._send_json(500, {'success': False, 'error': f'Serverfehler: {str(e)}'})
+            return
+
         self.send_error(404, 'Endpoint not found')
+
+    def do_GET(self):
+        if self.path == '/api/form-responses':
+            try:
+                dienst = forms_import.fetch_latest_response()
+                self._send_json(200, {
+                    'success': True,
+                    'quelle': 'google-api',
+                    'gottesdienst': dienst
+                })
+            except forms_import.FormEmptyError:
+                self._send_json(409, {'success': False, 'error': 'Noch keine Antworten im Google-Formular.'})
+            except FileNotFoundError as fe:
+                self._send_json(500, {'success': False, 'error': str(fe)})
+            except Exception as e:
+                self._send_json(500, {'success': False, 'error': f'Google-Abfrage fehlgeschlagen: {str(e)}'})
+            return
+        super().do_GET()
 
     def _send_json(self, status_code, data):
         response_bytes = json.dumps(data, ensure_ascii=False).encode('utf-8')

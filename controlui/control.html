@@ -30,6 +30,9 @@
             <button class="btn" id="btn-import" onclick="importJSON()">
                 <span class="btn-icon">📥</span> Import
             </button>
+            <button class="btn" id="btn-gf-import" onclick="openGFImportModal()">
+                <span class="btn-icon">📋</span> Form-Import
+            </button>
             <!-- Schnell-Profile: eigene Zeile -->
             <div class="header-profiles-row">
                 <div class="section-title">Schnell-Profile</div>
@@ -282,6 +285,33 @@
         </div>
     </div>
 
+    <!-- ==================== GOOGLE FORM IMPORT MODAL ==================== -->
+    <div class="modal-overlay" id="gf-import-modal" hidden>
+        <div class="modal">
+            <div class="modal-header">
+                <h2>📋 Google-Form-Import</h2>
+                <button class="btn btn-red" onclick="closeGFImportModal()" title="Schließen">✕</button>
+            </div>
+            <div class="modal-body" style="padding: 18px;">
+                <p style="margin: 0 0 12px; font-size: 0.85rem; color: #9aa4b2;">
+                    Antwort-Export aus dem Formular „Liedplan – Gottesdienstprogramm“:
+                    <b>CSV</b> oder <b>ZIP</b> (Formular → Antworten → ⋮ → Antworten herunterladen)
+                    oder <b>XLSX</b> (verlinktes Antwort-Sheet → Datei → Herunterladen → Microsoft Excel).
+                </p>
+                <input type="file" id="gf-file-input" accept=".csv,.xlsx,.zip" style="width: 100%; margin-bottom: 12px;">
+                <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                    <button class="btn btn-green" onclick="importFormFile()">
+                        <span class="btn-icon">📥</span> Datei importieren
+                    </button>
+                    <button class="btn" onclick="fetchLatestFromGoogle()">
+                        <span class="btn-icon">☁</span> Neueste Antwort von Google holen
+                    </button>
+                </div>
+                <div id="gf-status" style="margin-top: 14px; font-size: 0.85rem; min-height: 1.2em;"></div>
+            </div>
+        </div>
+    </div>
+
     <!-- Toast container -->
     <div class="toast-container" id="toast-container"></div>
 
@@ -407,5 +437,6 @@
     <script src="control.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
     <script src="pdf-automation.js"></script>
+    <script src="gf-import.js"></script>
 </body>
 </html>
