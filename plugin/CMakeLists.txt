@@ -14,7 +14,8 @@ include(helpers)
 add_library(${CMAKE_PROJECT_NAME} MODULE)
 
 find_package(libobs REQUIRED)
-target_link_libraries(${CMAKE_PROJECT_NAME} PRIVATE OBS::libobs)
+find_package(nlohmann_json REQUIRED)
+target_link_libraries(${CMAKE_PROJECT_NAME} PRIVATE OBS::libobs nlohmann_json::nlohmann_json)
 
 if(ENABLE_FRONTEND_API)
   find_package(obs-frontend-api REQUIRED)
@@ -34,8 +35,32 @@ if(ENABLE_QT)
     ${CMAKE_PROJECT_NAME}
     PROPERTIES AUTOMOC ON AUTOUIC ON AUTORCC ON
   )
+  target_sources(
+    ${CMAKE_PROJECT_NAME}
+    PRIVATE src/liedplan-dock.hpp src/liedplan-dock.cpp
+  )
 endif()
 
-target_sources(${CMAKE_PROJECT_NAME} PRIVATE src/plugin-main.cpp)
+target_sources(
+  ${CMAKE_PROJECT_NAME}
+  PRIVATE
+    src/plugin-main.cpp
+    src/liedplan-profiles.hpp
+    src/liedplan-state.hpp
+    src/liedplan-state.cpp
+)
 
 set_target_properties_plugin(${CMAKE_PROJECT_NAME} PROPERTIES OUTPUT_NAME ${_name})
+
+enable_testing()
+
+add_executable(
+  liedplan-tests
+  src/tests/test-liedplan-state.cpp
+  src/liedplan-state.cpp
+  src/liedplan-state.hpp
+  src/liedplan-profiles.hpp
+)
+target_link_libraries(liedplan-tests PRIVATE nlohmann_json::nlohmann_json)
+
+add_test(NAME liedplan-state COMMAND liedplan-tests)

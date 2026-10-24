@@ -18,6 +18,7 @@ with this program. If not, see <https://www.gnu.org/licenses/>
 
 #include <obs-module.h>
 #include <plugin-support.h>
+#include <util/bmem.h>
 
 #ifdef ENABLE_FRONTEND_API
 #include <obs-frontend-api.h>
@@ -33,20 +34,9 @@ OBS_DECLARE_MODULE()
 
 #ifdef ENABLE_FRONTEND_API
 #ifdef ENABLE_QT
-#include <QLabel>
-#include <QVBoxLayout>
+#include "liedplan-dock.hpp"
 #include <QDockWidget>
-
-struct LiedplanContent : public QWidget {
-	LiedplanContent(QWidget *parent = nullptr) : QWidget(parent)
-	{
-		auto *layout = new QVBoxLayout(this);
-		layout->addWidget(new QLabel(QStringLiteral("Liedplan (M0 Test-Dock)")));
-		layout->addWidget(
-			new QLabel(QStringLiteral("Plugin-Grundgeruest ok. M1-M5 folgen.")));
-		setMinimumSize(240, 100);
-	}
-};
+#include <string>
 
 /*
 Eigener QDockWidget statt obs_frontend_add_dock_by_id:
@@ -63,17 +53,19 @@ bool obs_module_load(void)
 	obs_log(LOG_INFO, "plugin loaded successfully (version %s)", PLUGIN_VERSION);
 #ifdef ENABLE_FRONTEND_API
 #ifdef ENABLE_QT
-	if (obs_frontend_get_main_window() && !g_dock)
-	{
+	if (obs_frontend_get_main_window() && !g_dock) {
+		char *cfg_path = obs_module_config_path("liedplan-state.json");
+		std::string state_path = cfg_path ? cfg_path : "";
+		bfree(cfg_path);
+
 		/* Parent = Main-Window: Widget gehoert zur OBS-Windows-Hierarchie */
 		QWidget *mw = static_cast<QWidget *>(obs_frontend_get_main_window());
 		g_dock = new QDockWidget(mw);
 		g_dock->setObjectName(QStringLiteral("liedplan"));
-		g_dock->setWindowTitle(QStringLiteral("Liedplan (Test)"));
-		g_dock->setWidget(new LiedplanContent());
+		g_dock->setWindowTitle(QStringLiteral("Liedplan"));
+		g_dock->setWidget(new LiedplanDock(state_path, g_dock));
 		bool ok = obs_frontend_add_custom_qdock("liedplan", g_dock);
-		if (!ok)
-		{
+		if (!ok) {
 			/* Registrierung fehlgeschlagen: Widget nicht hängen lassen */
 			delete g_dock;
 			g_dock = nullptr;
@@ -89,8 +81,7 @@ void obs_module_unload(void)
 {
 #ifdef ENABLE_FRONTEND_API
 #ifdef ENABLE_QT
-	if (g_dock)
-	{
+	if (g_dock) {
 		/*
 		obs_frontend_remove_dock loest den Custom-Dock nur aus dem
 		QMainWindow-Layout (extraCustomDocks = rohe Zeiger, kein shared_ptr).
