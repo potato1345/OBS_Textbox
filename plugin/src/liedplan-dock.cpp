@@ -23,15 +23,17 @@ with this program. If not, see <https://www.gnu.org/licenses/>
 #include "liedplan-dock.hpp"
 #include "liedplan-profiles.hpp"
 #include "liedplan-scene.hpp"
+#include "liedplan-theme.hpp"
 
 #include <QComboBox>
+#include <QFrame>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QLineEdit>
 #include <QMessageBox>
 #include <QPushButton>
 #include <QScrollArea>
-#include <QToolButton>
+#include <QSizePolicy>
 #include <QVBoxLayout>
 
 #include <algorithm>
@@ -47,34 +49,44 @@ LiedplanDock::LiedplanDock(const std::string &state_path, QWidget *parent)
 	: QWidget(parent),
 	  state_path_(state_path)
 {
+	setObjectName(QStringLiteral("liedplanDock"));
+	setAttribute(Qt::WA_StyledBackground, true);
+	setStyleSheet(liedplan_theme::stylesheet());
+
 	auto *root_layout = new QVBoxLayout(this);
-	root_layout->setContentsMargins(6, 6, 6, 6);
-	root_layout->setSpacing(6);
+	root_layout->setContentsMargins(8, 8, 8, 8);
+	root_layout->setSpacing(8);
+
+	auto *button_row = new QHBoxLayout();
+	button_row->setContentsMargins(8, 4, 8, 4);
+	button_row->setSpacing(8);
+
+	auto *add_btn = new QPushButton(QStringLiteral("＋ Neue Karte"), this);
+	add_btn->setObjectName(QStringLiteral("lpBtnAccent"));
+
+	auto *clear_btn = new QPushButton(QStringLiteral("🗑 Alle löschen"), this);
+	clear_btn->setObjectName(QStringLiteral("lpBtnRed"));
+
+	button_row->addWidget(add_btn);
+	button_row->addWidget(clear_btn);
+	button_row->addStretch(1);
+	root_layout->addLayout(button_row);
 
 	auto *scroll_area = new QScrollArea(this);
 	scroll_area->setWidgetResizable(true);
 	scroll_area->setFrameShape(QFrame::NoFrame);
 
 	auto *cards_container = new QWidget(scroll_area);
+	cards_container->setObjectName(QStringLiteral("lpCardsContainer"));
+	cards_container->setAttribute(Qt::WA_StyledBackground, true);
+
 	cards_layout_ = new QVBoxLayout(cards_container);
-	cards_layout_->setContentsMargins(0, 0, 0, 0);
-	cards_layout_->setSpacing(4);
+	cards_layout_->setContentsMargins(8, 8, 8, 8);
+	cards_layout_->setSpacing(12);
 	cards_layout_->addStretch(1);
 
 	scroll_area->setWidget(cards_container);
 	root_layout->addWidget(scroll_area, 1);
-
-	auto *button_row = new QHBoxLayout();
-	button_row->setContentsMargins(0, 0, 0, 0);
-	button_row->setSpacing(6);
-
-	auto *add_btn = new QPushButton(QStringLiteral("+ Neue Karte"), this);
-	auto *clear_btn = new QPushButton(QStringLiteral("Alle löschen"), this);
-
-	button_row->addWidget(add_btn);
-	button_row->addWidget(clear_btn);
-	button_row->addStretch(1);
-	root_layout->addLayout(button_row);
 
 	connect(add_btn, &QPushButton::clicked, this, &LiedplanDock::on_add_card);
 	connect(clear_btn, &QPushButton::clicked, this, &LiedplanDock::on_clear_all);
@@ -95,7 +107,7 @@ LiedplanDock::LiedplanDock(const std::string &state_path, QWidget *parent)
 	}
 
 	rebuild_rows();
-	setMinimumSize(420, 220);
+	setMinimumSize(440, 260);
 }
 
 LiedplanCard *LiedplanDock::find_card_mut(const std::string &id)
@@ -109,26 +121,82 @@ LiedplanCard *LiedplanDock::find_card_mut(const std::string &id)
 
 void LiedplanDock::create_row_widget(const LiedplanCard &card)
 {
-	auto *row_widget = new QWidget(this);
-	auto *row_layout = new QHBoxLayout(row_widget);
-	row_layout->setContentsMargins(0, 0, 0, 0);
-	row_layout->setSpacing(4);
+	auto *row_widget = new QFrame(this);
+	row_widget->setObjectName(QStringLiteral("lpCardOuter"));
+	row_widget->setMinimumWidth(320);
+	row_widget->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
 
-	auto *id_label = new QLabel(QString::fromUtf8(card.id.c_str()), row_widget);
-	id_label->setMinimumWidth(42);
+	auto *outer_layout = new QVBoxLayout(row_widget);
+	outer_layout->setContentsMargins(2, 2, 2, 2);
+	outer_layout->setSpacing(0);
 
-	auto *edit_zeile1 = new QLineEdit(QString::fromUtf8(card.zeile1.c_str()), row_widget);
-	edit_zeile1->setPlaceholderText(QStringLiteral("GL-Nummer"));
-	edit_zeile1->setMaximumWidth(80);
+	auto *card_inner = new QFrame(row_widget);
+	card_inner->setObjectName(QStringLiteral("lpCardInner"));
+	outer_layout->addWidget(card_inner);
 
-	auto *edit_zeile2 = new QLineEdit(QString::fromUtf8(card.zeile2.c_str()), row_widget);
-	edit_zeile2->setPlaceholderText(QStringLiteral("Verse"));
-	edit_zeile2->setMaximumWidth(80);
+	auto *inner_layout = new QVBoxLayout(card_inner);
+	inner_layout->setContentsMargins(16, 16, 16, 16);
+	inner_layout->setSpacing(10);
 
-	auto *edit_zeile3 = new QLineEdit(QString::fromUtf8(card.zeile3.c_str()), row_widget);
-	edit_zeile3->setPlaceholderText(QStringLiteral("Liedtitel"));
+	auto *id_bar = new QFrame(card_inner);
+	id_bar->setObjectName(QStringLiteral("lpIdBar"));
+	auto *id_layout = new QHBoxLayout(id_bar);
+	id_layout->setContentsMargins(12, 6, 12, 6);
+	id_layout->setSpacing(8);
 
-	auto *profile_combo = new QComboBox(row_widget);
+	auto *id_prefix = new QLabel(QStringLiteral("ID"), id_bar);
+	id_prefix->setObjectName(QStringLiteral("lpIdPrefix"));
+
+	auto *id_label = new QLabel(QString::fromUtf8(card.id.c_str()), id_bar);
+	id_label->setObjectName(QStringLiteral("lpIdValue"));
+
+	auto *del_btn = new QPushButton(QStringLiteral("✕"), id_bar);
+	del_btn->setObjectName(QStringLiteral("lpDelBtn"));
+	del_btn->setFixedSize(28, 28);
+	del_btn->setToolTip(QStringLiteral("Karte löschen"));
+
+	id_layout->addWidget(id_prefix);
+	id_layout->addWidget(id_label);
+	id_layout->addStretch(1);
+	id_layout->addWidget(del_btn);
+	inner_layout->addWidget(id_bar);
+	inner_layout->addSpacing(2);
+
+	auto make_field_row = [card_inner](const QString &label_text, const std::string &initial_val,
+					   const QString &placeholder, QVBoxLayout *parent_layout) -> QLineEdit * {
+		auto *field_layout = new QVBoxLayout();
+		field_layout->setContentsMargins(0, 0, 0, 0);
+		field_layout->setSpacing(4);
+
+		auto *lbl = new QLabel(label_text, card_inner);
+		lbl->setObjectName(QStringLiteral("lpFieldLabel"));
+
+		auto *edit = new QLineEdit(QString::fromUtf8(initial_val.c_str()), card_inner);
+		edit->setPlaceholderText(placeholder);
+		edit->setFixedHeight(34);
+
+		field_layout->addWidget(lbl);
+		field_layout->addWidget(edit);
+		parent_layout->addLayout(field_layout);
+		return edit;
+	};
+
+	auto *edit_zeile1 =
+		make_field_row(QStringLiteral("GL-NUMMER"), card.zeile1, QStringLiteral("GL-Nummer"), inner_layout);
+	auto *edit_zeile2 =
+		make_field_row(QStringLiteral("VERSE"), card.zeile2, QStringLiteral("Verse"), inner_layout);
+	auto *edit_zeile3 =
+		make_field_row(QStringLiteral("LIEDTITEL"), card.zeile3, QStringLiteral("Liedtitel"), inner_layout);
+
+	auto *prof_layout = new QVBoxLayout();
+	prof_layout->setContentsMargins(0, 0, 0, 0);
+	prof_layout->setSpacing(4);
+
+	auto *lbl_prof = new QLabel(QStringLiteral("PROFIL"), card_inner);
+	lbl_prof->setObjectName(QStringLiteral("lpFieldLabel"));
+
+	auto *profile_combo = new QComboBox(card_inner);
+	profile_combo->setFixedHeight(34);
 	int selected_index = 0;
 	const auto &profiles = liedplan_profiles();
 	for (size_t i = 0; i < profiles.size(); ++i) {
@@ -138,33 +206,32 @@ void LiedplanDock::create_row_widget(const LiedplanCard &card)
 	}
 	profile_combo->setCurrentIndex(selected_index);
 
-	auto *to_scene_btn = new QToolButton(row_widget);
-	to_scene_btn->setText(QStringLiteral("Zu Szene"));
+	prof_layout->addWidget(lbl_prof);
+	prof_layout->addWidget(profile_combo);
+	inner_layout->addLayout(prof_layout);
+
+	auto *actions_layout = new QHBoxLayout();
+	actions_layout->setContentsMargins(0, 4, 0, 0);
+	actions_layout->setSpacing(8);
+
+	auto *to_scene_btn = new QPushButton(QStringLiteral("▶ Zu Szene"), card_inner);
+	to_scene_btn->setObjectName(QStringLiteral("lpBtnGreen"));
 	to_scene_btn->setToolTip(
 		QStringLiteral("Karte als Text-Quelle in die aktuelle Szene legen oder aktualisieren"));
 
-	auto *clear_src_btn = new QToolButton(row_widget);
-	clear_src_btn->setText(QStringLiteral("Leeren"));
+	auto *clear_src_btn = new QPushButton(QStringLiteral("✕ Leeren"), card_inner);
+	clear_src_btn->setObjectName(QStringLiteral("lpBtnRed"));
 	clear_src_btn->setToolTip(
 		QStringLiteral("Text der Quelle auf leer setzen — die Quelle bleibt in der Szene"));
 
-	auto *remove_src_btn = new QToolButton(row_widget);
-	remove_src_btn->setText(QStringLiteral("Entf."));
+	auto *remove_src_btn = new QPushButton(QStringLiteral("Entf."), card_inner);
+	remove_src_btn->setObjectName(QStringLiteral("lpBtn"));
 	remove_src_btn->setToolTip(QStringLiteral("Quelle aus allen Szenen entfernen"));
 
-	auto *del_btn = new QToolButton(row_widget);
-	del_btn->setText(QStringLiteral("✕"));
-	del_btn->setToolTip(QStringLiteral("Karte löschen"));
-
-	row_layout->addWidget(id_label);
-	row_layout->addWidget(edit_zeile1);
-	row_layout->addWidget(edit_zeile2);
-	row_layout->addWidget(edit_zeile3, 1);
-	row_layout->addWidget(profile_combo);
-	row_layout->addWidget(to_scene_btn);
-	row_layout->addWidget(clear_src_btn);
-	row_layout->addWidget(remove_src_btn);
-	row_layout->addWidget(del_btn);
+	actions_layout->addWidget(to_scene_btn, 1);
+	actions_layout->addWidget(clear_src_btn, 1);
+	actions_layout->addWidget(remove_src_btn);
+	inner_layout->addLayout(actions_layout);
 
 	const std::string card_id = card.id;
 
@@ -205,23 +272,23 @@ void LiedplanDock::create_row_widget(const LiedplanCard &card)
 			}
 		});
 
-	connect(to_scene_btn, &QToolButton::clicked, this, [this, card_id]() {
+	connect(to_scene_btn, &QPushButton::clicked, this, [this, card_id]() {
 		if (LiedplanCard *c = find_card_mut(card_id)) {
 			liedplan_scene::send_to_current_scene(*c);
 		}
 	});
 
-	connect(clear_src_btn, &QToolButton::clicked, this, [this, card_id]() {
+	connect(clear_src_btn, &QPushButton::clicked, this, [this, card_id]() {
 		if (LiedplanCard *c = find_card_mut(card_id)) {
 			liedplan_scene::update_everywhere(*c, true);
 		}
 	});
 
-	connect(remove_src_btn, &QToolButton::clicked, this, [card_id]() {
+	connect(remove_src_btn, &QPushButton::clicked, this, [card_id]() {
 		liedplan_scene::remove_everywhere(card_id);
 	});
 
-	connect(del_btn, &QToolButton::clicked, this, [this, card_id, row_widget]() {
+	connect(del_btn, &QPushButton::clicked, this, [this, card_id, row_widget]() {
 		if (state_.remove_card(card_id)) {
 			save_state();
 		}

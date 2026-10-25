@@ -40,6 +40,7 @@ if(ENABLE_QT)
     PRIVATE
       src/liedplan-dock.hpp
       src/liedplan-dock.cpp
+      src/liedplan-theme.hpp
       src/liedplan-render.hpp
       src/liedplan-render.cpp
       src/liedplan-card-source.hpp
