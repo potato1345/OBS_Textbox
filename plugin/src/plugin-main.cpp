@@ -32,6 +32,10 @@ stille (fehlende Exporte).
 */
 OBS_DECLARE_MODULE()
 
+#ifdef ENABLE_QT
+#include "liedplan-card-source.hpp"
+#endif
+
 #ifdef ENABLE_FRONTEND_API
 #ifdef ENABLE_QT
 #include "liedplan-dock.hpp"
@@ -51,6 +55,9 @@ static QDockWidget *g_dock = nullptr;
 bool obs_module_load(void)
 {
 	obs_log(LOG_INFO, "plugin loaded successfully (version %s)", PLUGIN_VERSION);
+#ifdef ENABLE_QT
+	obs_register_source(&liedplan_card_source_info);
+#endif
 #ifdef ENABLE_FRONTEND_API
 #ifdef ENABLE_QT
 	if (obs_frontend_get_main_window() && !g_dock) {
@@ -93,6 +100,13 @@ void obs_module_unload(void)
 		g_dock = nullptr;
 	}
 #endif
+#endif
+#ifdef ENABLE_QT
+	/*
+	libobs (32.2.2, in .deps/include/obs-source.h und obs.h verifiziert)
+	deklariert kein obs_unregister_source; registrierte Source-Typen werden
+	analog zu image-source.c und obs-text.cpp durch obs_shutdown() freigegeben.
+	*/
 #endif
 	obs_log(LOG_INFO, "plugin unloaded");
 }

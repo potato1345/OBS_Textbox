@@ -22,6 +22,7 @@ with this program. If not, see <https://www.gnu.org/licenses/>
 
 #include "liedplan-dock.hpp"
 #include "liedplan-profiles.hpp"
+#include "liedplan-scene.hpp"
 
 #include <QComboBox>
 #include <QHBoxLayout>
@@ -137,6 +138,20 @@ void LiedplanDock::create_row_widget(const LiedplanCard &card)
 	}
 	profile_combo->setCurrentIndex(selected_index);
 
+	auto *to_scene_btn = new QToolButton(row_widget);
+	to_scene_btn->setText(QStringLiteral("Zu Szene"));
+	to_scene_btn->setToolTip(
+		QStringLiteral("Karte als Text-Quelle in die aktuelle Szene legen oder aktualisieren"));
+
+	auto *clear_src_btn = new QToolButton(row_widget);
+	clear_src_btn->setText(QStringLiteral("Leeren"));
+	clear_src_btn->setToolTip(
+		QStringLiteral("Text der Quelle auf leer setzen — die Quelle bleibt in der Szene"));
+
+	auto *remove_src_btn = new QToolButton(row_widget);
+	remove_src_btn->setText(QStringLiteral("Entf."));
+	remove_src_btn->setToolTip(QStringLiteral("Quelle aus allen Szenen entfernen"));
+
 	auto *del_btn = new QToolButton(row_widget);
 	del_btn->setText(QStringLiteral("✕"));
 	del_btn->setToolTip(QStringLiteral("Karte löschen"));
@@ -146,6 +161,9 @@ void LiedplanDock::create_row_widget(const LiedplanCard &card)
 	row_layout->addWidget(edit_zeile2);
 	row_layout->addWidget(edit_zeile3, 1);
 	row_layout->addWidget(profile_combo);
+	row_layout->addWidget(to_scene_btn);
+	row_layout->addWidget(clear_src_btn);
+	row_layout->addWidget(remove_src_btn);
 	row_layout->addWidget(del_btn);
 
 	const std::string card_id = card.id;
@@ -154,6 +172,7 @@ void LiedplanDock::create_row_widget(const LiedplanCard &card)
 		if (LiedplanCard *c = find_card_mut(card_id)) {
 			c->zeile1 = text.toUtf8().toStdString();
 			save_state();
+			liedplan_scene::update_everywhere(*c, false);
 		}
 	});
 
@@ -161,6 +180,7 @@ void LiedplanDock::create_row_widget(const LiedplanCard &card)
 		if (LiedplanCard *c = find_card_mut(card_id)) {
 			c->zeile2 = text.toUtf8().toStdString();
 			save_state();
+			liedplan_scene::update_everywhere(*c, false);
 		}
 	});
 
@@ -168,6 +188,7 @@ void LiedplanDock::create_row_widget(const LiedplanCard &card)
 		if (LiedplanCard *c = find_card_mut(card_id)) {
 			c->zeile3 = text.toUtf8().toStdString();
 			save_state();
+			liedplan_scene::update_everywhere(*c, false);
 		}
 	});
 
@@ -180,13 +201,31 @@ void LiedplanDock::create_row_widget(const LiedplanCard &card)
 					c->box_color = prof->box_color;
 				}
 				save_state();
+				liedplan_scene::update_everywhere(*c, false);
 			}
 		});
+
+	connect(to_scene_btn, &QToolButton::clicked, this, [this, card_id]() {
+		if (LiedplanCard *c = find_card_mut(card_id)) {
+			liedplan_scene::send_to_current_scene(*c);
+		}
+	});
+
+	connect(clear_src_btn, &QToolButton::clicked, this, [this, card_id]() {
+		if (LiedplanCard *c = find_card_mut(card_id)) {
+			liedplan_scene::update_everywhere(*c, true);
+		}
+	});
+
+	connect(remove_src_btn, &QToolButton::clicked, this, [card_id]() {
+		liedplan_scene::remove_everywhere(card_id);
+	});
 
 	connect(del_btn, &QToolButton::clicked, this, [this, card_id, row_widget]() {
 		if (state_.remove_card(card_id)) {
 			save_state();
 		}
+		liedplan_scene::remove_everywhere(card_id);
 		cards_layout_->removeWidget(row_widget);
 		row_widgets_.erase(std::remove(row_widgets_.begin(), row_widgets_.end(), row_widget),
 				   row_widgets_.end());
@@ -227,9 +266,19 @@ void LiedplanDock::on_clear_all()
 	if (reply != QMessageBox::Yes)
 		return;
 
+	std::vector<std::string> ids;
+	ids.reserve(state_.cards.size());
+	for (const auto &c : state_.cards) {
+		ids.push_back(c.id);
+	}
+
 	state_.cards.clear();
 	rebuild_rows();
 	save_state();
+
+	for (const auto &id : ids) {
+		liedplan_scene::remove_everywhere(id);
+	}
 }
 
 void LiedplanDock::save_state()
