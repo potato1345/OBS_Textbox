@@ -85,7 +85,9 @@ obs_data_t *make_settings(const LiedplanCard &card, const std::string &local_fil
 	obs_data_set_int(settings, "width", kLiedplanCardWidth);
 	obs_data_set_int(settings, "height", kBrowserCardHeight);
 	obs_data_set_int(settings, "fps", kBrowserFps);
-	obs_data_set_bool(settings, "shutdown", true);
+	// WICHTIG: kein "shutdown"-Setting setzen — obs-browser interpretiert
+	// shutdown:true als "CEF-Source angehalten" → schwarze Box.
+	// Default (nicht gesetzt / false) = Source startet und rendert.
 
 	return settings;
 }
