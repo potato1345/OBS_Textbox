@@ -15,7 +15,12 @@ add_library(${CMAKE_PROJECT_NAME} MODULE)
 
 find_package(libobs REQUIRED)
 find_package(nlohmann_json REQUIRED)
-target_link_libraries(${CMAKE_PROJECT_NAME} PRIVATE OBS::libobs nlohmann_json::nlohmann_json winhttp)
+set(ZLIB_USE_STATIC_LIBS ON)
+find_package(ZLIB REQUIRED)
+target_link_libraries(
+  ${CMAKE_PROJECT_NAME}
+  PRIVATE OBS::libobs nlohmann_json::nlohmann_json winhttp ZLIB::ZLIB
+)
 
 if(ENABLE_FRONTEND_API)
   find_package(obs-frontend-api REQUIRED)
@@ -88,7 +93,7 @@ add_executable(
   src/liedplan-import.cpp
   src/liedplan-import.hpp
 )
-target_link_libraries(liedplan-import-tests PRIVATE nlohmann_json::nlohmann_json winhttp)
+target_link_libraries(liedplan-import-tests PRIVATE nlohmann_json::nlohmann_json winhttp ZLIB::ZLIB)
 add_test(NAME liedplan-import COMMAND liedplan-import-tests)
 
 if(ENABLE_QT)
@@ -107,7 +112,7 @@ if(ENABLE_QT)
     liedplan-render-tests
     PRIVATE $<TARGET_PROPERTY:OBS::libobs,INTERFACE_INCLUDE_DIRECTORIES>
   )
-  target_link_libraries(liedplan-render-tests PRIVATE Qt6::Core Qt6::Gui)
+  target_link_libraries(liedplan-render-tests PRIVATE Qt6::Core Qt6::Gui nlohmann_json::nlohmann_json)
   add_test(NAME liedplan-render COMMAND liedplan-render-tests)
   set_tests_properties(liedplan-render PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 

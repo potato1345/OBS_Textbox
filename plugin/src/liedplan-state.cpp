@@ -36,12 +36,198 @@ std::filesystem::path to_fs_path(const std::string &utf8_path)
 	return std::filesystem::u8path(utf8_path);
 }
 
+LiedplanCard card_from_json(const nlohmann::json &item)
+{
+	LiedplanCard c;
+	if (item.contains("id") && item["id"].is_string())
+		c.id = item["id"].get<std::string>();
+	if (item.contains("zeile1") && item["zeile1"].is_string())
+		c.zeile1 = item["zeile1"].get<std::string>();
+	if (item.contains("zeile2") && item["zeile2"].is_string())
+		c.zeile2 = item["zeile2"].get<std::string>();
+	if (item.contains("zeile3") && item["zeile3"].is_string())
+		c.zeile3 = item["zeile3"].get<std::string>();
+	if (item.contains("profile") && item["profile"].is_string())
+		c.profile = item["profile"].get<std::string>();
+	if (item.contains("text_color") && item["text_color"].is_string())
+		c.text_color = item["text_color"].get<std::string>();
+	if (item.contains("text_opacity") && item["text_opacity"].is_number_integer())
+		c.text_opacity = item["text_opacity"].get<int>();
+	if (item.contains("box_color") && item["box_color"].is_string())
+		c.box_color = item["box_color"].get<std::string>();
+	if (item.contains("box_opacity") && item["box_opacity"].is_number_integer())
+		c.box_opacity = item["box_opacity"].get<int>();
+	if (item.contains("corner_color_a") && item["corner_color_a"].is_string())
+		c.corner_color_a = item["corner_color_a"].get<std::string>();
+	if (item.contains("corner_color_b") && item["corner_color_b"].is_string())
+		c.corner_color_b = item["corner_color_b"].get<std::string>();
+	if (item.contains("corner_opacity_a") && item["corner_opacity_a"].is_number_integer())
+		c.corner_opacity_a = item["corner_opacity_a"].get<int>();
+	if (item.contains("corner_opacity_b") && item["corner_opacity_b"].is_number_integer())
+		c.corner_opacity_b = item["corner_opacity_b"].get<int>();
+	if (item.contains("rainbow_corners") && item["rainbow_corners"].is_boolean())
+		c.rainbow_corners = item["rainbow_corners"].get<bool>();
+	return c;
+}
+
+nlohmann::json card_to_json(const LiedplanCard &c)
+{
+	return {
+		{"id", c.id},
+		{"zeile1", c.zeile1},
+		{"zeile2", c.zeile2},
+		{"zeile3", c.zeile3},
+		{"profile", c.profile},
+		{"text_color", c.text_color},
+		{"text_opacity", c.text_opacity},
+		{"box_color", c.box_color},
+		{"box_opacity", c.box_opacity},
+		{"corner_color_a", c.corner_color_a},
+		{"corner_color_b", c.corner_color_b},
+		{"corner_opacity_a", c.corner_opacity_a},
+		{"corner_opacity_b", c.corner_opacity_b},
+		{"rainbow_corners", c.rainbow_corners},
+	};
+}
+
+void update_next_id_from_cards(const std::vector<LiedplanCard> &card_list, int &inout_next_id)
+{
+	for (const auto &c : card_list) {
+		if (c.id.rfind("box", 0) == 0 && c.id.size() > 3) {
+			try {
+				int num = std::stoi(c.id.substr(3));
+				if (num >= inout_next_id)
+					inout_next_id = num + 1;
+			} catch (...) {
+			}
+		}
+	}
+}
+
+nlohmann::json state_to_json(const LiedplanState &s)
+{
+	nlohmann::json cards_json = nlohmann::json::array();
+	for (const auto &c : s.cards) {
+		cards_json.push_back(card_to_json(c));
+	}
+
+	nlohmann::json qp_json = nlohmann::json::array();
+	for (const auto &qp : s.quick_profiles) {
+		nlohmann::json qp_cards = nlohmann::json::array();
+		for (const auto &c : qp.cards) {
+			qp_cards.push_back(card_to_json(c));
+		}
+		qp_json.push_back({
+			{"name", qp.name},
+			{"cards", std::move(qp_cards)},
+		});
+	}
+
+	return {
+		{"version", 1},
+		{"next_id", s.next_id},
+		{"active_profile", s.active_profile},
+		{"settings",
+		 {
+			 {"google_form_id", s.settings.google_form_id},
+			 {"token_path", s.settings.token_path},
+		 }},
+		{"quick_profiles", std::move(qp_json)},
+		{"cards", std::move(cards_json)},
+	};
+}
+
+std::string state_from_json(LiedplanState &s, const nlohmann::json &root)
+{
+	if (root.is_discarded() || !root.is_object())
+		return "Invalid JSON object";
+
+	int loaded_next_id = 1;
+	if (root.contains("next_id")) {
+		if (!root["next_id"].is_number_integer())
+			return "Invalid 'next_id' field in state JSON";
+		loaded_next_id = root["next_id"].get<int>();
+		if (loaded_next_id < 1)
+			loaded_next_id = 1;
+	}
+
+	std::string loaded_active_profile = "OBS Dark";
+	if (root.contains("active_profile") && root["active_profile"].is_string()) {
+		loaded_active_profile = root["active_profile"].get<std::string>();
+	}
+
+	LiedplanSettings loaded_settings;
+	if (root.contains("settings") && root["settings"].is_object()) {
+		const auto &st = root["settings"];
+		if (st.contains("google_form_id") && st["google_form_id"].is_string())
+			loaded_settings.google_form_id = st["google_form_id"].get<std::string>();
+		if (st.contains("token_path") && st["token_path"].is_string())
+			loaded_settings.token_path = st["token_path"].get<std::string>();
+	}
+
+	std::vector<LiedplanQuickProfile> loaded_quick_profiles;
+	if (root.contains("quick_profiles") && root["quick_profiles"].is_array()) {
+		for (const auto &qp_item : root["quick_profiles"]) {
+			if (!qp_item.is_object())
+				continue;
+			LiedplanQuickProfile qp;
+			if (qp_item.contains("name") && qp_item["name"].is_string())
+				qp.name = qp_item["name"].get<std::string>();
+			if (qp_item.contains("cards") && qp_item["cards"].is_array()) {
+				for (const auto &c_item : qp_item["cards"]) {
+					if (c_item.is_object())
+						qp.cards.push_back(card_from_json(c_item));
+				}
+			}
+			loaded_quick_profiles.push_back(std::move(qp));
+		}
+	}
+
+	std::vector<LiedplanCard> loaded_cards;
+	if (root.contains("cards")) {
+		if (!root["cards"].is_array())
+			return "Invalid 'cards' field in state JSON";
+
+		for (const auto &item : root["cards"]) {
+			if (!item.is_object())
+				return "Invalid card entry in state JSON";
+
+			loaded_cards.push_back(card_from_json(item));
+		}
+	}
+
+	update_next_id_from_cards(loaded_cards, loaded_next_id);
+
+	s.cards = std::move(loaded_cards);
+	s.next_id = loaded_next_id;
+	s.active_profile = std::move(loaded_active_profile);
+	s.settings = std::move(loaded_settings);
+	s.quick_profiles = std::move(loaded_quick_profiles);
+	return "";
+}
+
 } // namespace
+
+std::string LiedplanState::serialize_json() const
+{
+	return state_to_json(*this).dump(2);
+}
+
+std::string LiedplanState::deserialize_json(const std::string &json_str)
+{
+	nlohmann::json root = nlohmann::json::parse(json_str, nullptr, false);
+	if (root.is_discarded() || !root.is_object())
+		return "Invalid JSON";
+	return state_from_json(*this, root);
+}
 
 std::string LiedplanState::load(const std::string &path)
 {
 	cards.clear();
 	next_id = 1;
+	active_profile = "OBS Dark";
+	settings = LiedplanSettings{};
+	quick_profiles.clear();
 
 	if (path.empty())
 		return "";
@@ -69,69 +255,10 @@ std::string LiedplanState::load(const std::string &path)
 	if (root.is_discarded() || !root.is_object())
 		return "Invalid JSON in state file: " + path;
 
-	int loaded_next_id = 1;
-	if (root.contains("next_id")) {
-		if (!root["next_id"].is_number_integer())
-			return "Invalid 'next_id' field in state file: " + path;
-		loaded_next_id = root["next_id"].get<int>();
-		if (loaded_next_id < 1)
-			loaded_next_id = 1;
-	}
+	const std::string err = state_from_json(*this, root);
+	if (!err.empty())
+		return err + ": " + path;
 
-	std::vector<LiedplanCard> loaded_cards;
-	if (root.contains("cards")) {
-		if (!root["cards"].is_array())
-			return "Invalid 'cards' field in state file: " + path;
-
-		for (const auto &item : root["cards"]) {
-			if (!item.is_object())
-				return "Invalid card entry in state file: " + path;
-
-			LiedplanCard c;
-			if (item.contains("id") && item["id"].is_string())
-				c.id = item["id"].get<std::string>();
-			if (item.contains("zeile1") && item["zeile1"].is_string())
-				c.zeile1 = item["zeile1"].get<std::string>();
-			if (item.contains("zeile2") && item["zeile2"].is_string())
-				c.zeile2 = item["zeile2"].get<std::string>();
-			if (item.contains("zeile3") && item["zeile3"].is_string())
-				c.zeile3 = item["zeile3"].get<std::string>();
-			if (item.contains("profile") && item["profile"].is_string())
-				c.profile = item["profile"].get<std::string>();
-			if (item.contains("text_color") && item["text_color"].is_string())
-				c.text_color = item["text_color"].get<std::string>();
-			if (item.contains("text_opacity") && item["text_opacity"].is_number_integer())
-				c.text_opacity = item["text_opacity"].get<int>();
-			if (item.contains("box_color") && item["box_color"].is_string())
-				c.box_color = item["box_color"].get<std::string>();
-			if (item.contains("box_opacity") && item["box_opacity"].is_number_integer())
-				c.box_opacity = item["box_opacity"].get<int>();
-			if (item.contains("corner_color_a") && item["corner_color_a"].is_string())
-				c.corner_color_a = item["corner_color_a"].get<std::string>();
-			if (item.contains("corner_color_b") && item["corner_color_b"].is_string())
-				c.corner_color_b = item["corner_color_b"].get<std::string>();
-			if (item.contains("corner_opacity_a") && item["corner_opacity_a"].is_number_integer())
-				c.corner_opacity_a = item["corner_opacity_a"].get<int>();
-			if (item.contains("corner_opacity_b") && item["corner_opacity_b"].is_number_integer())
-				c.corner_opacity_b = item["corner_opacity_b"].get<int>();
-			if (item.contains("rainbow_corners") && item["rainbow_corners"].is_boolean())
-				c.rainbow_corners = item["rainbow_corners"].get<bool>();
-
-			if (c.id.rfind("box", 0) == 0 && c.id.size() > 3) {
-				try {
-					int num = std::stoi(c.id.substr(3));
-					if (num >= loaded_next_id)
-						loaded_next_id = num + 1;
-				} catch (...) {
-				}
-			}
-
-			loaded_cards.push_back(std::move(c));
-		}
-	}
-
-	cards = std::move(loaded_cards);
-	next_id = loaded_next_id;
 	return "";
 }
 
@@ -148,33 +275,7 @@ std::string LiedplanState::save(const std::string &path) const
 			return "Failed to create directory: " + ec.message();
 	}
 
-	nlohmann::json cards_json = nlohmann::json::array();
-	for (const auto &c : cards) {
-		cards_json.push_back({
-			{"id", c.id},
-			{"zeile1", c.zeile1},
-			{"zeile2", c.zeile2},
-			{"zeile3", c.zeile3},
-			{"profile", c.profile},
-			{"text_color", c.text_color},
-			{"text_opacity", c.text_opacity},
-			{"box_color", c.box_color},
-			{"box_opacity", c.box_opacity},
-			{"corner_color_a", c.corner_color_a},
-			{"corner_color_b", c.corner_color_b},
-			{"corner_opacity_a", c.corner_opacity_a},
-			{"corner_opacity_b", c.corner_opacity_b},
-			{"rainbow_corners", c.rainbow_corners},
-		});
-	}
-
-	nlohmann::json root = {
-		{"version", 1},
-		{"next_id", next_id},
-		{"cards", std::move(cards_json)},
-	};
-
-	const std::string serialized = root.dump(2);
+	const std::string serialized = serialize_json();
 	std::ofstream file(fs_path, std::ios::binary | std::ios::trunc);
 	if (!file.is_open())
 		return "Failed to open state file for writing: " + path;
@@ -184,6 +285,37 @@ std::string LiedplanState::save(const std::string &path) const
 	if (!file.good())
 		return "Failed to write state file: " + path;
 
+	return "";
+}
+
+std::string LiedplanState::restore_backup(const std::string &path)
+{
+	if (path.empty())
+		return "Kein Dateipfad angegeben.";
+
+	std::error_code ec;
+	const std::filesystem::path fs_path = to_fs_path(path);
+	if (!std::filesystem::exists(fs_path, ec) || ec)
+		return "Datei nicht gefunden: " + path;
+
+	std::ifstream file(fs_path, std::ios::binary);
+	if (!file.is_open())
+		return "Datei konnte nicht geöffnet werden: " + path;
+
+	std::string content((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
+	if (file.bad() || content.find_first_not_of(" \t\r\n") == std::string::npos)
+		return "Datei ist leer oder nicht lesbar: " + path;
+
+	nlohmann::json root = nlohmann::json::parse(content, nullptr, false);
+	if (root.is_discarded() || !root.is_object())
+		return "Ungültiges JSON in Backup-Datei: " + path;
+
+	LiedplanState temp;
+	const std::string err = state_from_json(temp, root);
+	if (!err.empty())
+		return err;
+
+	*this = std::move(temp);
 	return "";
 }
 
@@ -216,5 +348,45 @@ bool LiedplanState::remove_card(const std::string &id)
 	if (it == cards.end())
 		return false;
 	cards.erase(it);
+	return true;
+}
+
+void LiedplanState::save_quick_profile(const std::string &name)
+{
+	const std::string clean_name = name.empty()
+					       ? ("Profil " + std::to_string(quick_profiles.size() + 1))
+					       : name;
+	for (auto &qp : quick_profiles) {
+		if (qp.name == clean_name) {
+			qp.cards = cards;
+			return;
+		}
+	}
+	quick_profiles.push_back(LiedplanQuickProfile{clean_name, cards});
+}
+
+bool LiedplanState::apply_quick_profile(std::size_t index)
+{
+	if (index >= quick_profiles.size())
+		return false;
+	cards = quick_profiles[index].cards;
+	update_next_id_from_cards(cards, next_id);
+	return true;
+}
+
+bool LiedplanState::apply_quick_profile(const std::string &name)
+{
+	for (std::size_t i = 0; i < quick_profiles.size(); ++i) {
+		if (quick_profiles[i].name == name)
+			return apply_quick_profile(i);
+	}
+	return false;
+}
+
+bool LiedplanState::remove_quick_profile(std::size_t index)
+{
+	if (index >= quick_profiles.size())
+		return false;
+	quick_profiles.erase(quick_profiles.begin() + static_cast<std::ptrdiff_t>(index));
 	return true;
 }

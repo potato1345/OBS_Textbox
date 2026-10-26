@@ -23,7 +23,9 @@ with this program. If not, see <https://www.gnu.org/licenses/>
 #include "../liedplan-import.hpp"
 
 #include <filesystem>
+#include <fstream>
 #include <iostream>
+#include <sstream>
 #include <string>
 
 namespace {
@@ -260,10 +262,182 @@ int main()
 		check(ok, "12. API-Multi: zwei textAnswers.answers[]-Werte -> joined \"a, b\"");
 	}
 
+	const std::filesystem::path temp_dir =
+		std::filesystem::temp_directory_path() / "liedplan_m4_import_tests";
+	{
+		std::error_code ec;
+		std::filesystem::remove_all(temp_dir, ec);
+		std::filesystem::create_directories(temp_dir, ec);
+	}
+
+	// Referenz-Ergebnis aus antwort_comma.csv laden
+	LiedplanImportResult ref_csv_res;
+	std::string ref_csv_bytes;
+	{
+		const std::filesystem::path csv_path =
+			std::filesystem::u8path(std::string(kSamplesDir) + "antwort_comma.csv");
+		std::ifstream in(csv_path, std::ios::binary);
+		std::ostringstream ss;
+		ss << in.rdbuf();
+		ref_csv_bytes = ss.str();
+		parse_csv_file(csv_path, ref_csv_res);
+	}
+
+	// 13. (M4 #1) XLSX: parse_xlsx_file auf antwort.xlsx == antwort_comma.csv
+	{
+		const std::filesystem::path xlsx_path =
+			std::filesystem::u8path(std::string(kSamplesDir) + "antwort.xlsx");
+		LiedplanImportResult xlsx_res;
+		std::size_t count = 0;
+		std::string err_msg;
+		const ImportError err = parse_xlsx_file(xlsx_path, xlsx_res, &count, &err_msg);
+		const bool ok = (err == ImportError::None) && (count == 1) &&
+				(xlsx_res == ref_csv_res) && (xlsx_res.punkte.size() == 12) &&
+				(xlsx_res.punkte[0].gl == "144") &&
+				(xlsx_res.punkte[0].verse == "1+4+6") &&
+				(xlsx_res.punkte[0].titel == "Nun jauchzt dem Herren, aller Welt") &&
+				(xlsx_res.punkte[4].gl == "175") &&
+				(xlsx_res.punkte[4].titel == "Halleluja!");
+		check(ok, "13. XLSX: antwort.xlsx == antwort_comma.csv (inkl. P1 & P5 Halleluja)",
+		      err_msg);
+	}
+
+	// 14. (M4 #2) ZIP-Deflate: antwort.zip (Deflate) -> parse_zip_file == antwort_comma.csv
+	{
+		const std::string zip_deflate_bytes = build_zip_archive(
+			{{"._ignored.csv", "muss ignoriert werden"},
+			 {"__ignored.csv", "muss ebenfalls ignoriert werden"},
+			 {"antwort.csv", ref_csv_bytes}},
+			true);
+		const std::filesystem::path zip_path = temp_dir / "antwort.zip";
+		{
+			std::ofstream out(zip_path, std::ios::binary | std::ios::trunc);
+			out.write(zip_deflate_bytes.data(),
+				  static_cast<std::streamsize>(zip_deflate_bytes.size()));
+		}
+		LiedplanImportResult zip_res;
+		std::size_t count = 0;
+		std::string err_msg;
+		const ImportError err = parse_zip_file(zip_path, zip_res, &count, &err_msg);
+		const bool ok = (err == ImportError::None) && (count == 1) &&
+				(zip_res == ref_csv_res);
+		check(ok, "14. ZIP-Deflate: antwort.zip == antwort_comma.csv", err_msg);
+	}
+
+	// 15. (M4 #3) ZIP-Store: antwort_store.zip (Store/unkomprimiert) -> parse_zip_file == antwort_comma.csv
+	{
+		const std::string zip_store_bytes =
+			build_zip_archive({{"antwort.csv", ref_csv_bytes}}, false);
+		const std::filesystem::path zip_path = temp_dir / "antwort_store.zip";
+		{
+			std::ofstream out(zip_path, std::ios::binary | std::ios::trunc);
+			out.write(zip_store_bytes.data(),
+				  static_cast<std::streamsize>(zip_store_bytes.size()));
+		}
+		LiedplanImportResult zip_res;
+		std::size_t count = 0;
+		std::string err_msg;
+		const ImportError err = parse_zip_file(zip_path, zip_res, &count, &err_msg);
+		const bool ok = (err == ImportError::None) && (count == 1) &&
+				(zip_res == ref_csv_res);
+		check(ok, "15. ZIP-Store: unkomprimiertes ZIP == antwort_comma.csv", err_msg);
+	}
+
+	// 16. (M4 #4) ZIP ohne CSV: ZIP mit nur foo.txt -> ImportError::Format
+	{
+		const std::string zip_no_csv =
+			build_zip_archive({{"foo.txt", "Kein CSV hier"}}, true);
+		LiedplanImportResult res;
+		std::string err_msg;
+		const ImportError err = parse_zip_bytes(zip_no_csv, res, nullptr, &err_msg);
+		const bool ok = (err == ImportError::Format) && !err_msg.empty();
+		check(ok, "16. ZIP ohne CSV liefert ImportError::Format", err_msg);
+	}
+
+	// 17. (M4 #5) XLSX leer (nur Header): -> ImportError::NoResponses
+	{
+		const std::string sheet_only_header =
+			"<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
+			"<worksheet><sheetData>"
+			"<row r=\"1\">"
+			"<c r=\"A1\" t=\"inlineStr\"><is><t>Woche</t></is></c>"
+			"<c r=\"B1\" t=\"inlineStr\"><is><t>1. Eröffnung – GL-Nummer</t></is></c>"
+			"</row>"
+			"</sheetData></worksheet>";
+		const std::string xlsx_header_only = build_zip_archive(
+			{{"xl/worksheets/sheet1.xml", sheet_only_header}}, true);
+		LiedplanImportResult res;
+		std::string err_msg;
+		const ImportError err =
+			parse_xlsx_bytes(xlsx_header_only, res, nullptr, &err_msg);
+		const bool ok = (err == ImportError::NoResponses) && !err_msg.empty();
+		check(ok, "17. XLSX leer (nur Header) liefert ImportError::NoResponses", err_msg);
+	}
+
+	// 18. (M4 #6) Falsche Endung: parse_answers-Dispatch auf .txt -> ImportError::Format
+	{
+		LiedplanImportResult res;
+		std::string err_msg;
+		const ImportError err1 =
+			parse_answers("beliebiger inhalt", "notizen.txt", res, nullptr, &err_msg);
+		std::string err_msg2;
+		const ImportError err2 = parse_answers_file(
+			temp_dir / "notizen.txt", res, nullptr, &err_msg2);
+		const bool ok = (err1 == ImportError::Format) && !err_msg.empty() &&
+				(err2 == ImportError::Format) && !err_msg2.empty();
+		check(ok, "18. Falsche Endung (.txt) bei parse_answers liefert ImportError::Format",
+		      err_msg);
+	}
+
+	// 19. (M4 #7) Shared-Strings-Entity: hand-konstruiertes XLSX mit sharedStrings.xml (&amp;, &#x41;, &lt;, &gt;, &quot;, &apos;)
+	{
+		const std::string sst_xml =
+			"<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
+			"<sst count=\"4\" uniqueCount=\"4\">"
+			"<si><t>Woche</t></si>"
+			"<si><t>1. Er&#246;ffnung &#8211; GL-Nummer</t></si>"
+			"<si><t>1. Er&#246;ffnung &#8211; Liedtitel</t></si>"
+			"<si><t xml:space=\"preserve\">Lob &amp; &#x41;lleluja &lt;Choral&gt; &quot;1&quot; &apos;A&apos;</t></si>"
+			"<si><t>KW 42 &amp; &#x42;</t></si>"
+			"</sst>";
+		const std::string sheet_xml =
+			"<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
+			"<worksheet><sheetData>"
+			"<row r=\"1\">"
+			"<c r=\"A1\" t=\"s\"><v>0</v></c>"
+			"<c r=\"B1\" t=\"s\"><v>1</v></c>"
+			"<c r=\"C1\" t=\"s\"><v>2</v></c>"
+			"</row>"
+			"<row r=\"2\">"
+			"<c r=\"A2\" t=\"s\"><v>4</v></c>"
+			"<c r=\"B2\"><v>144</v></c>"
+			"<c r=\"C2\" t=\"s\"><v>3</v></c>"
+			"</row>"
+			"</sheetData></worksheet>";
+		const std::string xlsx_bytes = build_zip_archive(
+			{{"xl/sharedStrings.xml", sst_xml},
+			 {"xl/worksheets/sheet1.xml", sheet_xml}},
+			true);
+		LiedplanImportResult res;
+		std::string err_msg;
+		const ImportError err = parse_xlsx_bytes(xlsx_bytes, res, nullptr, &err_msg);
+		const bool ok =
+			(err == ImportError::None) && (res.woche == "KW 42 & B") &&
+			(res.punkte.size() == 12) && (res.punkte[0].gl == "144") &&
+			(res.punkte[0].titel == "Lob & Alleluja <Choral> \"1\" 'A'");
+		check(ok, "19. Shared-Strings-Entity (&amp;, &#x41;, &lt;, &gt;, &quot;, &apos;) in XLSX korrekt dekodiert",
+		      err_msg);
+	}
+
+	{
+		std::error_code ec;
+		std::filesystem::remove_all(temp_dir, ec);
+	}
+
 	if (g_failures > 0) {
 		std::cerr << g_failures << " test(s) failed.\n";
 		return 1;
 	}
-	std::cout << "All 12 checks passed.\n";
+	std::cout << "All 19 checks passed.\n";
 	return 0;
 }

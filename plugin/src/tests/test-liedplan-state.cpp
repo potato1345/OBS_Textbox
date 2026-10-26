@@ -26,6 +26,7 @@ with this program. If not, see <https://www.gnu.org/licenses/>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <nlohmann/json.hpp>
 #include <string>
 
 namespace {
@@ -326,6 +327,129 @@ int main()
 		      err);
 	}
 
+	// 13. (M4 #8) Backup-Roundtrip: State anlegen (cards + quick_profiles + settings) -> serialisieren -> deserialisieren -> == (nlohmann ==)
+	{
+		const std::string backup_path = (temp_dir / "backup_m4.json").u8string();
+		LiedplanState s1;
+		s1.active_profile = "Midnight Blue";
+		s1.settings.google_form_id = "custom_form_id_123";
+		s1.settings.token_path = "C:\\custom\\path\\token.json";
+
+		LiedplanCard &c1 = s1.add_card();
+		c1.zeile1 = "144";
+		c1.zeile2 = "1+4+6";
+		c1.zeile3 = "Nun jauchzt dem Herren, aller Welt";
+		c1.rainbow_corners = true;
+
+		LiedplanCard &c2 = s1.add_card();
+		c2.zeile1 = "356";
+		c2.zeile3 = "Komm, o Gott, durch den Heiligen Geist";
+
+		s1.save_quick_profile("So 19.10.");
+
+		const std::string save_err = s1.save(backup_path);
+		LiedplanState s2;
+		const std::string restore_err = s2.restore_backup(backup_path);
+
+		const nlohmann::json j1 = nlohmann::json::parse(s1.serialize_json());
+		const nlohmann::json j2 = nlohmann::json::parse(s2.serialize_json());
+		const bool ok = save_err.empty() && restore_err.empty() && (j1 == j2) &&
+				(s1 == s2) &&
+				(s2.settings.google_form_id == "custom_form_id_123") &&
+				(s2.settings.token_path == "C:\\custom\\path\\token.json") &&
+				(s2.active_profile == "Midnight Blue") &&
+				(s2.quick_profiles.size() == 1);
+		check(ok, "13. M4 Backup-Roundtrip: Tiefenvergleich (nlohmann == und struct ==)",
+		      save_err + " " + restore_err);
+	}
+
+	// 14. (M4 #9) Schnellprofil-Roundtrip: quick_profiles +{ name, cards } -> serialisieren -> laden -> apply ersetzt cards komplett
+	{
+		const std::string path = (temp_dir / "quick_profiles_m4.json").u8string();
+		LiedplanState s1;
+		LiedplanCard &c1 = s1.add_card();
+		c1.zeile1 = "144";
+		c1.zeile2 = "1-3";
+		c1.zeile3 = "Sonntagslied";
+		c1.profile = "Forest Green";
+		s1.save_quick_profile("So 19.10.");
+
+		// Jetzt aktuellen State verändern (andere Karten)
+		s1.cards[0].zeile1 = "999";
+		s1.cards[0].zeile3 = "Geändert";
+		s1.add_card().zeile3 = "Zusatzkarte";
+
+		const std::string save_err = s1.save(path);
+		LiedplanState s2;
+		const std::string load_err = s2.load(path);
+
+		const bool before_apply =
+			load_err.empty() && s2.cards.size() == 2 &&
+			s2.cards[0].zeile1 == "999" && s2.quick_profiles.size() == 1 &&
+			s2.quick_profiles[0].name == "So 19.10." &&
+			s2.quick_profiles[0].cards.size() == 1 &&
+			s2.quick_profiles[0].cards[0].zeile1 == "144";
+
+		const bool applied = s2.apply_quick_profile(0);
+		const bool after_apply =
+			applied && s2.cards.size() == 1 && s2.cards[0].id == "box1" &&
+			s2.cards[0].zeile1 == "144" && s2.cards[0].zeile2 == "1-3" &&
+			s2.cards[0].zeile3 == "Sonntagslied" &&
+			s2.cards[0].profile == "Forest Green";
+
+		check( save_err.empty() && before_apply && after_apply,
+		      "14. M4 Schnellprofil-Roundtrip: Speichern, Laden und Apply ersetzt cards komplett",
+		      save_err + " " + load_err);
+	}
+
+	// 15. (M4 #10) Backward-Compat: JSON OHNE die drei neuen Top-Level-Keys -> lädt sauber mit Defaults, alte cards unverändert
+	{
+		const std::filesystem::path fs_path = temp_dir / "legacy_m3_state.json";
+		{
+			std::ofstream out(fs_path, std::ios::binary | std::ios::trunc);
+			out << R"({
+  "version": 1,
+  "next_id": 3,
+  "cards": [
+    {
+      "id": "box1",
+      "zeile1": "175",
+      "zeile2": "1",
+      "zeile3": "Halleluja!",
+      "profile": "OBS Dark",
+      "text_color": "#eff0f1",
+      "text_opacity": 255,
+      "box_color": "#3C404D",
+      "box_opacity": 255,
+      "corner_color_a": "#fce647",
+      "corner_color_b": "#fce647",
+      "corner_opacity_a": 255,
+      "corner_opacity_b": 255,
+      "rainbow_corners": false
+    }
+  ]
+})";
+		}
+		LiedplanState s;
+		const std::string err = s.load(fs_path.u8string());
+		const LiedplanSettings default_settings;
+		bool ok = err.empty() && s.next_id == 3 && s.cards.size() == 1 &&
+			  s.cards[0].id == "box1" && s.cards[0].zeile1 == "175" &&
+			  s.cards[0].zeile3 == "Halleluja!" &&
+			  s.active_profile == "OBS Dark" &&
+			  s.settings == default_settings &&
+			  s.quick_profiles.empty();
+
+		// Zusätzlich: kaputtes Backup bei restore_backup verändert bestehenden State NICHT
+		const std::string restore_err =
+			s.restore_backup((temp_dir / "broken.json").u8string());
+		ok = ok && !restore_err.empty() && s.cards.size() == 1 &&
+		     s.cards[0].zeile1 == "175";
+
+		check(ok, "15. M4 Backward-Compat: JSON ohne active_profile/settings/quick_profiles lädt mit Defaults",
+		      err);
+	}
+
 	std::error_code ec;
 	std::filesystem::remove_all(temp_dir, ec);
 
@@ -333,6 +457,6 @@ int main()
 		std::cerr << g_failures << " test(s) failed.\n";
 		return 1;
 	}
-	std::cout << "All 12 checks passed.\n";
+	std::cout << "All 15 checks passed.\n";
 	return 0;
 }

@@ -27,7 +27,9 @@ inline QString stylesheet()
 	return QStringLiteral(R"QSS(
 QWidget#liedplanDock,
 QWidget#lpCardsContainer,
-QDialog#lpImportDialog {
+QDialog#lpImportDialog,
+QDialog#lpQuickProfilesDialog,
+QDialog#lpSettingsDialog {
 	background-color: #1C1F26;
 	color: #EFF0F1;
 	font-family: 'Inter', 'Segoe UI', sans-serif;
@@ -329,7 +331,13 @@ QCheckBox::indicator:checked {
 
 QPushButton#lpBtnImport,
 QPushButton#lpBtnApiImport,
-QPushButton#lpBtnCsvImport {
+QPushButton#lpBtnCsvImport,
+QPushButton#lpBtnQuickProfiles,
+QPushButton#lpBtnBackup,
+QPushButton#lpBtnRestore,
+QPushButton#lpBtnSettings,
+QPushButton#lpBtnQuickSave,
+QPushButton#lpBtnQuickApply {
 	background-color: #272A33;
 	border: 1px solid #3DAEE9;
 	color: #3DAEE9;
@@ -337,15 +345,33 @@ QPushButton#lpBtnCsvImport {
 
 QPushButton#lpBtnImport:hover,
 QPushButton#lpBtnApiImport:hover,
-QPushButton#lpBtnCsvImport:hover {
+QPushButton#lpBtnCsvImport:hover,
+QPushButton#lpBtnQuickProfiles:hover,
+QPushButton#lpBtnBackup:hover,
+QPushButton#lpBtnRestore:hover,
+QPushButton#lpBtnSettings:hover,
+QPushButton#lpBtnQuickSave:hover,
+QPushButton#lpBtnQuickApply:hover {
 	background-color: #414852;
 }
 
 QPushButton#lpBtnApiImport:disabled,
-QPushButton#lpBtnCsvImport:disabled {
+QPushButton#lpBtnCsvImport:disabled,
+QPushButton#lpBtnQuickApply:disabled,
+QPushButton#lpBtnQuickDelete:disabled {
 	background-color: #1C1F26;
 	border: 1px solid #3C404D;
 	color: #B0B6BD;
+}
+
+QPushButton#lpBtnQuickDelete {
+	background-color: #272A33;
+	border: 1px solid #F87171;
+	color: #F87171;
+}
+
+QPushButton#lpBtnQuickDelete:hover {
+	background-color: rgba(248, 113, 113, 0.15);
 }
 
 QGroupBox {
@@ -366,7 +392,10 @@ QGroupBox::title {
 	color: #3DAEE9;
 }
 
-QLabel#lpImportStatus {
+QLabel#lpImportStatus,
+QLabel#lpDockStatus,
+QLabel#lpQuickStatus,
+QLabel#lpSettingsStatus {
 	color: #B0B6BD;
 	font-size: 12px;
 }

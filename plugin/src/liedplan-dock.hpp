@@ -25,6 +25,7 @@ with this program. If not, see <https://www.gnu.org/licenses/>
 #include <string>
 #include <vector>
 
+class QLabel;
 class QVBoxLayout;
 
 class LiedplanDock : public QWidget {
@@ -41,11 +42,18 @@ private:
 	void on_add_card();
 	void on_clear_all();
 	void on_open_import_dialog();
+	void on_open_quick_profiles_dialog();
+	void on_backup_state();
+	void on_restore_state();
+	void on_open_settings_dialog();
 	void apply_import_result(const liedplan_import::LiedplanImportResult &res);
+	void sync_all_cards_live(const std::vector<std::string> &previous_ids);
+	void set_dock_status(const QString &msg, bool is_error = false);
 	void save_state();
 
 	std::string state_path_;
 	LiedplanState state_;
 	QVBoxLayout *cards_layout_ = nullptr;
+	QLabel *dock_status_lbl_ = nullptr;
 	std::vector<QWidget *> row_widgets_;
 };

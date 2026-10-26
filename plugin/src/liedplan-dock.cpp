@@ -29,6 +29,7 @@ with this program. If not, see <https://www.gnu.org/licenses/>
 #include <QColor>
 #include <QColorDialog>
 #include <QComboBox>
+#include <QDate>
 #include <QDialog>
 #include <QFileDialog>
 #include <QFrame>
@@ -65,10 +66,10 @@ LiedplanDock::LiedplanDock(const std::string &state_path, QWidget *parent)
 
 	auto *root_layout = new QVBoxLayout(this);
 	root_layout->setContentsMargins(8, 8, 8, 8);
-	root_layout->setSpacing(8);
+	root_layout->setSpacing(6);
 
 	auto *button_row = new QHBoxLayout();
-	button_row->setContentsMargins(8, 4, 8, 4);
+	button_row->setContentsMargins(8, 2, 8, 2);
 	button_row->setSpacing(8);
 
 	auto *add_btn = new QPushButton(QStringLiteral("＋ Neue Karte"), this);
@@ -85,6 +86,36 @@ LiedplanDock::LiedplanDock(const std::string &state_path, QWidget *parent)
 	button_row->addWidget(import_btn);
 	button_row->addStretch(1);
 	root_layout->addLayout(button_row);
+
+	auto *button_row_m4 = new QHBoxLayout();
+	button_row_m4->setContentsMargins(8, 2, 8, 2);
+	button_row_m4->setSpacing(8);
+
+	auto *quick_btn = new QPushButton(QStringLiteral("⭐ Schnell-Profile"), this);
+	quick_btn->setObjectName(QStringLiteral("lpBtnQuickProfiles"));
+
+	auto *backup_btn = new QPushButton(QStringLiteral("💾 Backup"), this);
+	backup_btn->setObjectName(QStringLiteral("lpBtnBackup"));
+
+	auto *restore_btn = new QPushButton(QStringLiteral("♻️ Restore"), this);
+	restore_btn->setObjectName(QStringLiteral("lpBtnRestore"));
+
+	auto *settings_btn = new QPushButton(QStringLiteral("⚙ Einstellungen"), this);
+	settings_btn->setObjectName(QStringLiteral("lpBtnSettings"));
+
+	button_row_m4->addWidget(quick_btn);
+	button_row_m4->addWidget(backup_btn);
+	button_row_m4->addWidget(restore_btn);
+	button_row_m4->addWidget(settings_btn);
+	button_row_m4->addStretch(1);
+	root_layout->addLayout(button_row_m4);
+
+	dock_status_lbl_ = new QLabel(this);
+	dock_status_lbl_->setObjectName(QStringLiteral("lpDockStatus"));
+	dock_status_lbl_->setContentsMargins(8, 0, 8, 0);
+	dock_status_lbl_->setWordWrap(true);
+	dock_status_lbl_->setVisible(false);
+	root_layout->addWidget(dock_status_lbl_);
 
 	auto *scroll_area = new QScrollArea(this);
 	scroll_area->setWidgetResizable(true);
@@ -105,6 +136,10 @@ LiedplanDock::LiedplanDock(const std::string &state_path, QWidget *parent)
 	connect(add_btn, &QPushButton::clicked, this, &LiedplanDock::on_add_card);
 	connect(clear_btn, &QPushButton::clicked, this, &LiedplanDock::on_clear_all);
 	connect(import_btn, &QPushButton::clicked, this, &LiedplanDock::on_open_import_dialog);
+	connect(quick_btn, &QPushButton::clicked, this, &LiedplanDock::on_open_quick_profiles_dialog);
+	connect(backup_btn, &QPushButton::clicked, this, &LiedplanDock::on_backup_state);
+	connect(restore_btn, &QPushButton::clicked, this, &LiedplanDock::on_restore_state);
+	connect(settings_btn, &QPushButton::clicked, this, &LiedplanDock::on_open_settings_dialog);
 
 	bool file_exists = false;
 	if (!state_path_.empty()) {
@@ -488,6 +523,29 @@ void LiedplanDock::on_clear_all()
 	}
 }
 
+void LiedplanDock::sync_all_cards_live(const std::vector<std::string> &previous_ids)
+{
+	for (const auto &old_id : previous_ids) {
+		if (!state_.find(old_id)) {
+			liedplan_scene::remove_everywhere(old_id);
+		}
+	}
+	for (const auto &card : state_.cards) {
+		liedplan_scene::update_everywhere(card, false);
+	}
+}
+
+void LiedplanDock::set_dock_status(const QString &msg, bool is_error)
+{
+	if (!dock_status_lbl_)
+		return;
+	dock_status_lbl_->setText(msg);
+	dock_status_lbl_->setStyleSheet(
+		is_error ? QStringLiteral("color: #E85D5D; font-size: 12px; font-weight: 600;")
+			 : QStringLiteral("color: #B0B6BD; font-size: 12px;"));
+	dock_status_lbl_->setVisible(!msg.isEmpty());
+}
+
 void LiedplanDock::apply_import_result(const liedplan_import::LiedplanImportResult &res)
 {
 	while (state_.cards.size() < static_cast<std::size_t>(kDefaultCardCount)) {
@@ -515,13 +573,13 @@ void LiedplanDock::on_open_import_dialog()
 	dlg.setObjectName(QStringLiteral("lpImportDialog"));
 	dlg.setWindowTitle(QStringLiteral("Liedplan-Import"));
 	dlg.setStyleSheet(liedplan_theme::stylesheet());
-	dlg.setMinimumWidth(480);
+	dlg.setMinimumWidth(500);
 
 	auto *root = new QVBoxLayout(&dlg);
 	root->setContentsMargins(16, 16, 16, 16);
 	root->setSpacing(12);
 
-	// Gruppe 1: Von Google holen
+	// Gruppe 1: Von Google holen (+ Form-ID & Token-Pfad Einstellungen)
 	auto *google_group = new QGroupBox(QStringLiteral("Von Google holen"), &dlg);
 	auto *google_layout = new QVBoxLayout(google_group);
 	google_layout->setContentsMargins(12, 16, 12, 12);
@@ -531,6 +589,38 @@ void LiedplanDock::on_open_import_dialog()
 		QStringLiteral("Neueste Antwort aus dem Google-Formular laden"), google_group);
 	google_info->setWordWrap(true);
 
+	auto *lbl_form_id = new QLabel(QStringLiteral("FORM-ID"), google_group);
+	lbl_form_id->setObjectName(QStringLiteral("lpFieldLabel"));
+	const std::string init_form_id = state_.settings.google_form_id.empty()
+						 ? liedplan_import::kDefaultFormId
+						 : state_.settings.google_form_id;
+	auto *edit_form_id =
+		new QLineEdit(QString::fromUtf8(init_form_id.c_str()), google_group);
+	edit_form_id->setPlaceholderText(QString::fromUtf8(liedplan_import::kDefaultFormId));
+
+	auto *lbl_token_path = new QLabel(QStringLiteral("TOKEN-PFAD"), google_group);
+	lbl_token_path->setObjectName(QStringLiteral("lpFieldLabel"));
+	const std::string init_token_path = state_.settings.token_path.empty()
+						    ? liedplan_import::kDefaultTokenPath
+						    : state_.settings.token_path;
+	auto *edit_token_path =
+		new QLineEdit(QString::fromUtf8(init_token_path.c_str()), google_group);
+	edit_token_path->setPlaceholderText(QString::fromUtf8(liedplan_import::kDefaultTokenPath));
+
+	connect(edit_form_id, &QLineEdit::textChanged, this, [this](const QString &t) {
+		state_.settings.google_form_id = t.trimmed().toUtf8().toStdString();
+		if (state_.settings.google_form_id.empty())
+			state_.settings.google_form_id = liedplan_import::kDefaultFormId;
+		save_state();
+	});
+
+	connect(edit_token_path, &QLineEdit::textChanged, this, [this](const QString &t) {
+		state_.settings.token_path = t.trimmed().toUtf8().toStdString();
+		if (state_.settings.token_path.empty())
+			state_.settings.token_path = liedplan_import::kDefaultTokenPath;
+		save_state();
+	});
+
 	auto *api_btn = new QPushButton(QStringLiteral("📥 Neueste Antwort laden"), google_group);
 	api_btn->setObjectName(QStringLiteral("lpBtnApiImport"));
 
@@ -539,17 +629,22 @@ void LiedplanDock::on_open_import_dialog()
 	status_lbl->setWordWrap(true);
 
 	google_layout->addWidget(google_info);
+	google_layout->addWidget(lbl_form_id);
+	google_layout->addWidget(edit_form_id);
+	google_layout->addWidget(lbl_token_path);
+	google_layout->addWidget(edit_token_path);
 	google_layout->addWidget(api_btn);
 	google_layout->addWidget(status_lbl);
 	root->addWidget(google_group);
 
-	// Gruppe 2: CSV-Datei
-	auto *csv_group = new QGroupBox(QStringLiteral("CSV-Datei"), &dlg);
+	// Gruppe 2: Datei-Import (CSV / XLSX / ZIP)
+	auto *csv_group = new QGroupBox(QStringLiteral("Datei-Import (CSV / XLSX / ZIP)"), &dlg);
 	auto *csv_layout = new QVBoxLayout(csv_group);
 	csv_layout->setContentsMargins(12, 16, 12, 12);
 	csv_layout->setSpacing(8);
 
-	auto *csv_btn = new QPushButton(QStringLiteral("📂 CSV-Datei importieren …"), csv_group);
+	auto *csv_btn = new QPushButton(
+		QStringLiteral("📂 Datei importieren (CSV / XLSX / ZIP) …"), csv_group);
 	csv_btn->setObjectName(QStringLiteral("lpBtnCsvImport"));
 	csv_layout->addWidget(csv_btn);
 	root->addWidget(csv_group);
@@ -585,7 +680,8 @@ void LiedplanDock::on_open_import_dialog()
 
 	auto handle_success = [this, kopf_group, lbl_woche, lbl_tag, lbl_organist, lbl_zeitstempel,
 			       status_lbl, error_lbl](
-				      const liedplan_import::LiedplanImportResult &res) {
+				      const liedplan_import::LiedplanImportResult &res,
+				      const QString &source_name = QString()) {
 		apply_import_result(res);
 		lbl_woche->setText(QStringLiteral("Woche: ") +
 				   QString::fromUtf8(res.woche.c_str()));
@@ -597,15 +693,23 @@ void LiedplanDock::on_open_import_dialog()
 		kopf_group->setVisible(true);
 		error_lbl->clear();
 		error_lbl->setVisible(false);
-		status_lbl->setText(QStringLiteral(
-			"12 Karten befüllt — im Dock editierbar, „▶ Zu Szene“ legt sie in die Szene."));
+		const QString msg =
+			source_name.isEmpty()
+				? QStringLiteral(
+					  "12 Karten befüllt — im Dock editierbar, „▶ Zu Szene“ legt sie in die Szene.")
+				: QStringLiteral("Importiert: %1 Punkte (Quelle: %2)")
+					  .arg(res.punkte.size())
+					  .arg(source_name);
+		status_lbl->setText(msg);
+		set_dock_status(msg, false);
 	};
 
-	auto handle_error = [status_lbl, error_lbl](const std::string &err_msg) {
+	auto handle_error = [this, status_lbl, error_lbl](const std::string &err_msg) {
 		const QString qerr = QString::fromUtf8(err_msg.c_str());
 		error_lbl->setText(qerr);
 		error_lbl->setVisible(true);
 		status_lbl->setText(qerr);
+		set_dock_status(qerr, true);
 	};
 
 	QPointer<QDialog> dlg_ptr(&dlg);
@@ -627,10 +731,20 @@ void LiedplanDock::on_open_import_dialog()
 					     "google_access_token.json";
 			}
 
-			std::thread([self_ptr, dlg_ptr, api_btn, csv_btn, cache_path,
-				     handle_success, handle_error]() {
+			const std::string form_id =
+				state_.settings.google_form_id.empty()
+					? liedplan_import::kDefaultFormId
+					: state_.settings.google_form_id;
+			const std::filesystem::path token_path = std::filesystem::u8path(
+				state_.settings.token_path.empty()
+					? liedplan_import::kDefaultTokenPath
+					: state_.settings.token_path);
+
+			std::thread([self_ptr, dlg_ptr, api_btn, csv_btn, cache_path, token_path,
+				     form_id, handle_success, handle_error]() {
 				std::string err_msg;
-				auto res = liedplan_import::import_from_api(&err_msg, cache_path);
+				auto res = liedplan_import::import_from_api(
+					&err_msg, cache_path, token_path, form_id);
 
 				if (!self_ptr)
 					return;
@@ -655,24 +769,371 @@ void LiedplanDock::on_open_import_dialog()
 		});
 
 	connect(csv_btn, &QPushButton::clicked, &dlg,
-		[&dlg, handle_success, handle_error]() {
+		[&dlg, dlg_ptr, self_ptr, api_btn, csv_btn, status_lbl, error_lbl, handle_success,
+		 handle_error]() {
 			const QString file_name = QFileDialog::getOpenFileName(
-				&dlg, QStringLiteral("CSV-Datei importieren"), QString(),
-				QStringLiteral("CSV-Dateien (*.csv)"));
+				&dlg, QStringLiteral("Liedplan-Datei importieren"), QString(),
+				QStringLiteral(
+					"CSV-Dateien (*.csv);;Excel-Dateien (*.xlsx);;ZIP-Archive (*.zip);;Alle Dateien (*.*)"));
 			if (file_name.isEmpty())
 				return;
 
-			liedplan_import::LiedplanImportResult res;
-			std::string err_msg;
-			const auto path =
+			api_btn->setEnabled(false);
+			csv_btn->setEnabled(false);
+			error_lbl->clear();
+			error_lbl->setVisible(false);
+			status_lbl->setText(QStringLiteral("Importiere Datei …"));
+
+			const std::filesystem::path path =
 				std::filesystem::u8path(file_name.toUtf8().toStdString());
-			const auto err =
-				liedplan_import::parse_csv_file(path, res, nullptr, &err_msg);
-			if (err == liedplan_import::ImportError::None) {
-				handle_success(res);
-			} else {
-				handle_error(err_msg);
+			const QString source_basename =
+				QString::fromUtf8(path.filename().u8string().c_str());
+
+			std::thread([self_ptr, dlg_ptr, api_btn, csv_btn, path, source_basename,
+				     handle_success, handle_error]() {
+				liedplan_import::LiedplanImportResult res;
+				std::string err_msg;
+				const auto err = liedplan_import::parse_answers_file(
+					path, res, nullptr, &err_msg);
+
+				if (!self_ptr)
+					return;
+
+				QMetaObject::invokeMethod(
+					self_ptr.data(),
+					[self_ptr, dlg_ptr, api_btn, csv_btn, err,
+					 res = std::move(res), err_msg = std::move(err_msg),
+					 source_basename, handle_success, handle_error]() {
+						if (!self_ptr || !dlg_ptr)
+							return;
+						api_btn->setEnabled(true);
+						csv_btn->setEnabled(true);
+						if (err == liedplan_import::ImportError::None) {
+							handle_success(res, source_basename);
+						} else {
+							handle_error(err_msg);
+						}
+					},
+					Qt::QueuedConnection);
+			}).detach();
+		});
+
+	dlg.exec();
+}
+
+void LiedplanDock::on_open_quick_profiles_dialog()
+{
+	QDialog dlg(this);
+	dlg.setObjectName(QStringLiteral("lpQuickProfilesDialog"));
+	dlg.setWindowTitle(QStringLiteral("Schnell-Profile"));
+	dlg.setStyleSheet(liedplan_theme::stylesheet());
+	dlg.setMinimumWidth(460);
+
+	auto *root = new QVBoxLayout(&dlg);
+	root->setContentsMargins(16, 16, 16, 16);
+	root->setSpacing(12);
+
+	auto make_default_name = [this]() -> QString {
+		const int next_num = static_cast<int>(state_.quick_profiles.size()) + 1;
+		const QString date_str = QDate::currentDate().toString(QStringLiteral("dd.MM."));
+		return QStringLiteral("Profil %1 (%2)").arg(next_num).arg(date_str);
+	};
+
+	// Gruppe 1: Aktuellen Stand als Schnell-Profil speichern
+	auto *save_group = new QGroupBox(QStringLiteral("Aktuellen Stand speichern"), &dlg);
+	auto *save_layout = new QVBoxLayout(save_group);
+	save_layout->setContentsMargins(12, 16, 12, 12);
+	save_layout->setSpacing(8);
+
+	auto *lbl_name = new QLabel(QStringLiteral("NAME"), save_group);
+	lbl_name->setObjectName(QStringLiteral("lpFieldLabel"));
+
+	auto *save_row = new QHBoxLayout();
+	save_row->setSpacing(8);
+	auto *name_edit = new QLineEdit(make_default_name(), save_group);
+	name_edit->setPlaceholderText(QStringLiteral("Name des Schnell-Profils"));
+	auto *save_btn = new QPushButton(QStringLiteral("Speichern"), save_group);
+	save_btn->setObjectName(QStringLiteral("lpBtnQuickSave"));
+	save_row->addWidget(name_edit, 1);
+	save_row->addWidget(save_btn);
+
+	save_layout->addWidget(lbl_name);
+	save_layout->addLayout(save_row);
+	root->addWidget(save_group);
+
+	// Gruppe 2: Gespeicherte Schnell-Profile verwalten
+	auto *list_group = new QGroupBox(QStringLiteral("Gespeicherte Schnell-Profile"), &dlg);
+	auto *list_layout = new QVBoxLayout(list_group);
+	list_layout->setContentsMargins(12, 16, 12, 12);
+	list_layout->setSpacing(8);
+
+	auto *combo = new QComboBox(list_group);
+	combo->setFixedHeight(34);
+
+	auto *action_row = new QHBoxLayout();
+	action_row->setSpacing(8);
+	auto *apply_btn = new QPushButton(QStringLiteral("▶ Übernehmen"), list_group);
+	apply_btn->setObjectName(QStringLiteral("lpBtnQuickApply"));
+	auto *del_btn = new QPushButton(QStringLiteral("🗑 Löschen"), list_group);
+	del_btn->setObjectName(QStringLiteral("lpBtnQuickDelete"));
+	action_row->addWidget(apply_btn, 1);
+	action_row->addWidget(del_btn, 1);
+
+	list_layout->addWidget(combo);
+	list_layout->addLayout(action_row);
+	root->addWidget(list_group);
+
+	auto *status_lbl = new QLabel(&dlg);
+	status_lbl->setObjectName(QStringLiteral("lpQuickStatus"));
+	status_lbl->setWordWrap(true);
+	root->addWidget(status_lbl);
+
+	auto refresh_combo = [this, combo, apply_btn, del_btn]() {
+		combo->clear();
+		for (const auto &qp : state_.quick_profiles) {
+			const QString label = QStringLiteral("%1 (%2 Karten)")
+						      .arg(QString::fromUtf8(qp.name.c_str()))
+						      .arg(qp.cards.size());
+			combo->addItem(label);
+		}
+		const bool has_items = !state_.quick_profiles.empty();
+		combo->setEnabled(has_items);
+		apply_btn->setEnabled(has_items);
+		del_btn->setEnabled(has_items);
+	};
+
+	refresh_combo();
+
+	connect(save_btn, &QPushButton::clicked, &dlg,
+		[this, name_edit, status_lbl, refresh_combo, make_default_name]() {
+			const QString qname = name_edit->text().trimmed();
+			const std::string name_utf8 =
+				(qname.isEmpty() ? make_default_name() : qname).toUtf8().toStdString();
+			state_.save_quick_profile(name_utf8);
+			save_state();
+			refresh_combo();
+			name_edit->setText(make_default_name());
+			const QString msg = QStringLiteral("Schnell-Profil gespeichert: %1")
+						    .arg(QString::fromUtf8(name_utf8.c_str()));
+			status_lbl->setText(msg);
+			set_dock_status(msg, false);
+		});
+
+	connect(apply_btn, &QPushButton::clicked, &dlg,
+		[this, combo, status_lbl]() {
+			const int idx = combo->currentIndex();
+			if (idx < 0 || static_cast<std::size_t>(idx) >= state_.quick_profiles.size())
+				return;
+
+			std::vector<std::string> prev_ids;
+			prev_ids.reserve(state_.cards.size());
+			for (const auto &c : state_.cards)
+				prev_ids.push_back(c.id);
+
+			const std::string prof_name =
+				state_.quick_profiles[static_cast<std::size_t>(idx)].name;
+			if (state_.apply_quick_profile(static_cast<std::size_t>(idx))) {
+				save_state();
+				sync_all_cards_live(prev_ids);
+				rebuild_rows();
+				const QString msg =
+					QStringLiteral("Schnell-Profil übernommen: %1")
+						.arg(QString::fromUtf8(prof_name.c_str()));
+				status_lbl->setText(msg);
+				set_dock_status(msg, false);
 			}
+		});
+
+	connect(del_btn, &QPushButton::clicked, &dlg,
+		[this, combo, status_lbl, refresh_combo]() {
+			const int idx = combo->currentIndex();
+			if (idx < 0 || static_cast<std::size_t>(idx) >= state_.quick_profiles.size())
+				return;
+
+			const std::string prof_name =
+				state_.quick_profiles[static_cast<std::size_t>(idx)].name;
+			if (state_.remove_quick_profile(static_cast<std::size_t>(idx))) {
+				save_state();
+				refresh_combo();
+				const QString msg =
+					QStringLiteral("Schnell-Profil gelöscht: %1")
+						.arg(QString::fromUtf8(prof_name.c_str()));
+				status_lbl->setText(msg);
+				set_dock_status(msg, false);
+			}
+		});
+
+	dlg.exec();
+}
+
+void LiedplanDock::on_backup_state()
+{
+	const QString file_name = QFileDialog::getSaveFileName(
+		this, QStringLiteral("JSON-Backup speichern"),
+		QStringLiteral("liedplan-backup.json"),
+		QStringLiteral("JSON-Backup (*.json)"));
+	if (file_name.isEmpty())
+		return;
+
+	const std::string out_path = file_name.toUtf8().toStdString();
+	const LiedplanState snap = state_;
+	QPointer<LiedplanDock> self_ptr(this);
+
+	std::thread([self_ptr, snap, out_path, file_name]() {
+		const std::string err = snap.save(out_path);
+		if (!self_ptr)
+			return;
+		QMetaObject::invokeMethod(
+			self_ptr.data(),
+			[self_ptr, err, file_name]() {
+				if (!self_ptr)
+					return;
+				if (err.empty()) {
+					self_ptr->set_dock_status(
+						QStringLiteral("Backup nach %1").arg(file_name),
+						false);
+				} else {
+					self_ptr->set_dock_status(
+						QStringLiteral("Backup fehlgeschlagen: %1")
+							.arg(QString::fromUtf8(err.c_str())),
+						true);
+				}
+			},
+			Qt::QueuedConnection);
+	}).detach();
+}
+
+void LiedplanDock::on_restore_state()
+{
+	const QString file_name = QFileDialog::getOpenFileName(
+		this, QStringLiteral("JSON-Backup wiederherstellen"), QString(),
+		QStringLiteral("JSON-Backup (*.json)"));
+	if (file_name.isEmpty())
+		return;
+
+	const std::string in_path = file_name.toUtf8().toStdString();
+	QPointer<LiedplanDock> self_ptr(this);
+
+	std::thread([self_ptr, in_path, file_name]() {
+		LiedplanState restored;
+		const std::string err = restored.restore_backup(in_path);
+		if (!self_ptr)
+			return;
+		QMetaObject::invokeMethod(
+			self_ptr.data(),
+			[self_ptr, err, restored = std::move(restored), file_name]() mutable {
+				if (!self_ptr)
+					return;
+				if (!err.empty()) {
+					self_ptr->set_dock_status(
+						QStringLiteral("Restore fehlgeschlagen: %1")
+							.arg(QString::fromUtf8(err.c_str())),
+						true);
+					return;
+				}
+
+				std::vector<std::string> prev_ids;
+				prev_ids.reserve(self_ptr->state_.cards.size());
+				for (const auto &c : self_ptr->state_.cards)
+					prev_ids.push_back(c.id);
+
+				self_ptr->state_ = std::move(restored);
+				self_ptr->save_state();
+				self_ptr->sync_all_cards_live(prev_ids);
+				self_ptr->rebuild_rows();
+				self_ptr->set_dock_status(
+					QStringLiteral("Restore erfolgreich: %1").arg(file_name),
+					false);
+			},
+			Qt::QueuedConnection);
+	}).detach();
+}
+
+void LiedplanDock::on_open_settings_dialog()
+{
+	QDialog dlg(this);
+	dlg.setObjectName(QStringLiteral("lpSettingsDialog"));
+	dlg.setWindowTitle(QStringLiteral("Einstellungen"));
+	dlg.setStyleSheet(liedplan_theme::stylesheet());
+	dlg.setMinimumWidth(480);
+
+	auto *root = new QVBoxLayout(&dlg);
+	root->setContentsMargins(16, 16, 16, 16);
+	root->setSpacing(12);
+
+	auto *oauth_group = new QGroupBox(QStringLiteral("Google-Forms-API & OAuth"), &dlg);
+	auto *oauth_layout = new QVBoxLayout(oauth_group);
+	oauth_layout->setContentsMargins(12, 16, 12, 12);
+	oauth_layout->setSpacing(8);
+
+	auto *lbl_form = new QLabel(QStringLiteral("GOOGLE-FORM-ID"), oauth_group);
+	lbl_form->setObjectName(QStringLiteral("lpFieldLabel"));
+	const std::string cur_form_id = state_.settings.google_form_id.empty()
+						? liedplan_import::kDefaultFormId
+						: state_.settings.google_form_id;
+	auto *edit_form = new QLineEdit(QString::fromUtf8(cur_form_id.c_str()), oauth_group);
+	edit_form->setPlaceholderText(QString::fromUtf8(liedplan_import::kDefaultFormId));
+
+	auto *lbl_token = new QLabel(QStringLiteral("OAUTH-TOKEN-PFAD"), oauth_group);
+	lbl_token->setObjectName(QStringLiteral("lpFieldLabel"));
+	const std::string cur_token = state_.settings.token_path.empty()
+					      ? liedplan_import::kDefaultTokenPath
+					      : state_.settings.token_path;
+	auto *token_row = new QHBoxLayout();
+	token_row->setSpacing(8);
+	auto *edit_token = new QLineEdit(QString::fromUtf8(cur_token.c_str()), oauth_group);
+	edit_token->setPlaceholderText(QString::fromUtf8(liedplan_import::kDefaultTokenPath));
+	auto *browse_btn = new QPushButton(QStringLiteral("📂 …"), oauth_group);
+	browse_btn->setObjectName(QStringLiteral("lpBtn"));
+	token_row->addWidget(edit_token, 1);
+	token_row->addWidget(browse_btn);
+
+	oauth_layout->addWidget(lbl_form);
+	oauth_layout->addWidget(edit_form);
+	oauth_layout->addWidget(lbl_token);
+	oauth_layout->addLayout(token_row);
+	root->addWidget(oauth_group);
+
+	auto *status_lbl = new QLabel(&dlg);
+	status_lbl->setObjectName(QStringLiteral("lpSettingsStatus"));
+	status_lbl->setWordWrap(true);
+	root->addWidget(status_lbl);
+
+	auto *btn_row = new QHBoxLayout();
+	btn_row->setSpacing(8);
+	auto *reset_btn = new QPushButton(QStringLiteral("Standardwerte"), &dlg);
+	reset_btn->setObjectName(QStringLiteral("lpBtn"));
+	auto *save_btn = new QPushButton(QStringLiteral("Speichern"), &dlg);
+	save_btn->setObjectName(QStringLiteral("lpBtnAccent"));
+	btn_row->addWidget(reset_btn);
+	btn_row->addStretch(1);
+	btn_row->addWidget(save_btn);
+	root->addLayout(btn_row);
+
+	connect(browse_btn, &QPushButton::clicked, &dlg, [&dlg, edit_token]() {
+		const QString chosen = QFileDialog::getOpenFileName(
+			&dlg, QStringLiteral("Google-OAuth-Token-Datei wählen"),
+			edit_token->text(), QStringLiteral("JSON-Dateien (*.json);;Alle Dateien (*.*)"));
+		if (!chosen.isEmpty())
+			edit_token->setText(chosen);
+	});
+
+	connect(reset_btn, &QPushButton::clicked, &dlg, [edit_form, edit_token]() {
+		edit_form->setText(QString::fromUtf8(liedplan_import::kDefaultFormId));
+		edit_token->setText(QString::fromUtf8(liedplan_import::kDefaultTokenPath));
+	});
+
+	connect(save_btn, &QPushButton::clicked, &dlg,
+		[this, &dlg, edit_form, edit_token]() {
+			std::string fid = edit_form->text().trimmed().toUtf8().toStdString();
+			std::string tpath = edit_token->text().trimmed().toUtf8().toStdString();
+			state_.settings.google_form_id =
+				fid.empty() ? liedplan_import::kDefaultFormId : fid;
+			state_.settings.token_path =
+				tpath.empty() ? liedplan_import::kDefaultTokenPath : tpath;
+			save_state();
+			set_dock_status(QStringLiteral("Einstellungen gespeichert."), false);
+			dlg.accept();
 		});
 
 	dlg.exec();

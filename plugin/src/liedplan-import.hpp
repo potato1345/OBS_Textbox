@@ -45,6 +45,11 @@ struct LiedplanPoint {
 	std::string gl;
 	std::string verse;
 	std::string titel;
+
+	bool operator==(const LiedplanPoint &other) const
+	{
+		return gl == other.gl && verse == other.verse && titel == other.titel;
+	}
 };
 
 struct LiedplanImportResult {
@@ -53,6 +58,12 @@ struct LiedplanImportResult {
 	std::string organist;
 	std::string zeitstempel;
 	std::vector<LiedplanPoint> punkte; // exakt 12 Einträge (fehlende leer)
+
+	bool operator==(const LiedplanImportResult &other) const
+	{
+		return woche == other.woche && tag == other.tag && organist == other.organist &&
+		       zeitstempel == other.zeitstempel && punkte == other.punkte;
+	}
 };
 
 enum class ImportError { None, Format, NoResponses, File };
@@ -62,6 +73,9 @@ using Record = std::map<std::string, std::string>;
 // Spaltenkopf-Normalisierung und Mapping
 std::string normalize_header(std::string_view raw);
 std::optional<std::string> header_key(std::string_view raw);
+
+// XML-Entity-Dekodierung (für XLSX sharedStrings / inlineStr)
+std::string decode_xml_entities(std::string_view raw);
 
 // CSV-Parser & Record-Konvertierung
 std::vector<std::vector<std::string>> parse_csv(const std::string &text);
@@ -83,6 +97,44 @@ ImportError parse_csv_file(const std::filesystem::path &path,
 			   LiedplanImportResult &out_result,
 			   std::size_t *out_count = nullptr,
 			   std::string *out_error = nullptr);
+
+// XLSX-Import (Mini-ZIP + Mini-XML)
+ImportError parse_xlsx_bytes(std::string_view data,
+			     LiedplanImportResult &out_result,
+			     std::size_t *out_count = nullptr,
+			     std::string *out_error = nullptr);
+
+ImportError parse_xlsx_file(const std::filesystem::path &path,
+			    LiedplanImportResult &out_result,
+			    std::size_t *out_count = nullptr,
+			    std::string *out_error = nullptr);
+
+// ZIP-Import (Mini-ZIP + zlib Store/Deflate)
+ImportError parse_zip_bytes(std::string_view data,
+			    LiedplanImportResult &out_result,
+			    std::size_t *out_count = nullptr,
+			    std::string *out_error = nullptr);
+
+ImportError parse_zip_file(const std::filesystem::path &path,
+			   LiedplanImportResult &out_result,
+			   std::size_t *out_count = nullptr,
+			   std::string *out_error = nullptr);
+
+// Datei-Dispatch nach Endung (.csv, .xlsx, .zip)
+ImportError parse_answers(std::string_view data,
+			  std::string_view filename,
+			  LiedplanImportResult &out_result,
+			  std::size_t *out_count = nullptr,
+			  std::string *out_error = nullptr);
+
+ImportError parse_answers_file(const std::filesystem::path &path,
+			       LiedplanImportResult &out_result,
+			       std::size_t *out_count = nullptr,
+			       std::string *out_error = nullptr);
+
+// Hilfsfunktion zum Erzeugen eines ZIP-Archivs im Speicher (Store oder Deflate, für Tests)
+std::string build_zip_archive(const std::vector<std::pair<std::string, std::string>> &entries,
+			      bool use_deflate);
 
 // Google-Forms-API JSON->Record Mapping (offline testbar)
 Record api_response_to_record(const nlohmann::json &response,
