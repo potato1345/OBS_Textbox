@@ -30,8 +30,9 @@
   Fehlschlag → Fehler mit genauen Meldetext im Report, NICHT mit UAC/admin hacken.
 
 ### 4. OBS mit korrektem WorkingDirectory starten
-- `powershell.exe -NoProfile -Command "Start-Process -FilePath 'C:\Program Files (x86)\Steam\steamapps\common\OBS Studio\obs64.exe' -WorkingDirectory 'C:\Program Files (x86)\Steam\steamapps\common\OBS Studio'"`
-- WorkingDirectory ist WICHTIG (Theme-/CEF-Pfadprobleme sonst).
+- `powershell.exe -NoProfile -Command "Start-Process -FilePath 'C:\Program Files (x86)\Steam\steamapps\common\OBS Studio\bin\64bit\obs64.exe' -WorkingDirectory 'C:\Program Files (x86)\Steam\steamapps\common\OBS Studio\data\obs-studio'"`
+- WorkingDirectory ist WICHTIG: OBS 32.2.2 löst `locale/en-US.ini` relativ zum CWD auf (obsproject#2966). Im Steam-Layout liegt `locale/` nur unter `data\obs-studio\` — falscher CWD → Dialog „Failed to find locale/en-US.ini", kein Start (verifiziert 26.10).
+- exe liegt NICHT im Install-Root, sondern in `bin\64bit\` (Steam-Layout).
 - 30 s warten, dann `tasklist | grep obs64` → neue PID notieren.
 
 ### 5. Log verifizieren
