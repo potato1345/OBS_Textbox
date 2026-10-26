@@ -44,35 +44,117 @@ namespace liedplan_html {
 namespace {
 
 constexpr const char *kRepoTextboxPath = "C:/Users/Johann/Desktop/GitHub/OBS_Textbox/main/textbox.html";
-constexpr const char *kDefaultTriangleColor = "#fce647";
-constexpr int kDefaultTriangleOpacity = 255;
 
-constexpr const char *kListenerScript =
-	"<script>\n"
-	"// Liedplan-Plugin: Live-Updates ohne Reload (javascript_event → CustomEvent)\n"
-	"(function () {\n"
-	"    function setVar(name, value) {\n"
-	"        document.documentElement.style.setProperty(name, value);\n"
-	"    }\n"
-	"    window.addEventListener(\"liedplan_card_update\", function (ev) {\n"
-	"        var d = ev.detail;\n"
-	"        if (!d) return;\n"
-	"        if (d.zeile1 != null) setVar(\"--zeile-1\", '\"' + String(d.zeile1) + '\"');\n"
-	"        if (d.zeile2 != null) setVar(\"--zeile-2\", '\"' + String(d.zeile2) + '\"');\n"
-	"        if (d.zeile3 != null) setVar(\"--zeile-3\", '\"' + String(d.zeile3) + '\"');\n"
-	"        if (d.box_bg != null) setVar(\"--box-bg\", d.box_bg);\n"
-	"        if (d.text_color != null) setVar(\"--text-color\", d.text_color);\n"
-	"        if (d.box_opacity != null) setVar(\"--box-opacity\", String(d.box_opacity));\n"
-	"        if (d.anim_file != null) setVar(\"--anim-file\", '\"' + String(d.anim_file) + '\"');\n"
-	"        if (d.show_anim != null) setVar(\"--show-anim\", String(d.show_anim));\n"
-	"        if (d.anim_scale != null) setVar(\"--anim-scale\", String(d.anim_scale));\n"
-	"        if (d.anim_x != null) setVar(\"--anim-x\", String(d.anim_x) + \"px\");\n"
-	"        if (d.anim_y != null) setVar(\"--anim-y\", String(d.anim_y) + \"px\");\n"
-	"        // Die 150-ms updateLines()-Poll der Seite wendet die Variablen an\n"
-	"        // (Zeilen ein/ausblenden, Anim-Wrapper).\n"
-	"    });\n"
-	"})();\n"
-	"</script>\n";
+constexpr const char *kRainbowCssRepo =
+	".textbox-container { background-image: none !important; }\n"
+	".textbox-container::before {\n"
+	"  content: \"\" !important; display: block !important; position: absolute; top: 0; left: 0;\n"
+	"  width: 50px; height: 50px; border-top-left-radius: 4px;\n"
+	"  background: linear-gradient(135deg, var(--triangle-color-a) 50%, transparent 50%);\n"
+	"  pointer-events: none; z-index: 0; animation: rainbow-rotate 12s linear infinite;\n"
+	"}\n"
+	".textbox-container::after {\n"
+	"  content: \"\" !important; display: block !important; position: absolute; bottom: 0; right: 0;\n"
+	"  width: 50px; height: 50px; border-bottom-right-radius: 4px;\n"
+	"  background: linear-gradient(315deg, var(--triangle-color-b) 50%, transparent 50%);\n"
+	"  pointer-events: none; z-index: 0; animation: rainbow-rotate 12s linear infinite;\n"
+	"}\n"
+	".text-line { position: relative; z-index: 1; }\n"
+	"@keyframes rainbow-rotate {\n"
+	"  from { filter: hue-rotate(0deg); }\n"
+	"  to   { filter: hue-rotate(360deg); }\n"
+	"}\n";
+
+constexpr const char *kRainbowCssFallback =
+	"#box { background-image: none !important; }\n"
+	"#box::before {\n"
+	"  content: \"\" !important; display: block !important; position: absolute; top: 0; left: 0;\n"
+	"  width: 50px; height: 50px; border-top-left-radius: 24px;\n"
+	"  background: linear-gradient(135deg, var(--triangle-color-a) 50%, transparent 50%);\n"
+	"  pointer-events: none; z-index: 0; animation: rainbow-rotate 12s linear infinite;\n"
+	"}\n"
+	"#box::after {\n"
+	"  content: \"\" !important; display: block !important; position: absolute; bottom: 0; right: 0;\n"
+	"  width: 50px; height: 50px; border-bottom-right-radius: 24px;\n"
+	"  background: linear-gradient(315deg, var(--triangle-color-b) 50%, transparent 50%);\n"
+	"  pointer-events: none; z-index: 0; animation: rainbow-rotate 12s linear infinite;\n"
+	"}\n"
+	"#lines { position: relative; z-index: 1; }\n"
+	"@keyframes rainbow-rotate {\n"
+	"  from { filter: hue-rotate(0deg); }\n"
+	"  to   { filter: hue-rotate(360deg); }\n"
+	"}\n";
+
+std::string escape_js_string(const char *input)
+{
+	std::string out;
+	if (!input)
+		return out;
+	for (const char *p = input; *p != '\0'; ++p) {
+		switch (*p) {
+		case '\\':
+			out += "\\\\";
+			break;
+		case '"':
+			out += "\\\"";
+			break;
+		case '\n':
+			out += "\\n";
+			break;
+		case '\r':
+			out += "\\r";
+			break;
+		case '-':
+			out += "\\x2d";
+			break;
+		default:
+			out += *p;
+			break;
+		}
+	}
+	return out;
+}
+
+std::string build_repo_listener_script()
+{
+	std::string s =
+		"<script>\n"
+		"// Liedplan-Plugin: Live-Updates ohne Reload (javascript_event → CustomEvent)\n"
+		"(function () {\n"
+		"    var RAINBOW_CSS = \"";
+	s += escape_js_string(kRainbowCssRepo);
+	s += "\";\n"
+	     "    function setVar(name, value) {\n"
+	     "        document.documentElement.style.setProperty(name, value);\n"
+	     "    }\n"
+	     "    function applyRainbow(v) {\n"
+	     "        var el = document.getElementById(\"lp-rainbow\");\n"
+	     "        if (el) el.textContent = v ? RAINBOW_CSS : \"\";\n"
+	     "    }\n"
+	     "    window.addEventListener(\"liedplan_card_update\", function (ev) {\n"
+	     "        var d = ev.detail;\n"
+	     "        if (!d) return;\n"
+	     "        if (d.zeile1 != null) setVar(\"--zeile-1\", '\"' + String(d.zeile1) + '\"');\n"
+	     "        if (d.zeile2 != null) setVar(\"--zeile-2\", '\"' + String(d.zeile2) + '\"');\n"
+	     "        if (d.zeile3 != null) setVar(\"--zeile-3\", '\"' + String(d.zeile3) + '\"');\n"
+	     "        if (d.box_bg != null) setVar(\"--box-bg\", d.box_bg);\n"
+	     "        if (d.text_color != null) setVar(\"--text-color\", d.text_color);\n"
+	     "        if (d.box_opacity != null) setVar(\"--box-opacity\", String(d.box_opacity));\n"
+	     "        if (d.triangle_color_a != null) setVar(\"--triangle-color-a\", d.triangle_color_a);\n"
+	     "        if (d.triangle_color_b != null) setVar(\"--triangle-color-b\", d.triangle_color_b);\n"
+	     "        if (d.rainbow != null) applyRainbow(d.rainbow);\n"
+	     "        if (d.anim_file != null) setVar(\"--anim-file\", '\"' + String(d.anim_file) + '\"');\n"
+	     "        if (d.show_anim != null) setVar(\"--show-anim\", String(d.show_anim));\n"
+	     "        if (d.anim_scale != null) setVar(\"--anim-scale\", String(d.anim_scale));\n"
+	     "        if (d.anim_x != null) setVar(\"--anim-x\", String(d.anim_x) + \"px\");\n"
+	     "        if (d.anim_y != null) setVar(\"--anim-y\", String(d.anim_y) + \"px\");\n"
+	     "        // Die 150-ms updateLines()-Poll der Seite wendet die Variablen an\n"
+	     "        // (Zeilen ein/ausblenden, Anim-Wrapper).\n"
+	     "    });\n"
+	     "})();\n"
+	     "</script>\n";
+	return s;
+}
 
 // Escaped HTML-Sonderzeichen (& < > " ').
 std::string escape_html(const std::string &input)
@@ -210,7 +292,10 @@ std::string build_inject_css(const LiedplanCard &card)
 		format_rgba(card.box_color.empty() ? "#ffffff" : card.box_color, 0xFFFFFFu, card.box_opacity);
 	const std::string text_col =
 		format_rgba(card.text_color.empty() ? "#000000" : card.text_color, 0x000000u, card.text_opacity);
-	const std::string tri_col = hex_to_rgba(kDefaultTriangleColor, kDefaultTriangleOpacity);
+	const std::string tri_col_a =
+		format_rgba(card.corner_color_a.empty() ? "#fce647" : card.corner_color_a, 0xFCE647u, card.corner_opacity_a);
+	const std::string tri_col_b =
+		format_rgba(card.corner_color_b.empty() ? "#fce647" : card.corner_color_b, 0xFCE647u, card.corner_opacity_b);
 	const int box_opacity = has_any_text(card) ? 1 : 0;
 
 	std::ostringstream oss;
@@ -226,8 +311,8 @@ std::string build_inject_css(const LiedplanCard &card)
 	    << "  --anim-x: 0px;\n"
 	    << "  --anim-y: 0px;\n"
 	    << "  --box-bg: " << box_bg << ";\n"
-	    << "  --triangle-color-a: " << tri_col << ";\n"
-	    << "  --triangle-color-b: " << tri_col << ";\n"
+	    << "  --triangle-color-a: " << tri_col_a << ";\n"
+	    << "  --triangle-color-b: " << tri_col_b << ";\n"
 	    << "  --text-color: " << text_col << ";\n"
 	    << "  --box-opacity: " << box_opacity << ";\n"
 	    << "}\n"
@@ -247,13 +332,17 @@ std::string render_card_html(const LiedplanCard &card, const std::string &repo_h
 		return card_html(card);
 
 	const std::string style_block = "<style>\n" + build_inject_css(card) + "\n</style>\n";
+	const std::string rainbow_block = std::string("<style id=\"lp-rainbow\">") +
+					  (card.rainbow_corners ? kRainbowCssRepo : "") + "</style>\n";
+	const std::string listener_script = build_repo_listener_script();
 
 	std::string out;
-	out.reserve(repo_html.size() + style_block.size() + 1024);
+	out.reserve(repo_html.size() + style_block.size() + rainbow_block.size() + listener_script.size());
 	out.append(repo_html, 0, head_pos);
 	out.append(style_block);
+	out.append(rainbow_block);
 	out.append(repo_html, head_pos, body_pos - head_pos);
-	out.append(kListenerScript);
+	out.append(listener_script);
 	out.append(repo_html, body_pos, repo_html.size() - body_pos);
 	return out;
 }
@@ -286,6 +375,10 @@ std::string card_html(const LiedplanCard &card)
 	const int box_alpha = std::clamp(card.box_opacity, 0, 255);
 	const std::string box_rgba = format_rgba(card.box_color, 0xFFFFFFu, box_alpha);
 	const std::string text_rgba = format_rgba(card.text_color, 0x000000u, card.text_opacity);
+	const std::string tri_a_rgba = format_rgba(
+		card.corner_color_a.empty() ? "#fce647" : card.corner_color_a, 0xFCE647u, card.corner_opacity_a);
+	const std::string tri_b_rgba = format_rgba(
+		card.corner_color_b.empty() ? "#fce647" : card.corner_color_b, 0xFCE647u, card.corner_opacity_b);
 
 	std::string box_style = "background:" + box_rgba + ";";
 	if (box_alpha <= 0)
@@ -294,12 +387,20 @@ std::string card_html(const LiedplanCard &card)
 	const std::string lines_style = "color:" + text_rgba + ";";
 
 	std::string html;
-	html.reserve(2048);
+	html.reserve(3072);
 	html += "<!DOCTYPE html>\n"
 		"<html lang=\"de\">\n"
 		"<head>\n"
 		"<meta charset=\"utf-8\">\n"
 		"<style>\n"
+		":root {\n"
+		"\t--triangle-color-a: " +
+		tri_a_rgba +
+		";\n"
+		"\t--triangle-color-b: " +
+		tri_b_rgba +
+		";\n"
+		"}\n"
 		"html, body {\n"
 		"\tmargin: 0;\n"
 		"\tpadding: 0;\n"
@@ -320,6 +421,10 @@ std::string card_html(const LiedplanCard &card)
 		"\theight: 400px;\n"
 		"\tborder-radius:24px;\n"
 		"\toverflow: hidden;\n"
+		"\tbackground-image: linear-gradient(135deg, var(--triangle-color-a) 50%, transparent 50%), linear-gradient(315deg, var(--triangle-color-b) 50%, transparent 50%);\n"
+		"\tbackground-size: 50px 50px, 50px 50px;\n"
+		"\tbackground-position: top left, bottom right;\n"
+		"\tbackground-repeat: no-repeat;\n"
 		"}\n"
 		"#lines {\n"
 		"\tposition: relative;\n"
@@ -344,6 +449,10 @@ std::string card_html(const LiedplanCard &card)
 		"\twidth: 100%;\n"
 		"}\n"
 		"</style>\n"
+		"<style id=\"lp-rainbow\">";
+	if (card.rainbow_corners)
+		html += kRainbowCssFallback;
+	html += "</style>\n"
 		"</head>\n"
 		"<body>\n"
 		"<div id=\"card\">\n"
@@ -360,10 +469,17 @@ std::string card_html(const LiedplanCard &card)
 	html += "\t</div>\n"
 		"</div>\n"
 		"<script>\n"
-		"function hexToRgb(hex) {\n"
-		"\tif (typeof hex !== \"string\" || !/^#[0-9a-fA-F]{6}$/.test(hex)) return \"0,0,0\";\n"
-		"\tvar v = parseInt(hex.slice(1), 16);\n"
-		"\treturn ((v >> 16) & 255) + \",\" + ((v >> 8) & 255) + \",\" + (v & 255);\n"
+		"var RAINBOW_CSS = \"" +
+		escape_js_string(kRainbowCssFallback) +
+		"\";\n"
+		"function applyRainbow(v) {\n"
+		"\tvar el = document.getElementById(\"lp-rainbow\");\n"
+		"\tif (el) el.textContent = v ? RAINBOW_CSS : \"\";\n"
+		"}\n"
+		"function setVar(name, value) {\n"
+		"\tdocument.documentElement.style.setProperty(name, value);\n"
+		"\tvar box = document.getElementById(\"box\");\n"
+		"\tif (box) box.style.setProperty(name, value);\n"
 		"}\n"
 		"function setLine(id, val) {\n"
 		"\tvar el = document.getElementById(id);\n"
@@ -375,17 +491,18 @@ std::string card_html(const LiedplanCard &card)
 		"function applyCard(d) {\n"
 		"\tif (!d) return;\n"
 		"\tsetLine(\"l1\", d.zeile1); setLine(\"l2\", d.zeile2); setLine(\"l3\", d.zeile3);\n"
-		"\tif (d.box_color != null) {\n"
-		"\t\tvar box = document.getElementById(\"box\");\n"
-		"\t\tvar ba = Math.max(0, Math.min(255, d.box_opacity|0));\n"
-		"\t\tbox.style.background = \"rgba(\" + hexToRgb(d.box_color) + \",\" + (ba/255) + \")\";\n"
-		"\t\tbox.style.display = ba <= 0 ? \"none\" : \"block\";\n"
+		"\tvar box = document.getElementById(\"box\");\n"
+		"\tif (box) {\n"
+		"\t\tif (d.box_bg != null) box.style.background = d.box_bg;\n"
+		"\t\tif (d.box_opacity != null) box.style.display = Number(d.box_opacity) <= 0 ? \"none\" : \"block\";\n"
 		"\t}\n"
 		"\tif (d.text_color != null) {\n"
-		"\t\tvar ta = Math.max(0, Math.min(255, d.text_opacity|0));\n"
-		"\t\tdocument.getElementById(\"lines\").style.color =\n"
-		"\t\t\t\"rgba(\" + hexToRgb(d.text_color) + \",\" + (ta/255) + \")\";\n"
+		"\t\tvar lines = document.getElementById(\"lines\");\n"
+		"\t\tif (lines) lines.style.color = d.text_color;\n"
 		"\t}\n"
+		"\tif (d.triangle_color_a != null) setVar(\"--triangle-color-a\", d.triangle_color_a);\n"
+		"\tif (d.triangle_color_b != null) setVar(\"--triangle-color-b\", d.triangle_color_b);\n"
+		"\tif (d.rainbow != null) applyRainbow(d.rainbow);\n"
 		"}\n"
 		"window.addEventListener(\"liedplan_card_update\", ev => applyCard(ev.detail));\n"
 		"</script>\n"
@@ -436,7 +553,12 @@ void push_update(obs_source_t *src, const LiedplanCard &card, bool clear)
 		format_rgba(card.box_color.empty() ? "#ffffff" : card.box_color, 0xFFFFFFu, card.box_opacity);
 	const std::string text_col =
 		format_rgba(card.text_color.empty() ? "#000000" : card.text_color, 0x000000u, card.text_opacity);
+	const std::string tri_col_a =
+		format_rgba(card.corner_color_a.empty() ? "#fce647" : card.corner_color_a, 0xFCE647u, card.corner_opacity_a);
+	const std::string tri_col_b =
+		format_rgba(card.corner_color_b.empty() ? "#fce647" : card.corner_color_b, 0xFCE647u, card.corner_opacity_b);
 	const int box_opacity = clear ? 0 : (has_any_text(card) ? 1 : 0);
+	const int rainbow = card.rainbow_corners ? 1 : 0;
 
 	QJsonObject obj;
 	obj.insert(QStringLiteral("zeile1"),
@@ -448,6 +570,9 @@ void push_update(obs_source_t *src, const LiedplanCard &card, bool clear)
 	obj.insert(QStringLiteral("box_bg"), QString::fromUtf8(box_bg.c_str()));
 	obj.insert(QStringLiteral("text_color"), QString::fromUtf8(text_col.c_str()));
 	obj.insert(QStringLiteral("box_opacity"), box_opacity);
+	obj.insert(QStringLiteral("triangle_color_a"), QString::fromUtf8(tri_col_a.c_str()));
+	obj.insert(QStringLiteral("triangle_color_b"), QString::fromUtf8(tri_col_b.c_str()));
+	obj.insert(QStringLiteral("rainbow"), rainbow);
 	obj.insert(QStringLiteral("anim_file"), QStringLiteral(""));
 	obj.insert(QStringLiteral("show_anim"), 0);
 	obj.insert(QStringLiteral("anim_scale"), 3);

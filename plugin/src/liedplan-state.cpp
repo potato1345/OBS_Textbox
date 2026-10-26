@@ -106,6 +106,16 @@ std::string LiedplanState::load(const std::string &path)
 				c.box_color = item["box_color"].get<std::string>();
 			if (item.contains("box_opacity") && item["box_opacity"].is_number_integer())
 				c.box_opacity = item["box_opacity"].get<int>();
+			if (item.contains("corner_color_a") && item["corner_color_a"].is_string())
+				c.corner_color_a = item["corner_color_a"].get<std::string>();
+			if (item.contains("corner_color_b") && item["corner_color_b"].is_string())
+				c.corner_color_b = item["corner_color_b"].get<std::string>();
+			if (item.contains("corner_opacity_a") && item["corner_opacity_a"].is_number_integer())
+				c.corner_opacity_a = item["corner_opacity_a"].get<int>();
+			if (item.contains("corner_opacity_b") && item["corner_opacity_b"].is_number_integer())
+				c.corner_opacity_b = item["corner_opacity_b"].get<int>();
+			if (item.contains("rainbow_corners") && item["rainbow_corners"].is_boolean())
+				c.rainbow_corners = item["rainbow_corners"].get<bool>();
 
 			if (c.id.rfind("box", 0) == 0 && c.id.size() > 3) {
 				try {
@@ -150,6 +160,11 @@ std::string LiedplanState::save(const std::string &path) const
 			{"text_opacity", c.text_opacity},
 			{"box_color", c.box_color},
 			{"box_opacity", c.box_opacity},
+			{"corner_color_a", c.corner_color_a},
+			{"corner_color_b", c.corner_color_b},
+			{"corner_opacity_a", c.corner_opacity_a},
+			{"corner_opacity_b", c.corner_opacity_b},
+			{"rainbow_corners", c.rainbow_corners},
 		});
 	}
 

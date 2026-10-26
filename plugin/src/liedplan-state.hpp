@@ -31,6 +31,11 @@ struct LiedplanCard {
 	int text_opacity = 255;
 	std::string box_color = "#ffffff";
 	int box_opacity = 255;
+	std::string corner_color_a = "#fce647";
+	std::string corner_color_b = "#fce647";
+	int corner_opacity_a = 255; // 0..255
+	int corner_opacity_b = 255; // 0..255
+	bool rainbow_corners = false;
 };
 
 class LiedplanState {

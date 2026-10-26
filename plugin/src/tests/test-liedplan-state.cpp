@@ -226,7 +226,7 @@ int main()
 		check(ok, "9. LiedplanState::find() liefert Zeiger bzw. nullptr");
 	}
 
-	// 10. load() auf leerer Datei (0 Bytes) -> leerer State, Rückgabe ""
+		// 10. load() auf leerer Datei (0 Bytes) -> leerer State, Rückgabe ""
 	{
 		const std::filesystem::path fs_path = temp_dir / "empty.json";
 		{
@@ -239,6 +239,93 @@ int main()
 		      "10. load() auf leerer Datei liefert leeren State und \"\"", err);
 	}
 
+	// 11. Ui2/M2b Roundtrip: Card mit nicht-default Corner-Werten + rainbow_corners=true
+	{
+		const std::string path = (temp_dir / "roundtrip_m2b.json").u8string();
+		LiedplanState s1;
+		s1.next_id = 3;
+
+		LiedplanCard c;
+		c.id = "box2";
+		c.zeile1 = "123";
+		c.zeile2 = "1-2";
+		c.zeile3 = "Lobe den Herren";
+		c.profile = "Midnight Blue";
+		c.text_color = "#c9d1d9";
+		c.text_opacity = 220;
+		c.box_color = "#252d3a";
+		c.box_opacity = 210;
+		c.corner_color_a = "#123456";
+		c.corner_color_b = "#abcdef";
+		c.corner_opacity_a = 128;
+		c.corner_opacity_b = 17;
+		c.rainbow_corners = true;
+		s1.cards.push_back(c);
+
+		const std::string save_err = s1.save(path);
+		LiedplanState s2;
+		const std::string load_err = s2.load(path);
+
+		bool ok = save_err.empty() && load_err.empty() && s2.cards.size() == 1 &&
+			  s2.next_id == 3 && s2.cards[0].id == c.id &&
+			  s2.cards[0].zeile1 == c.zeile1 && s2.cards[0].zeile2 == c.zeile2 &&
+			  s2.cards[0].zeile3 == c.zeile3 && s2.cards[0].profile == c.profile &&
+			  s2.cards[0].text_color == c.text_color &&
+			  s2.cards[0].text_opacity == c.text_opacity &&
+			  s2.cards[0].box_color == c.box_color &&
+			  s2.cards[0].box_opacity == c.box_opacity &&
+			  s2.cards[0].corner_color_a == "#123456" &&
+			  s2.cards[0].corner_color_b == "#abcdef" &&
+			  s2.cards[0].corner_opacity_a == 128 &&
+			  s2.cards[0].corner_opacity_b == 17 &&
+			  s2.cards[0].rainbow_corners == true;
+		check(ok, "11. Ui2/M2b Roundtrip: Corner-Colors, Opacities und rainbow_corners bleiben erhalten",
+		      save_err + " " + load_err);
+	}
+
+	// 12. Ui2/M2b Alte-Datei-Test: JSON ohne die neuen Felder -> Defaults (#fce647, 255/255, false)
+	{
+		const std::filesystem::path fs_path = temp_dir / "legacy_no_corners.json";
+		{
+			std::ofstream out(fs_path, std::ios::binary | std::ios::trunc);
+			out << R"({
+  "version": 1,
+  "next_id": 4,
+  "cards": [
+    {
+      "id": "box3",
+      "zeile1": "290",
+      "zeile2": "1-4",
+      "zeile3": "Großer Gott, wir loben dich",
+      "profile": "OBS Dark",
+      "text_color": "#eff0f1",
+      "text_opacity": 255,
+      "box_color": "#3C404D",
+      "box_opacity": 200
+    }
+  ]
+})";
+		}
+		LiedplanState s;
+		const std::string err = s.load(fs_path.u8string());
+		bool ok = err.empty() && s.next_id == 4 && s.cards.size() == 1 &&
+			  s.cards[0].id == "box3" && s.cards[0].zeile1 == "290" &&
+			  s.cards[0].zeile2 == "1-4" &&
+			  s.cards[0].zeile3 == "Großer Gott, wir loben dich" &&
+			  s.cards[0].profile == "OBS Dark" &&
+			  s.cards[0].text_color == "#eff0f1" &&
+			  s.cards[0].text_opacity == 255 &&
+			  s.cards[0].box_color == "#3C404D" &&
+			  s.cards[0].box_opacity == 200 &&
+			  s.cards[0].corner_color_a == "#fce647" &&
+			  s.cards[0].corner_color_b == "#fce647" &&
+			  s.cards[0].corner_opacity_a == 255 &&
+			  s.cards[0].corner_opacity_b == 255 &&
+			  s.cards[0].rainbow_corners == false;
+		check(ok, "12. Ui2/M2b Alte-Datei-Test: fehlende Ecken-Felder erhalten Defaults (#fce647, 255/255, false)",
+		      err);
+	}
+
 	std::error_code ec;
 	std::filesystem::remove_all(temp_dir, ec);
 
@@ -246,6 +333,6 @@ int main()
 		std::cerr << g_failures << " test(s) failed.\n";
 		return 1;
 	}
-	std::cout << "All 10 checks passed.\n";
+	std::cout << "All 12 checks passed.\n";
 	return 0;
 }

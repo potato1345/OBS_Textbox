@@ -25,6 +25,9 @@ with this program. If not, see <https://www.gnu.org/licenses/>
 #include "liedplan-scene.hpp"
 #include "liedplan-theme.hpp"
 
+#include <QCheckBox>
+#include <QColor>
+#include <QColorDialog>
 #include <QComboBox>
 #include <QFrame>
 #include <QHBoxLayout>
@@ -34,6 +37,7 @@ with this program. If not, see <https://www.gnu.org/licenses/>
 #include <QPushButton>
 #include <QScrollArea>
 #include <QSizePolicy>
+#include <QSlider>
 #include <QVBoxLayout>
 
 #include <algorithm>
@@ -210,6 +214,75 @@ void LiedplanDock::create_row_widget(const LiedplanCard &card)
 	prof_layout->addWidget(profile_combo);
 	inner_layout->addLayout(prof_layout);
 
+	const QString hex_a =
+		QString::fromUtf8((card.corner_color_a.empty() ? "#fce647" : card.corner_color_a).c_str()).toUpper();
+	const QString hex_b =
+		QString::fromUtf8((card.corner_color_b.empty() ? "#fce647" : card.corner_color_b).c_str()).toUpper();
+
+	auto *corner_a_layout = new QVBoxLayout();
+	corner_a_layout->setContentsMargins(0, 0, 0, 0);
+	corner_a_layout->setSpacing(4);
+	auto *lbl_corner_a = new QLabel(QStringLiteral("ECKE A"), card_inner);
+	lbl_corner_a->setObjectName(QStringLiteral("lpFieldLabel"));
+	auto *color_a_btn = new QPushButton(hex_a, card_inner);
+	color_a_btn->setObjectName(QStringLiteral("lpColorA"));
+	color_a_btn->setFixedHeight(34);
+	corner_a_layout->addWidget(lbl_corner_a);
+	corner_a_layout->addWidget(color_a_btn);
+	inner_layout->addLayout(corner_a_layout);
+
+	auto *corner_b_layout = new QVBoxLayout();
+	corner_b_layout->setContentsMargins(0, 0, 0, 0);
+	corner_b_layout->setSpacing(4);
+	auto *lbl_corner_b = new QLabel(QStringLiteral("ECKE B"), card_inner);
+	lbl_corner_b->setObjectName(QStringLiteral("lpFieldLabel"));
+	auto *color_b_btn = new QPushButton(hex_b, card_inner);
+	color_b_btn->setObjectName(QStringLiteral("lpColorB"));
+	color_b_btn->setFixedHeight(34);
+	corner_b_layout->addWidget(lbl_corner_b);
+	corner_b_layout->addWidget(color_b_btn);
+	inner_layout->addLayout(corner_b_layout);
+
+	auto *opacity_layout = new QVBoxLayout();
+	opacity_layout->setContentsMargins(0, 0, 0, 0);
+	opacity_layout->setSpacing(4);
+	auto *lbl_opacity = new QLabel(QStringLiteral("ECKEN-DECKKRAFT"), card_inner);
+	lbl_opacity->setObjectName(QStringLiteral("lpFieldLabel"));
+	opacity_layout->addWidget(lbl_opacity);
+
+	auto *opacity_a_row = new QHBoxLayout();
+	opacity_a_row->setContentsMargins(0, 0, 0, 0);
+	opacity_a_row->setSpacing(8);
+	auto *lbl_op_a = new QLabel(QStringLiteral("A"), card_inner);
+	lbl_op_a->setObjectName(QStringLiteral("lpFieldLabel"));
+	auto *opacity_a_slider = new QSlider(Qt::Horizontal, card_inner);
+	opacity_a_slider->setObjectName(QStringLiteral("lpOpacityA"));
+	opacity_a_slider->setRange(0, 255);
+	opacity_a_slider->setValue(std::clamp(card.corner_opacity_a, 0, 255));
+	opacity_a_row->addWidget(lbl_op_a);
+	opacity_a_row->addWidget(opacity_a_slider, 1);
+	opacity_layout->addLayout(opacity_a_row);
+
+	auto *opacity_b_row = new QHBoxLayout();
+	opacity_b_row->setContentsMargins(0, 0, 0, 0);
+	opacity_b_row->setSpacing(8);
+	auto *lbl_op_b = new QLabel(QStringLiteral("B"), card_inner);
+	lbl_op_b->setObjectName(QStringLiteral("lpFieldLabel"));
+	auto *opacity_b_slider = new QSlider(Qt::Horizontal, card_inner);
+	opacity_b_slider->setObjectName(QStringLiteral("lpOpacityB"));
+	opacity_b_slider->setRange(0, 255);
+	opacity_b_slider->setValue(std::clamp(card.corner_opacity_b, 0, 255));
+	opacity_b_row->addWidget(lbl_op_b);
+	opacity_b_row->addWidget(opacity_b_slider, 1);
+	opacity_layout->addLayout(opacity_b_row);
+
+	inner_layout->addLayout(opacity_layout);
+
+	auto *rainbow_cb = new QCheckBox(QStringLiteral("🌈 Regenbogen-Ecken"), card_inner);
+	rainbow_cb->setObjectName(QStringLiteral("lpRainbow"));
+	rainbow_cb->setChecked(card.rainbow_corners);
+	inner_layout->addWidget(rainbow_cb);
+
 	auto *actions_layout = new QHBoxLayout();
 	actions_layout->setContentsMargins(0, 4, 0, 0);
 	actions_layout->setSpacing(8);
@@ -271,6 +344,62 @@ void LiedplanDock::create_row_widget(const LiedplanCard &card)
 				liedplan_scene::update_everywhere(*c, false);
 			}
 		});
+
+	connect(color_a_btn, &QPushButton::clicked, this, [this, card_id, color_a_btn]() {
+		if (LiedplanCard *c = find_card_mut(card_id)) {
+			const QString cur_hex = QString::fromUtf8(
+				(c->corner_color_a.empty() ? "#fce647" : c->corner_color_a).c_str());
+			const QColor chosen =
+				QColorDialog::getColor(QColor(cur_hex), this, QStringLiteral("Eckfarbe A"));
+			if (chosen.isValid()) {
+				const QString hex = chosen.name(QColor::HexRgb);
+				c->corner_color_a = hex.toUtf8().toStdString();
+				color_a_btn->setText(hex.toUpper());
+				save_state();
+				liedplan_scene::update_everywhere(*c, false);
+			}
+		}
+	});
+
+	connect(color_b_btn, &QPushButton::clicked, this, [this, card_id, color_b_btn]() {
+		if (LiedplanCard *c = find_card_mut(card_id)) {
+			const QString cur_hex = QString::fromUtf8(
+				(c->corner_color_b.empty() ? "#fce647" : c->corner_color_b).c_str());
+			const QColor chosen =
+				QColorDialog::getColor(QColor(cur_hex), this, QStringLiteral("Eckfarbe B"));
+			if (chosen.isValid()) {
+				const QString hex = chosen.name(QColor::HexRgb);
+				c->corner_color_b = hex.toUtf8().toStdString();
+				color_b_btn->setText(hex.toUpper());
+				save_state();
+				liedplan_scene::update_everywhere(*c, false);
+			}
+		}
+	});
+
+	connect(opacity_a_slider, &QSlider::valueChanged, this, [this, card_id](int val) {
+		if (LiedplanCard *c = find_card_mut(card_id)) {
+			c->corner_opacity_a = std::clamp(val, 0, 255);
+			save_state();
+			liedplan_scene::update_everywhere(*c, false);
+		}
+	});
+
+	connect(opacity_b_slider, &QSlider::valueChanged, this, [this, card_id](int val) {
+		if (LiedplanCard *c = find_card_mut(card_id)) {
+			c->corner_opacity_b = std::clamp(val, 0, 255);
+			save_state();
+			liedplan_scene::update_everywhere(*c, false);
+		}
+	});
+
+	connect(rainbow_cb, &QCheckBox::toggled, this, [this, card_id](bool checked) {
+		if (LiedplanCard *c = find_card_mut(card_id)) {
+			c->rainbow_corners = checked;
+			save_state();
+			liedplan_scene::update_everywhere(*c, false);
+		}
+	});
 
 	connect(to_scene_btn, &QPushButton::clicked, this, [this, card_id]() {
 		if (LiedplanCard *c = find_card_mut(card_id)) {

@@ -40,21 +40,23 @@ std::string card_html(const LiedplanCard &card);
 // Formatiert "#RRGGBB" + Opacity (0..255) als "rgba(r,g,b,a)".
 std::string hex_to_rgba(const std::string &hex, int opacity_0_255);
 
-// Erzeugt den CSS-Injektionsblock (:root mit --zeile-1/2/3, --box-bg, --text-color usw.)
-// im exakten Production-Format (nicht-Rainbow-Variante aus control.js).
+// Erzeugt den CSS-Injektionsblock (:root mit --zeile-1/2/3, --box-bg, --triangle-color-a/b,
+// --text-color, --box-opacity usw.) aus den State-Feldern der Karte.
 std::string build_inject_css(const LiedplanCard &card);
 
 // Rendert die komplette HTML-Datei der Karte (reines String, testbar):
-// 1. repo_html leer → card_html(card) (Fallback-Template).
+// 1. repo_html leer → card_html(card) (Fallback-Template inkl. <style id="lp-rainbow">).
 // 2. sonst (Inhalt von main/textbox.html):
 //    a) vor dem LETZTEN "</head>": <style>\n + build_inject_css(card) + "\n</style>\n
+//       gefolgt vom <style id="lp-rainbow">-Platzhalter (befüllt bei rainbow_corners=true, sonst leer).
 //    b) vor dem LETZTEN "</body>": Listener-Script für liedplan_card_update.
 // 3. Fehlt ein Marker (</head> oder </body>) im repo_html → Fallback card_html(card).
 std::string render_card_html(const LiedplanCard &card, const std::string &repo_html);
 
 // Schickt das Kartenevent an eine BESTEHENDE Browser-Source (ohne Reload):
 // proc-Handler "javascript_event" mit eventName="liedplan_card_update",
-// jsonString = JSON {zeile1,zeile2,zeile3,box_bg,text_color,box_opacity,anim_file,show_anim,anim_scale,anim_x,anim_y}
+// jsonString = JSON {zeile1,zeile2,zeile3,box_bg,text_color,box_opacity,
+// triangle_color_a,triangle_color_b,rainbow,anim_file,show_anim,anim_scale,anim_x,anim_y}
 // (clear=true → alle Zeilen "" und box_opacity = 0). JSON über Qt (QJsonObject/QJsonDocument::toJson(Compact)).
 // src==nullptr → no-op.
 void push_update(obs_source_t *src, const LiedplanCard &card, bool clear);
