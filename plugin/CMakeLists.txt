@@ -15,7 +15,7 @@ add_library(${CMAKE_PROJECT_NAME} MODULE)
 
 find_package(libobs REQUIRED)
 find_package(nlohmann_json REQUIRED)
-target_link_libraries(${CMAKE_PROJECT_NAME} PRIVATE OBS::libobs nlohmann_json::nlohmann_json)
+target_link_libraries(${CMAKE_PROJECT_NAME} PRIVATE OBS::libobs nlohmann_json::nlohmann_json winhttp)
 
 if(ENABLE_FRONTEND_API)
   find_package(obs-frontend-api REQUIRED)
@@ -60,6 +60,8 @@ target_sources(
     src/liedplan-html.cpp
     src/liedplan-scene.hpp
     src/liedplan-scene.cpp
+    src/liedplan-import.hpp
+    src/liedplan-import.cpp
 )
 
 set_target_properties_plugin(${CMAKE_PROJECT_NAME} PROPERTIES OUTPUT_NAME ${_name})
@@ -79,6 +81,15 @@ add_test(NAME liedplan-state COMMAND liedplan-tests)
 
 add_executable(liedplan-textfmt-tests src/tests/test-liedplan-textfmt.cpp)
 add_test(NAME liedplan-textfmt COMMAND liedplan-textfmt-tests)
+
+add_executable(
+  liedplan-import-tests
+  src/tests/test-liedplan-import.cpp
+  src/liedplan-import.cpp
+  src/liedplan-import.hpp
+)
+target_link_libraries(liedplan-import-tests PRIVATE nlohmann_json::nlohmann_json winhttp)
+add_test(NAME liedplan-import COMMAND liedplan-import-tests)
 
 if(ENABLE_QT)
   add_executable(

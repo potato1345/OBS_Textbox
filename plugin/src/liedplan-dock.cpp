@@ -29,11 +29,16 @@ with this program. If not, see <https://www.gnu.org/licenses/>
 #include <QColor>
 #include <QColorDialog>
 #include <QComboBox>
+#include <QDialog>
+#include <QFileDialog>
 #include <QFrame>
+#include <QGroupBox>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QLineEdit>
 #include <QMessageBox>
+#include <QMetaObject>
+#include <QPointer>
 #include <QPushButton>
 #include <QScrollArea>
 #include <QSizePolicy>
@@ -42,6 +47,7 @@ with this program. If not, see <https://www.gnu.org/licenses/>
 
 #include <algorithm>
 #include <filesystem>
+#include <thread>
 
 namespace {
 
@@ -71,8 +77,12 @@ LiedplanDock::LiedplanDock(const std::string &state_path, QWidget *parent)
 	auto *clear_btn = new QPushButton(QStringLiteral("🗑 Alle löschen"), this);
 	clear_btn->setObjectName(QStringLiteral("lpBtnRed"));
 
+	auto *import_btn = new QPushButton(QStringLiteral("📥 Import"), this);
+	import_btn->setObjectName(QStringLiteral("lpBtnImport"));
+
 	button_row->addWidget(add_btn);
 	button_row->addWidget(clear_btn);
+	button_row->addWidget(import_btn);
 	button_row->addStretch(1);
 	root_layout->addLayout(button_row);
 
@@ -94,6 +104,7 @@ LiedplanDock::LiedplanDock(const std::string &state_path, QWidget *parent)
 
 	connect(add_btn, &QPushButton::clicked, this, &LiedplanDock::on_add_card);
 	connect(clear_btn, &QPushButton::clicked, this, &LiedplanDock::on_clear_all);
+	connect(import_btn, &QPushButton::clicked, this, &LiedplanDock::on_open_import_dialog);
 
 	bool file_exists = false;
 	if (!state_path_.empty()) {
@@ -475,6 +486,196 @@ void LiedplanDock::on_clear_all()
 	for (const auto &id : ids) {
 		liedplan_scene::remove_everywhere(id);
 	}
+}
+
+void LiedplanDock::apply_import_result(const liedplan_import::LiedplanImportResult &res)
+{
+	while (state_.cards.size() < static_cast<std::size_t>(kDefaultCardCount)) {
+		state_.add_card();
+	}
+
+	const std::size_t count =
+		std::min<std::size_t>(static_cast<std::size_t>(kDefaultCardCount), res.punkte.size());
+	for (std::size_t i = 0; i < count; ++i) {
+		state_.cards[i].zeile1 = res.punkte[i].gl;
+		state_.cards[i].zeile2 = res.punkte[i].verse;
+		state_.cards[i].zeile3 = res.punkte[i].titel;
+	}
+
+	save_state();
+	for (std::size_t i = 0; i < count; ++i) {
+		liedplan_scene::update_everywhere(state_.cards[i], false);
+	}
+	rebuild_rows();
+}
+
+void LiedplanDock::on_open_import_dialog()
+{
+	QDialog dlg(this);
+	dlg.setObjectName(QStringLiteral("lpImportDialog"));
+	dlg.setWindowTitle(QStringLiteral("Liedplan-Import"));
+	dlg.setStyleSheet(liedplan_theme::stylesheet());
+	dlg.setMinimumWidth(480);
+
+	auto *root = new QVBoxLayout(&dlg);
+	root->setContentsMargins(16, 16, 16, 16);
+	root->setSpacing(12);
+
+	// Gruppe 1: Von Google holen
+	auto *google_group = new QGroupBox(QStringLiteral("Von Google holen"), &dlg);
+	auto *google_layout = new QVBoxLayout(google_group);
+	google_layout->setContentsMargins(12, 16, 12, 12);
+	google_layout->setSpacing(8);
+
+	auto *google_info = new QLabel(
+		QStringLiteral("Neueste Antwort aus dem Google-Formular laden"), google_group);
+	google_info->setWordWrap(true);
+
+	auto *api_btn = new QPushButton(QStringLiteral("📥 Neueste Antwort laden"), google_group);
+	api_btn->setObjectName(QStringLiteral("lpBtnApiImport"));
+
+	auto *status_lbl = new QLabel(QStringLiteral("Bereit."), google_group);
+	status_lbl->setObjectName(QStringLiteral("lpImportStatus"));
+	status_lbl->setWordWrap(true);
+
+	google_layout->addWidget(google_info);
+	google_layout->addWidget(api_btn);
+	google_layout->addWidget(status_lbl);
+	root->addWidget(google_group);
+
+	// Gruppe 2: CSV-Datei
+	auto *csv_group = new QGroupBox(QStringLiteral("CSV-Datei"), &dlg);
+	auto *csv_layout = new QVBoxLayout(csv_group);
+	csv_layout->setContentsMargins(12, 16, 12, 12);
+	csv_layout->setSpacing(8);
+
+	auto *csv_btn = new QPushButton(QStringLiteral("📂 CSV-Datei importieren …"), csv_group);
+	csv_btn->setObjectName(QStringLiteral("lpBtnCsvImport"));
+	csv_layout->addWidget(csv_btn);
+	root->addWidget(csv_group);
+
+	// Gruppe 3: Kopfdaten (erst nach erfolgreichem Laden sichtbar)
+	auto *kopf_group = new QGroupBox(QStringLiteral("Kopfdaten"), &dlg);
+	auto *kopf_layout = new QVBoxLayout(kopf_group);
+	kopf_layout->setContentsMargins(12, 16, 12, 12);
+	kopf_layout->setSpacing(4);
+
+	auto *lbl_woche = new QLabel(QStringLiteral("Woche: —"), kopf_group);
+	lbl_woche->setObjectName(QStringLiteral("lpKopfWochen"));
+	auto *lbl_tag = new QLabel(QStringLiteral("Tag: —"), kopf_group);
+	lbl_tag->setObjectName(QStringLiteral("lpKopfTag"));
+	auto *lbl_organist = new QLabel(QStringLiteral("Organist: —"), kopf_group);
+	lbl_organist->setObjectName(QStringLiteral("lpKopfOrganist"));
+	auto *lbl_zeitstempel = new QLabel(QStringLiteral("Zeitstempel: —"), kopf_group);
+	lbl_zeitstempel->setObjectName(QStringLiteral("lpKopfZeitstempel"));
+
+	kopf_layout->addWidget(lbl_woche);
+	kopf_layout->addWidget(lbl_tag);
+	kopf_layout->addWidget(lbl_organist);
+	kopf_layout->addWidget(lbl_zeitstempel);
+	kopf_group->setVisible(false);
+	root->addWidget(kopf_group);
+
+	// Ergebnis-/Fehler-Label unterhalb
+	auto *error_lbl = new QLabel(&dlg);
+	error_lbl->setObjectName(QStringLiteral("lpImportError"));
+	error_lbl->setWordWrap(true);
+	error_lbl->setVisible(false);
+	root->addWidget(error_lbl);
+
+	auto handle_success = [this, kopf_group, lbl_woche, lbl_tag, lbl_organist, lbl_zeitstempel,
+			       status_lbl, error_lbl](
+				      const liedplan_import::LiedplanImportResult &res) {
+		apply_import_result(res);
+		lbl_woche->setText(QStringLiteral("Woche: ") +
+				   QString::fromUtf8(res.woche.c_str()));
+		lbl_tag->setText(QStringLiteral("Tag: ") + QString::fromUtf8(res.tag.c_str()));
+		lbl_organist->setText(QStringLiteral("Organist: ") +
+				      QString::fromUtf8(res.organist.c_str()));
+		lbl_zeitstempel->setText(QStringLiteral("Zeitstempel: ") +
+					 QString::fromUtf8(res.zeitstempel.c_str()));
+		kopf_group->setVisible(true);
+		error_lbl->clear();
+		error_lbl->setVisible(false);
+		status_lbl->setText(QStringLiteral(
+			"12 Karten befüllt — im Dock editierbar, „▶ Zu Szene“ legt sie in die Szene."));
+	};
+
+	auto handle_error = [status_lbl, error_lbl](const std::string &err_msg) {
+		const QString qerr = QString::fromUtf8(err_msg.c_str());
+		error_lbl->setText(qerr);
+		error_lbl->setVisible(true);
+		status_lbl->setText(qerr);
+	};
+
+	QPointer<QDialog> dlg_ptr(&dlg);
+	QPointer<LiedplanDock> self_ptr(this);
+
+	connect(api_btn, &QPushButton::clicked, &dlg,
+		[this, dlg_ptr, self_ptr, api_btn, csv_btn, status_lbl, error_lbl, handle_success,
+		 handle_error]() {
+			api_btn->setEnabled(false);
+			csv_btn->setEnabled(false);
+			error_lbl->clear();
+			error_lbl->setVisible(false);
+			status_lbl->setText(QStringLiteral("Lade …"));
+
+			std::filesystem::path cache_path;
+			if (!state_path_.empty()) {
+				std::error_code ec;
+				cache_path = std::filesystem::u8path(state_path_).parent_path() /
+					     "google_access_token.json";
+			}
+
+			std::thread([self_ptr, dlg_ptr, api_btn, csv_btn, cache_path,
+				     handle_success, handle_error]() {
+				std::string err_msg;
+				auto res = liedplan_import::import_from_api(&err_msg, cache_path);
+
+				if (!self_ptr)
+					return;
+
+				QMetaObject::invokeMethod(
+					self_ptr.data(),
+					[self_ptr, dlg_ptr, api_btn, csv_btn, res = std::move(res),
+					 err_msg = std::move(err_msg), handle_success,
+					 handle_error]() {
+						if (!self_ptr || !dlg_ptr)
+							return;
+						api_btn->setEnabled(true);
+						csv_btn->setEnabled(true);
+						if (res) {
+							handle_success(*res);
+						} else {
+							handle_error(err_msg);
+						}
+					},
+					Qt::QueuedConnection);
+			}).detach();
+		});
+
+	connect(csv_btn, &QPushButton::clicked, &dlg,
+		[&dlg, handle_success, handle_error]() {
+			const QString file_name = QFileDialog::getOpenFileName(
+				&dlg, QStringLiteral("CSV-Datei importieren"), QString(),
+				QStringLiteral("CSV-Dateien (*.csv)"));
+			if (file_name.isEmpty())
+				return;
+
+			liedplan_import::LiedplanImportResult res;
+			std::string err_msg;
+			const auto path =
+				std::filesystem::u8path(file_name.toUtf8().toStdString());
+			const auto err =
+				liedplan_import::parse_csv_file(path, res, nullptr, &err_msg);
+			if (err == liedplan_import::ImportError::None) {
+				handle_success(res);
+			} else {
+				handle_error(err_msg);
+			}
+		});
+
+	dlg.exec();
 }
 
 void LiedplanDock::save_state()

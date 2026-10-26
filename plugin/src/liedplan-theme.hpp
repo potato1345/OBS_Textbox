@@ -26,7 +26,8 @@ inline QString stylesheet()
 {
 	return QStringLiteral(R"QSS(
 QWidget#liedplanDock,
-QWidget#lpCardsContainer {
+QWidget#lpCardsContainer,
+QDialog#lpImportDialog {
 	background-color: #1C1F26;
 	color: #EFF0F1;
 	font-family: 'Inter', 'Segoe UI', sans-serif;
@@ -324,6 +325,64 @@ QCheckBox::indicator:hover {
 QCheckBox::indicator:checked {
 	background-color: #3DAEE9;
 	border: 1px solid #3DAEE9;
+}
+
+QPushButton#lpBtnImport,
+QPushButton#lpBtnApiImport,
+QPushButton#lpBtnCsvImport {
+	background-color: #272A33;
+	border: 1px solid #3DAEE9;
+	color: #3DAEE9;
+}
+
+QPushButton#lpBtnImport:hover,
+QPushButton#lpBtnApiImport:hover,
+QPushButton#lpBtnCsvImport:hover {
+	background-color: #414852;
+}
+
+QPushButton#lpBtnApiImport:disabled,
+QPushButton#lpBtnCsvImport:disabled {
+	background-color: #1C1F26;
+	border: 1px solid #3C404D;
+	color: #B0B6BD;
+}
+
+QGroupBox {
+	background-color: #272A33;
+	border: 1px solid #3C404D;
+	border-radius: 8px;
+	margin-top: 12px;
+	padding-top: 12px;
+	color: #EFF0F1;
+	font-weight: 600;
+}
+
+QGroupBox::title {
+	subcontrol-origin: margin;
+	subcontrol-position: top left;
+	left: 12px;
+	padding: 0 4px;
+	color: #3DAEE9;
+}
+
+QLabel#lpImportStatus {
+	color: #B0B6BD;
+	font-size: 12px;
+}
+
+QLabel#lpImportError {
+	color: #E85D5D;
+	font-size: 12px;
+	font-weight: 600;
+}
+
+QLabel#lpKopfWochen,
+QLabel#lpKopfTag,
+QLabel#lpKopfOrganist,
+QLabel#lpKopfZeitstempel {
+	color: #EFF0F1;
+	font-size: 12px;
 }
 )QSS");
 }

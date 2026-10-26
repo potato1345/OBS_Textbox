@@ -18,6 +18,7 @@ with this program. If not, see <https://www.gnu.org/licenses/>
 
 #pragma once
 
+#include "liedplan-import.hpp"
 #include "liedplan-state.hpp"
 
 #include <QWidget>
@@ -39,6 +40,8 @@ private:
 	void rebuild_rows();
 	void on_add_card();
 	void on_clear_all();
+	void on_open_import_dialog();
+	void apply_import_result(const liedplan_import::LiedplanImportResult &res);
 	void save_state();
 
 	std::string state_path_;
