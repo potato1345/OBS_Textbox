@@ -306,17 +306,131 @@ std::string path_to_file_url(const std::string &path_utf8)
 	std::size_t start = 0;
 	while (start < path_utf8.size() && (path_utf8[start] == '/' || path_utf8[start] == '\\'))
 		++start;
+	static const char hexd[] = "0123456789ABCDEF";
 	for (std::size_t i = start; i < path_utf8.size(); ++i) {
-		const char c = path_utf8[i];
+		const unsigned char c = static_cast<unsigned char>(path_utf8[i]);
 		if (c == '\\') {
 			out += '/';
-		} else if (c == ' ') {
-			out += "%20";
+		} else if (std::isalnum(c) != 0 || c == '-' || c == '_' || c == '.' || c == '~' || c == ':' ||
+		           c == '/') {
+			// Unreserved (plus ':' für Laufwerksbuchstaben und '/' als Separator) bleibt roh.
+			out += static_cast<char>(c);
 		} else {
-			out += c;
+			// M5-1: alles andere (Spaces, Umlaute/Non-ASCII-Bytes, …) prozent-encodiert,
+			// sonst weigert sich CEF, die Datei zu laden.
+			out += '%';
+			out += hexd[(c >> 4) & 0xF];
+			out += hexd[c & 0xF];
 		}
 	}
 	return out;
+}
+
+std::string base64_encode(const std::string &data)
+{
+	static const char tbl[] =
+		"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+	std::string out;
+	out.reserve((data.size() + 2) / 3 * 4);
+	for (std::size_t i = 0; i < data.size(); i += 3) {
+		const unsigned b0 = static_cast<unsigned char>(data[i]);
+		const unsigned b1 = (i + 1 < data.size()) ? static_cast<unsigned char>(data[i + 1]) : 0;
+		const unsigned b2 = (i + 2 < data.size()) ? static_cast<unsigned char>(data[i + 2]) : 0;
+		const unsigned n = (b0 << 16) | (b1 << 8) | b2;
+		out += tbl[(n >> 18) & 0x3F];
+		out += tbl[(n >> 12) & 0x3F];
+		out += (i + 1 < data.size()) ? tbl[(n >> 6) & 0x3F] : '=';
+		out += (i + 2 < data.size()) ? tbl[n & 0x3F] : '=';
+	}
+	return out;
+}
+
+// Liest eine Datei (max. max_bytes) als rohe Bytes; ok=false bei Fehler.
+bool read_file_bytes(const std::string &path, std::size_t max_bytes, std::string &out)
+{
+	std::ifstream f(std::filesystem::u8path(path), std::ios::binary | std::ios::ate);
+	if (!f.is_open())
+		return false;
+	const std::size_t size = static_cast<std::size_t>(f.tellg());
+	if (size > max_bytes)
+		return false;
+	f.seekg(0, std::ios::beg);
+	out.resize(size);
+	if (size > 0 && !f.read(&out[0], static_cast<std::streamsize>(size)))
+		return false;
+	return true;
+}
+
+std::string ext_lowercase(const std::string &p)
+{
+	const std::size_t dot = p.find_last_of('.');
+	const std::size_t slash = p.find_last_of("/\\");
+	if (dot == std::string::npos || (slash != std::string::npos && dot < slash))
+		return "";
+	std::string e = p.substr(dot + 1);
+	for (char &c : e)
+		c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+	return e;
+}
+
+bool is_image_ext(const std::string &e)
+{
+	return e == "gif" || e == "png" || e == "jpg" || e == "jpeg" || e == "webp" || e == "bmp";
+}
+
+bool is_video_ext(const std::string &e)
+{
+	return e == "webm" || e == "mp4" || e == "mov";
+}
+
+std::string mime_for_ext(const std::string &e)
+{
+	if (e == "gif")
+		return "image/gif";
+	if (e == "png")
+		return "image/png";
+	if (e == "jpg" || e == "jpeg")
+		return "image/jpeg";
+	if (e == "webp")
+		return "image/webp";
+	if (e == "bmp")
+		return "image/bmp";
+	return "application/octet-stream";
+}
+
+// Nur [A-Za-z0-9._-], sonst '_' — für Video-Kopien neben der Card-HTML (ASCII,
+// damit der file://-URL nie Non-ASCII enthält).
+std::string sanitize_basename(const std::string &name)
+{
+	std::string out;
+	out.reserve(name.size());
+	for (const char c : name)
+		out += (std::isalnum(static_cast<unsigned char>(c)) != 0 || c == '.' || c == '_' || c == '-')
+				? c
+				: '_';
+	while (!out.empty() && out.back() == '_')
+		out.pop_back();
+	return out.empty() ? "anim" : out;
+}
+
+// true, wenn `p` (absolut) innerhalb des Verzeichnisses `dir` liegt (oder gleich).
+bool path_inside_dir(const std::string &p, const std::string &dir)
+{
+	std::error_code ec1, ec2;
+	const std::filesystem::path a =
+		std::filesystem::weakly_canonical(std::filesystem::u8path(p), ec1);
+	const std::filesystem::path b =
+		std::filesystem::weakly_canonical(std::filesystem::u8path(dir), ec2);
+	if (ec1 || ec2)
+		return false;
+	auto it = a.begin();
+	auto ite = a.end();
+	for (const auto &seg : b) {
+		if (it == ite || !(*it == seg))
+			return false;
+		++it;
+	}
+	return it != ite;
 }
 
 } // namespace
@@ -326,7 +440,8 @@ std::string hex_to_rgba(const std::string &hex, int opacity_0_255)
 	return format_rgba(hex, 0x000000u, opacity_0_255);
 }
 
-std::string normalize_anim_src(const std::string &raw, const LiedplanSettings &settings)
+std::string normalize_anim_src(const std::string &raw, const LiedplanSettings &settings,
+                               const std::string &copy_dir)
 {
 	if (raw.empty())
 		return "";
@@ -336,42 +451,72 @@ std::string normalize_anim_src(const std::string &raw, const LiedplanSettings &s
 		return raw;
 	}
 
+	// Lokalen Pfad auflösen (absolut oder relativ zu settings.animation_dir).
+	std::string resolved;
 	if (is_abs_win_path(raw)) {
-		return path_to_file_url(raw);
-	}
-
-	if (!settings.animation_dir.empty()) {
+		resolved = std::filesystem::u8path(raw).generic_u8string();
+	} else if (!settings.animation_dir.empty()) {
 		std::error_code ec;
 		const std::filesystem::path anim_dir = std::filesystem::u8path(settings.animation_dir);
 		const std::filesystem::path candidate = anim_dir / std::filesystem::u8path(raw);
 		if (std::filesystem::exists(candidate, ec) && !ec) {
 			const std::filesystem::path abs_cand =
 				std::filesystem::absolute(candidate, ec);
-			const std::string p_str =
-				(!ec && !abs_cand.empty()) ? abs_cand.generic_u8string()
-							   : candidate.generic_u8string();
-			return path_to_file_url(p_str);
+			resolved = (!ec && !abs_cand.empty()) ? abs_cand.generic_u8string()
+			                                      : candidate.generic_u8string();
 		}
 		// Fallback, falls "animation/..." oder "animation\..." relativ zum Repo-Root angegeben wurde
-		if (anim_dir.has_parent_path()) {
+		if (resolved.empty() && anim_dir.has_parent_path()) {
 			const std::filesystem::path parent_cand =
 				anim_dir.parent_path() / std::filesystem::u8path(raw);
 			ec.clear();
 			if (std::filesystem::exists(parent_cand, ec) && !ec) {
 				const std::filesystem::path abs_cand =
 					std::filesystem::absolute(parent_cand, ec);
-				const std::string p_str =
-					(!ec && !abs_cand.empty()) ? abs_cand.generic_u8string()
-								   : parent_cand.generic_u8string();
-				return path_to_file_url(p_str);
+				resolved = (!ec && !abs_cand.empty()) ? abs_cand.generic_u8string()
+				                                     : parent_cand.generic_u8string();
 			}
 		}
 	}
+	if (resolved.empty())
+		return raw;
 
-	return raw;
+	const std::string ext = ext_lowercase(resolved);
+
+	// M5.1 (CEF-File-Access): Die Card-HTML lädt per file://; CEF 127 weigert sich,
+	// Sub-Ressourcen aus ANDEREN Verzeichnisbäumen zu laden ("Not allowed to load
+	// local resource"). Bilder daher als base64-data-URI inline (immer ladbar,
+	// keine Kopie, bleibt frisch bei jedem push_update),
+	if (is_image_ext(ext)) {
+		std::string bytes;
+		if (read_file_bytes(resolved, 16 * 1024 * 1024, bytes))
+			return "data:" + mime_for_ext(ext) + ";base64," + base64_encode(bytes);
+		// Lesefehler → Fallback wie vorher (file-URL, best effort).
+	}
+
+	// Videos (webm/mp4/mov) sind zu groß für data-URIs → Kopie NEBEN die Card-HTML
+	// (selbes Verzeichnis = selbst bei striktester CEF-Policy erlaubt) + file-URL.
+	if (is_video_ext(ext)) {
+		if (!copy_dir.empty() && !path_inside_dir(resolved, copy_dir)) {
+			std::error_code ec;
+			std::filesystem::create_directories(std::filesystem::u8path(copy_dir), ec);
+			const std::filesystem::path src = std::filesystem::u8path(resolved);
+			const std::filesystem::path dest =
+				std::filesystem::u8path(copy_dir) /
+				std::filesystem::u8path(sanitize_basename(src.filename().u8string()));
+			std::filesystem::copy_file(src, dest,
+			                           std::filesystem::copy_options::overwrite_existing, ec);
+			if (!ec)
+				return path_to_file_url(dest.generic_u8string());
+		}
+		return path_to_file_url(resolved);
+	}
+
+	return path_to_file_url(resolved);
 }
 
-std::string build_inject_css(const LiedplanCard &card, const LiedplanSettings &settings)
+std::string build_inject_css(const LiedplanCard &card, const LiedplanSettings &settings,
+                             const std::string &copy_dir)
 {
 	const std::string box_bg =
 		format_rgba(card.box_color.empty() ? "#ffffff" : card.box_color, 0xFFFFFFu, card.box_opacity);
@@ -382,7 +527,7 @@ std::string build_inject_css(const LiedplanCard &card, const LiedplanSettings &s
 	const std::string tri_col_b =
 		format_rgba(card.corner_color_b.empty() ? "#fce647" : card.corner_color_b, 0xFCE647u, card.corner_opacity_b);
 	const int box_opacity = has_any_text(card) ? 1 : 0;
-	const std::string norm_anim = normalize_anim_src(card.anim_file, settings);
+	const std::string norm_anim = normalize_anim_src(card.anim_file, settings, copy_dir);
 	const int show_anim = card.show_anim ? 1 : 0;
 
 	std::ostringstream oss;
@@ -409,7 +554,7 @@ std::string build_inject_css(const LiedplanCard &card, const LiedplanSettings &s
 }
 
 std::string render_card_html(const LiedplanCard &card, const std::string &repo_html,
-			     const LiedplanSettings &settings)
+			     const LiedplanSettings &settings, const std::string &copy_dir)
 {
 	if (repo_html.empty())
 		return card_html(card);
@@ -419,7 +564,8 @@ std::string render_card_html(const LiedplanCard &card, const std::string &repo_h
 	if (head_pos == std::string::npos || body_pos == std::string::npos || head_pos >= body_pos)
 		return card_html(card);
 
-	const std::string style_block = "<style>\n" + build_inject_css(card, settings) + "\n</style>\n";
+	const std::string style_block =
+		"<style>\n" + build_inject_css(card, settings, copy_dir) + "\n</style>\n";
 	const std::string rainbow_block = std::string("<style id=\"lp-rainbow\">") +
 					  (card.rainbow_corners ? kRainbowCssRepo : "") + "</style>\n";
 	const std::string listener_script = build_repo_listener_script();
@@ -617,7 +763,7 @@ bool write_card(const LiedplanCard &card, std::string &path_out, const LiedplanS
 	}
 
 	const std::string full_path = dir + "/" + card.id + ".html";
-	const std::string html = render_card_html(card, repo_html, settings);
+	const std::string html = render_card_html(card, repo_html, settings, dir);
 
 	std::ofstream file(std::filesystem::u8path(full_path), std::ios::binary | std::ios::trunc);
 	if (!file.is_open())
@@ -633,7 +779,7 @@ bool write_card(const LiedplanCard &card, std::string &path_out, const LiedplanS
 }
 
 void push_update(obs_source_t *src, const LiedplanCard &card, bool clear,
-		 const LiedplanSettings &settings)
+		 const LiedplanSettings &settings, const std::string &copy_dir)
 {
 	if (!src)
 		return;
@@ -648,7 +794,7 @@ void push_update(obs_source_t *src, const LiedplanCard &card, bool clear,
 		format_rgba(card.corner_color_b.empty() ? "#fce647" : card.corner_color_b, 0xFCE647u, card.corner_opacity_b);
 	const int box_opacity = clear ? 0 : (has_any_text(card) ? 1 : 0);
 	const int rainbow = card.rainbow_corners ? 1 : 0;
-	const std::string norm_anim = normalize_anim_src(card.anim_file, settings);
+	const std::string norm_anim = normalize_anim_src(card.anim_file, settings, copy_dir);
 	const int show_anim = card.show_anim ? 1 : 0;
 
 	QJsonObject obj;

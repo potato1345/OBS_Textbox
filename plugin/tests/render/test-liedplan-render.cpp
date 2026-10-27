@@ -455,14 +455,166 @@ int main(int argc, char *argv[])
 		const bool ok =
 			(res_a == "file:///C:/Users/J/animation/1_advent.gif") &&
 			(res_b == "https://example.com/a.webm") &&
-			(res_c.rfind("file:///", 0) == 0 &&
-			 res_c.find("1_advent.gif") != std::string::npos) &&
+			// M5.1: existierendes Bild → base64-Data-URI (CEF-File-Access-Fix),
+			// base64("GIF89a") = "R0lGODlh"
+			(res_c == "data:image/gif;base64,R0lGODlh") &&
 			(res_d == "does_not_exist_999.gif") &&
 			(res_e == "file:///C:/a%20b/x.gif");
 
 		std::filesystem::remove_all(fix_dir, ec);
-		check(ok, "10. (M5 #9) normalize_anim_src: Win-Pfad, URL, existierender Bare-Name, fehlender Bare-Name, Space->%20",
+		check(ok, "10. (M5 #9) normalize_anim_src: Win-Pfad, URL, existierendes Bild->Data-URI, fehlender Bare-Name, Space->%20",
 		      res_a + " | " + res_c + " | " + res_e);
+	}
+
+	// 12. (M5.1 CEF-File-Access) Data-URIs für Bilder, Video-Kopie neben Card-HTML,
+	//     percent-Encoding (M5-1), Fallbacks
+	{
+		// Mini-Base64-Decoder für den Roundtrip-Check
+		auto b64_decode = [](const std::string &in) {
+			auto val = [](char c) -> int {
+				if (c >= 'A' && c <= 'Z')
+					return c - 'A';
+				if (c >= 'a' && c <= 'z')
+					return c - 'a' + 26;
+				if (c >= '0' && c <= '9')
+					return c - '0' + 52;
+				if (c == '+')
+					return 62;
+				if (c == '/')
+					return 63;
+				return -1;
+			};
+			std::string out;
+			int buf = 0, bits = 0;
+			for (char c : in) {
+				if (c == '=')
+					break;
+				const int v = val(c);
+				if (v < 0)
+					continue;
+				buf = (buf << 6) | v;
+				bits += 6;
+				if (bits >= 8) {
+					bits -= 8;
+					out += static_cast<char>((buf >> bits) & 0xFF);
+				}
+			}
+			return out;
+		};
+		// 1x1-transparenter GIF (43 Bytes)
+		const std::string gif_bytes =
+			"\x47\x49\x46\x38\x39\x61" // GIF89a
+			"\x01\x00\x01\x00"            // 1x1
+			"\x80"                         // GCT 2 Farben
+			"\x00\x00"
+			"\x00\x00\x00\xFF\xFF\xFF"
+			"\x21\xF9\x04\x01\x00\x00\x00\x00"
+			"\x2C\x00\x00\x00\x00\x01\x00\x01\x00\x00"
+			"\x02"
+			"\x02\x4C\x01\x00"
+			"\x3B";
+
+		LiedplanSettings st;
+		const std::filesystem::path m51 =
+			std::filesystem::temp_directory_path() / "liedplan_m51_fix";
+		std::error_code ec;
+		std::filesystem::remove_all(m51, ec);
+		std::filesystem::create_directories(m51 / "src", ec);
+		std::filesystem::create_directories(m51 / "cards", ec);
+		auto wr = [](const std::filesystem::path &p, const std::string &b) {
+			std::ofstream f(p, std::ios::binary | std::ios::trunc);
+			f.write(b.data(), static_cast<std::streamsize>(b.size()));
+		};
+		const std::filesystem::path gif_path = m51 / "src" / "1_advent.gif";
+		wr(gif_path, gif_bytes);
+
+		// 12a: existierendes GIF (absoluter Pfad) → Data-URI + Byte-Identität
+		const std::string uri_gif =
+			liedplan_html::normalize_anim_src(gif_path.u8string(), st);
+		const bool ok_12a =
+			uri_gif.rfind("data:image/gif;base64,", 0) == 0 &&
+			b64_decode(uri_gif.substr(22)) == gif_bytes;
+
+		// 12b: MIME pro Endung
+		wr(m51 / "src" / "a.png", "PNGDATA");
+		wr(m51 / "src" / "a.jpg", "JPGDATA");
+		wr(m51 / "src" / "a.webp", "WEBPDATA");
+		const std::string uri_png =
+			liedplan_html::normalize_anim_src((m51 / "src" / "a.png").u8string(), st);
+		const std::string uri_jpg =
+			liedplan_html::normalize_anim_src((m51 / "src" / "a.jpg").u8string(), st);
+		const std::string uri_webp =
+			liedplan_html::normalize_anim_src((m51 / "src" / "a.webp").u8string(), st);
+		const bool ok_12b =
+			uri_png.rfind("data:image/png;base64,", 0) == 0 &&
+			uri_jpg.rfind("data:image/jpeg;base64,", 0) == 0 &&
+			uri_webp.rfind("data:image/webp;base64,", 0) == 0;
+
+		// 12c: fehlendes Bild → file-URL-Fallback (kein data:, kein Crash)
+		const std::string uri_missing = liedplan_html::normalize_anim_src(
+			(m51 / "src" / "nicht_da.gif").u8string(), st);
+		const bool ok_12c =
+			uri_missing.rfind("file:///", 0) == 0 && uri_missing.find("data:") == std::string::npos;
+
+		// 12d: Video außerhalb von copy_dir → Kopie NEBEN die Card-HTML + file-URL
+		const std::filesystem::path vid_path = m51 / "src" / "anim_xmas.webm";
+		wr(vid_path, "FAKEWEBM-CONTENT");
+		const std::string cards = (m51 / "cards").u8string();
+		const std::string uri_vid =
+			liedplan_html::normalize_anim_src(vid_path.u8string(), st, cards);
+		const std::filesystem::path vid_copy = m51 / "cards" / "anim_xmas.webm";
+		const bool ok_12d =
+			uri_vid.rfind("file:///", 0) == 0 &&
+			uri_vid.find("cards/anim_xmas.webm") != std::string::npos &&
+			std::filesystem::exists(vid_copy, ec) &&
+			[&]() {
+				std::string a, b;
+				std::ifstream fa(vid_path, std::ios::binary);
+				std::ifstream fb(vid_copy, std::ios::binary);
+				std::ostringstream oa, ob;
+				oa << fa.rdbuf();
+				ob << fb.rdbuf();
+				return oa.str() == ob.str();
+			}();
+
+		// 12e: Video BEREITS in copy_dir → direkte file-URL, keine Doppelkopie
+		const std::string uri_vid2 = liedplan_html::normalize_anim_src(vid_copy.u8string(), st, cards);
+		const bool ok_12e =
+			uri_vid2.rfind("file:///", 0) == 0 &&
+			uri_vid2.find("cards/anim_xmas.webm") != std::string::npos;
+
+		// 12f: Non-ASCII-Dateiname ohne copy_dir (M5-1): Umlaut wird prozent-encodiert.
+		// NUR über u8path() mit expliziten UTF-8-Bytes (narrow-Konkatenation würde
+		// unter MSVC die Locale/CP1252 nehmen — genau das, was wir hier testen).
+		const std::string umlaut_name = "Gr\xc3\xbc\xc3\x9f" "e.webm"; // "Grüße.webm"
+		const std::filesystem::path umlaut =
+			m51 / "src" / std::filesystem::u8path(umlaut_name.c_str());
+		wr(umlaut, "V");
+		const std::string uri_um = liedplan_html::normalize_anim_src(umlaut.u8string(), st);
+		const bool ok_12f =
+			uri_um.rfind("file:///", 0) == 0 &&
+			uri_um.find("%C3%BC") != std::string::npos &&
+			uri_um.find("\xC3") == std::string::npos;
+
+		// 12g: Pass-through und leer
+		const std::string uri_pt1 =
+			liedplan_html::normalize_anim_src("http://x.test/a.gif", st);
+		const std::string uri_pt2 =
+			liedplan_html::normalize_anim_src("file:///C:/x/a.gif", st);
+		const std::string uri_empty = liedplan_html::normalize_anim_src("", st);
+		const bool ok_12g =
+			uri_pt1 == "http://x.test/a.gif" &&
+			uri_pt2 == "file:///C:/x/a.gif" &&
+			uri_empty.empty();
+
+		std::filesystem::remove_all(m51, ec);
+		check(ok_12a, "12a. (M5.1) existierendes GIF → data:image/gif;base64 + Byte-Identität", uri_gif.substr(0, 40));
+		check(ok_12b, "12b. (M5.1) MIME pro Endung (png/jpg/webp)");
+		check(ok_12c, "12c. (M5.1) fehlendes Bild → file-URL-Fallback", uri_missing);
+		check(ok_12d, "12d. (M5.1) Video → Kopie nach cards/ + file-URL, Inhalte identisch", uri_vid);
+		check(ok_12e, "12e. (M5.1) Video in copy_dir → direkte file-URL", uri_vid2);
+		check(ok_12f, "12f. (M5-1) Non-ASCII-Name → %C3%BC-Encoded, keine rohen High-Bytes", uri_um);
+		check(ok_12g, "12g. (M5.1) http/file/empty Pass-through");
 	}
 
 	// 11. (M5 #13 & #14) build_inject_css mit echten Anim-Werten, Escape und Defaults

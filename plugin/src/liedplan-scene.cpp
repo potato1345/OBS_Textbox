@@ -124,7 +124,8 @@ void send_to_current_scene(const LiedplanCard &card, const LiedplanSettings &set
 			if (liedplan_html::write_card(card, html_path, settings)) {
 				obs_log(LOG_INFO, "Liedplan: HTML geschrieben: %s", html_path.c_str());
 			}
-			liedplan_html::push_update(src, card, false, settings);
+			liedplan_html::push_update(src, card, false, settings,
+						 liedplan_html::cards_dir());
 		} else {
 			const char *old_id = src ? obs_source_get_id(src) : "";
 			obs_log(LOG_INFO, "Liedplan: migriere %s (alter Typ '%s' -> %s)",
@@ -193,7 +194,8 @@ void update_everywhere(const LiedplanCard &card, bool clear, const LiedplanSetti
 		if (!is_browser_source(src))
 			continue;
 
-		liedplan_html::push_update(src, card, clear, settings);
+		liedplan_html::push_update(src, card, clear, settings,
+					   liedplan_html::cards_dir());
 	}
 }
 
