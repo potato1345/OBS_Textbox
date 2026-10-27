@@ -18,6 +18,7 @@ with this program. If not, see <https://www.gnu.org/licenses/>
 
 #pragma once
 
+#include "liedplan-ai.hpp"
 #include "liedplan-import.hpp"
 #include "liedplan-state.hpp"
 

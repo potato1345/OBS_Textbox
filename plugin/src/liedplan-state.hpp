@@ -37,6 +37,11 @@ struct LiedplanCard {
 	int corner_opacity_a = 255; // 0..255
 	int corner_opacity_b = 255; // 0..255
 	bool rainbow_corners = false;
+	std::string anim_file = ""; // Dateiname, absoluter Pfad oder URL (roher Wert, wie eingegeben)
+	bool show_anim = false;
+	int anim_scale = 3; // 1,2,3,4,6,8,10,12 (v2-Optionen); Default 3
+	int anim_x = 0; // -1200..1200 px
+	int anim_y = 0; // -1200..1200 px
 
 	bool operator==(const LiedplanCard &other) const
 	{
@@ -48,17 +53,29 @@ struct LiedplanCard {
 		       corner_color_b == other.corner_color_b &&
 		       corner_opacity_a == other.corner_opacity_a &&
 		       corner_opacity_b == other.corner_opacity_b &&
-		       rainbow_corners == other.rainbow_corners;
+		       rainbow_corners == other.rainbow_corners &&
+		       anim_file == other.anim_file && show_anim == other.show_anim &&
+		       anim_scale == other.anim_scale && anim_x == other.anim_x &&
+		       anim_y == other.anim_y;
 	}
 };
 
 struct LiedplanSettings {
 	std::string google_form_id = "1jreAuzd-jt1x48WDmjaP7v0OusdVO2lb55Kt4JrhEgY";
 	std::string token_path = "C:\\Users\\Johann\\AppData\\Local\\hermes\\google_token.json";
+	std::string openrouter_key_path = "C:\\Users\\Johann\\Desktop\\GitHub\\OBS_Textbox\\main\\api.env";
+	std::string markitdown_python = "C:\\Users\\Johann\\Desktop\\GitHub\\OBS_Textbox\\.venv\\Scripts\\python.exe";
+	std::string animation_dir = "C:\\Users\\Johann\\Desktop\\GitHub\\OBS_Textbox\\animation";
+	std::string lieder_path = "C:\\Users\\Johann\\Desktop\\GitHub\\OBS_Textbox\\rewrite\\dashboard\\lieder.md";
+	std::string ai_system_prompt = ""; // leer = LiedplanAi::kDefaultSystemPrompt verwenden
 
 	bool operator==(const LiedplanSettings &other) const
 	{
-		return google_form_id == other.google_form_id && token_path == other.token_path;
+		return google_form_id == other.google_form_id && token_path == other.token_path &&
+		       openrouter_key_path == other.openrouter_key_path &&
+		       markitdown_python == other.markitdown_python &&
+		       animation_dir == other.animation_dir && lieder_path == other.lieder_path &&
+		       ai_system_prompt == other.ai_system_prompt;
 	}
 };
 

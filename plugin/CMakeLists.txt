@@ -67,6 +67,8 @@ target_sources(
     src/liedplan-scene.cpp
     src/liedplan-import.hpp
     src/liedplan-import.cpp
+    src/liedplan-ai.hpp
+    src/liedplan-ai.cpp
 )
 
 set_target_properties_plugin(${CMAKE_PROJECT_NAME} PROPERTIES OUTPUT_NAME ${_name})
@@ -95,6 +97,19 @@ add_executable(
 )
 target_link_libraries(liedplan-import-tests PRIVATE nlohmann_json::nlohmann_json winhttp ZLIB::ZLIB)
 add_test(NAME liedplan-import COMMAND liedplan-import-tests)
+
+add_executable(
+  liedplan-ai-tests
+  src/tests/test-liedplan-ai.cpp
+  src/liedplan-ai.cpp
+  src/liedplan-ai.hpp
+)
+target_compile_definitions(
+  liedplan-ai-tests
+  PRIVATE LIEDPLAN_REPO_ROOT="${CMAKE_CURRENT_SOURCE_DIR}/.."
+)
+target_link_libraries(liedplan-ai-tests PRIVATE nlohmann_json::nlohmann_json winhttp)
+add_test(NAME liedplan-ai COMMAND liedplan-ai-tests)
 
 if(ENABLE_QT)
   add_executable(

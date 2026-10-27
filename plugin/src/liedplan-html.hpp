@@ -32,7 +32,8 @@ std::string cards_dir();
 // Erzeugt das self-contained HTML der Karte (Template unten) und schreibt es nach
 // cards_dir() + "/" + card.id + ".html" (UTF-8, via std::filesystem::u8path).
 // true bei Erfolg. path_out = voller Pfad der Datei (UTF-8).
-bool write_card(const LiedplanCard &card, std::string &path_out);
+bool write_card(const LiedplanCard &card, std::string &path_out,
+		const LiedplanSettings &settings = LiedplanSettings());
 
 // Reines String-Template (für Testbarkeit), ohne Dateizugriff.
 std::string card_html(const LiedplanCard &card);
@@ -40,18 +41,30 @@ std::string card_html(const LiedplanCard &card);
 // Formatiert "#RRGGBB" + Opacity (0..255) als "rgba(r,g,b,a)".
 std::string hex_to_rgba(const std::string &hex, int opacity_0_255);
 
+// Wandelt den rohen anim_file-Wert in einen für CEF ladbaren src-Wert um:
+// - "" → ""
+// - beginnt mit "http://" / "https://" / "file://" → unverändert
+// - absoluter Windows-Pfad (^[A-Za-z]:[\\/] ...) → "file:///" + Pfad mit FORWARD-SLASHES,
+//   Spaces als %20 (z. B. "C:\a b\x.gif" → "file:///C:/a%20b/x.gif")
+// - sonst (Bare-Name/relativ): wenn settings.animation_dir + "/" + s existiert
+//   (std::filesystem::exists) → file-URL davon; sonst unverändert (relativ zur Card-HTML, Best-Effort)
+std::string normalize_anim_src(const std::string &raw,
+			       const LiedplanSettings &settings = LiedplanSettings());
+
 // Erzeugt den CSS-Injektionsblock (:root mit --zeile-1/2/3, --box-bg, --triangle-color-a/b,
 // --text-color, --box-opacity usw.) aus den State-Feldern der Karte.
-std::string build_inject_css(const LiedplanCard &card);
+std::string build_inject_css(const LiedplanCard &card,
+			     const LiedplanSettings &settings = LiedplanSettings());
 
 // Rendert die komplette HTML-Datei der Karte (reines String, testbar):
 // 1. repo_html leer → card_html(card) (Fallback-Template inkl. <style id="lp-rainbow">).
 // 2. sonst (Inhalt von main/textbox.html):
-//    a) vor dem LETZTEN "</head>": <style>\n + build_inject_css(card) + "\n</style>\n
+//    a) vor dem LETZTEN "</head>": <style>\n + build_inject_css(card, settings) + "\n</style>\n
 //       gefolgt vom <style id="lp-rainbow">-Platzhalter (befüllt bei rainbow_corners=true, sonst leer).
 //    b) vor dem LETZTEN "</body>": Listener-Script für liedplan_card_update.
 // 3. Fehlt ein Marker (</head> oder </body>) im repo_html → Fallback card_html(card).
-std::string render_card_html(const LiedplanCard &card, const std::string &repo_html);
+std::string render_card_html(const LiedplanCard &card, const std::string &repo_html,
+			     const LiedplanSettings &settings = LiedplanSettings());
 
 // Schickt das Kartenevent an eine BESTEHENDE Browser-Source (ohne Reload):
 // proc-Handler "javascript_event" mit eventName="liedplan_card_update",
@@ -59,6 +72,7 @@ std::string render_card_html(const LiedplanCard &card, const std::string &repo_h
 // triangle_color_a,triangle_color_b,rainbow,anim_file,show_anim,anim_scale,anim_x,anim_y}
 // (clear=true → alle Zeilen "" und box_opacity = 0). JSON über Qt (QJsonObject/QJsonDocument::toJson(Compact)).
 // src==nullptr → no-op.
-void push_update(obs_source_t *src, const LiedplanCard &card, bool clear);
+void push_update(obs_source_t *src, const LiedplanCard &card, bool clear,
+		 const LiedplanSettings &settings = LiedplanSettings());
 
 } // namespace liedplan_html

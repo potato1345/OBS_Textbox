@@ -35,6 +35,7 @@ with this program. If not, see <https://www.gnu.org/licenses/>
 #include <QString>
 
 #include <algorithm>
+#include <cctype>
 #include <filesystem>
 #include <fstream>
 #include <sstream>
@@ -279,6 +280,45 @@ std::string render_line_div(const char *id, const std::string &text)
 	return out;
 }
 
+bool starts_with_icase(const std::string &s, const char *prefix)
+{
+	std::size_t i = 0;
+	for (; prefix[i] != '\0'; ++i) {
+		if (i >= s.size())
+			return false;
+		if (std::tolower(static_cast<unsigned char>(s[i])) !=
+		    std::tolower(static_cast<unsigned char>(prefix[i])))
+			return false;
+	}
+	return true;
+}
+
+bool is_abs_win_path(const std::string &s)
+{
+	return s.size() >= 3 && std::isalpha(static_cast<unsigned char>(s[0])) && s[1] == ':' &&
+	       (s[2] == '\\' || s[2] == '/');
+}
+
+std::string path_to_file_url(const std::string &path_utf8)
+{
+	std::string out = "file:///";
+	out.reserve(out.size() + path_utf8.size() + 8);
+	std::size_t start = 0;
+	while (start < path_utf8.size() && (path_utf8[start] == '/' || path_utf8[start] == '\\'))
+		++start;
+	for (std::size_t i = start; i < path_utf8.size(); ++i) {
+		const char c = path_utf8[i];
+		if (c == '\\') {
+			out += '/';
+		} else if (c == ' ') {
+			out += "%20";
+		} else {
+			out += c;
+		}
+	}
+	return out;
+}
+
 } // namespace
 
 std::string hex_to_rgba(const std::string &hex, int opacity_0_255)
@@ -286,7 +326,52 @@ std::string hex_to_rgba(const std::string &hex, int opacity_0_255)
 	return format_rgba(hex, 0x000000u, opacity_0_255);
 }
 
-std::string build_inject_css(const LiedplanCard &card)
+std::string normalize_anim_src(const std::string &raw, const LiedplanSettings &settings)
+{
+	if (raw.empty())
+		return "";
+
+	if (starts_with_icase(raw, "http://") || starts_with_icase(raw, "https://") ||
+	    starts_with_icase(raw, "file://")) {
+		return raw;
+	}
+
+	if (is_abs_win_path(raw)) {
+		return path_to_file_url(raw);
+	}
+
+	if (!settings.animation_dir.empty()) {
+		std::error_code ec;
+		const std::filesystem::path anim_dir = std::filesystem::u8path(settings.animation_dir);
+		const std::filesystem::path candidate = anim_dir / std::filesystem::u8path(raw);
+		if (std::filesystem::exists(candidate, ec) && !ec) {
+			const std::filesystem::path abs_cand =
+				std::filesystem::absolute(candidate, ec);
+			const std::string p_str =
+				(!ec && !abs_cand.empty()) ? abs_cand.generic_u8string()
+							   : candidate.generic_u8string();
+			return path_to_file_url(p_str);
+		}
+		// Fallback, falls "animation/..." oder "animation\..." relativ zum Repo-Root angegeben wurde
+		if (anim_dir.has_parent_path()) {
+			const std::filesystem::path parent_cand =
+				anim_dir.parent_path() / std::filesystem::u8path(raw);
+			ec.clear();
+			if (std::filesystem::exists(parent_cand, ec) && !ec) {
+				const std::filesystem::path abs_cand =
+					std::filesystem::absolute(parent_cand, ec);
+				const std::string p_str =
+					(!ec && !abs_cand.empty()) ? abs_cand.generic_u8string()
+								   : parent_cand.generic_u8string();
+				return path_to_file_url(p_str);
+			}
+		}
+	}
+
+	return raw;
+}
+
+std::string build_inject_css(const LiedplanCard &card, const LiedplanSettings &settings)
 {
 	const std::string box_bg =
 		format_rgba(card.box_color.empty() ? "#ffffff" : card.box_color, 0xFFFFFFu, card.box_opacity);
@@ -297,6 +382,8 @@ std::string build_inject_css(const LiedplanCard &card)
 	const std::string tri_col_b =
 		format_rgba(card.corner_color_b.empty() ? "#fce647" : card.corner_color_b, 0xFCE647u, card.corner_opacity_b);
 	const int box_opacity = has_any_text(card) ? 1 : 0;
+	const std::string norm_anim = normalize_anim_src(card.anim_file, settings);
+	const int show_anim = card.show_anim ? 1 : 0;
 
 	std::ostringstream oss;
 	oss.imbue(std::locale::classic());
@@ -305,11 +392,11 @@ std::string build_inject_css(const LiedplanCard &card)
 	    << "  --zeile-1: \"" << escape_css_string(card.zeile1) << "\";\n"
 	    << "  --zeile-2: \"" << escape_css_string(card.zeile2) << "\";\n"
 	    << "  --zeile-3: \"" << escape_css_string(card.zeile3) << "\";\n"
-	    << "  --anim-file: \"\";\n"
-	    << "  --show-anim: 0;\n"
-	    << "  --anim-scale: 3;\n"
-	    << "  --anim-x: 0px;\n"
-	    << "  --anim-y: 0px;\n"
+	    << "  --anim-file: \"" << escape_css_string(norm_anim) << "\";\n"
+	    << "  --show-anim: " << show_anim << ";\n"
+	    << "  --anim-scale: " << card.anim_scale << ";\n"
+	    << "  --anim-x: " << card.anim_x << "px;\n"
+	    << "  --anim-y: " << card.anim_y << "px;\n"
 	    << "  --box-bg: " << box_bg << ";\n"
 	    << "  --triangle-color-a: " << tri_col_a << ";\n"
 	    << "  --triangle-color-b: " << tri_col_b << ";\n"
@@ -321,7 +408,8 @@ std::string build_inject_css(const LiedplanCard &card)
 	return oss.str();
 }
 
-std::string render_card_html(const LiedplanCard &card, const std::string &repo_html)
+std::string render_card_html(const LiedplanCard &card, const std::string &repo_html,
+			     const LiedplanSettings &settings)
 {
 	if (repo_html.empty())
 		return card_html(card);
@@ -331,7 +419,7 @@ std::string render_card_html(const LiedplanCard &card, const std::string &repo_h
 	if (head_pos == std::string::npos || body_pos == std::string::npos || head_pos >= body_pos)
 		return card_html(card);
 
-	const std::string style_block = "<style>\n" + build_inject_css(card) + "\n</style>\n";
+	const std::string style_block = "<style>\n" + build_inject_css(card, settings) + "\n</style>\n";
 	const std::string rainbow_block = std::string("<style id=\"lp-rainbow\">") +
 					  (card.rainbow_corners ? kRainbowCssRepo : "") + "</style>\n";
 	const std::string listener_script = build_repo_listener_script();
@@ -512,7 +600,7 @@ std::string card_html(const LiedplanCard &card)
 	return html;
 }
 
-bool write_card(const LiedplanCard &card, std::string &path_out)
+bool write_card(const LiedplanCard &card, std::string &path_out, const LiedplanSettings &settings)
 {
 	if (card.id.empty())
 		return false;
@@ -529,7 +617,7 @@ bool write_card(const LiedplanCard &card, std::string &path_out)
 	}
 
 	const std::string full_path = dir + "/" + card.id + ".html";
-	const std::string html = render_card_html(card, repo_html);
+	const std::string html = render_card_html(card, repo_html, settings);
 
 	std::ofstream file(std::filesystem::u8path(full_path), std::ios::binary | std::ios::trunc);
 	if (!file.is_open())
@@ -544,7 +632,8 @@ bool write_card(const LiedplanCard &card, std::string &path_out)
 	return true;
 }
 
-void push_update(obs_source_t *src, const LiedplanCard &card, bool clear)
+void push_update(obs_source_t *src, const LiedplanCard &card, bool clear,
+		 const LiedplanSettings &settings)
 {
 	if (!src)
 		return;
@@ -559,6 +648,8 @@ void push_update(obs_source_t *src, const LiedplanCard &card, bool clear)
 		format_rgba(card.corner_color_b.empty() ? "#fce647" : card.corner_color_b, 0xFCE647u, card.corner_opacity_b);
 	const int box_opacity = clear ? 0 : (has_any_text(card) ? 1 : 0);
 	const int rainbow = card.rainbow_corners ? 1 : 0;
+	const std::string norm_anim = normalize_anim_src(card.anim_file, settings);
+	const int show_anim = card.show_anim ? 1 : 0;
 
 	QJsonObject obj;
 	obj.insert(QStringLiteral("zeile1"),
@@ -573,11 +664,11 @@ void push_update(obs_source_t *src, const LiedplanCard &card, bool clear)
 	obj.insert(QStringLiteral("triangle_color_a"), QString::fromUtf8(tri_col_a.c_str()));
 	obj.insert(QStringLiteral("triangle_color_b"), QString::fromUtf8(tri_col_b.c_str()));
 	obj.insert(QStringLiteral("rainbow"), rainbow);
-	obj.insert(QStringLiteral("anim_file"), QStringLiteral(""));
-	obj.insert(QStringLiteral("show_anim"), 0);
-	obj.insert(QStringLiteral("anim_scale"), 3);
-	obj.insert(QStringLiteral("anim_x"), 0);
-	obj.insert(QStringLiteral("anim_y"), 0);
+	obj.insert(QStringLiteral("anim_file"), QString::fromUtf8(norm_anim.c_str()));
+	obj.insert(QStringLiteral("show_anim"), show_anim);
+	obj.insert(QStringLiteral("anim_scale"), card.anim_scale);
+	obj.insert(QStringLiteral("anim_x"), card.anim_x);
+	obj.insert(QStringLiteral("anim_y"), card.anim_y);
 
 	const QByteArray json_bytes = QJsonDocument(obj).toJson(QJsonDocument::Compact);
 

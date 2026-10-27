@@ -93,7 +93,8 @@ QLabel#lpFieldLabel {
 	letter-spacing: 0.4px;
 }
 
-QLineEdit {
+QLineEdit,
+QPlainTextEdit {
 	background-color: #323A44;
 	border: 1px solid #3C404D;
 	border-radius: 8px;
@@ -105,7 +106,8 @@ QLineEdit {
 	selection-color: #EFF0F1;
 }
 
-QLineEdit:focus {
+QLineEdit:focus,
+QPlainTextEdit:focus {
 	background-color: #272A33;
 	border: 1px solid #3DAEE9;
 }
@@ -332,6 +334,8 @@ QCheckBox::indicator:checked {
 QPushButton#lpBtnImport,
 QPushButton#lpBtnApiImport,
 QPushButton#lpBtnCsvImport,
+QPushButton#lpBtnAiStart,
+QPushButton#lpBtnAiApply,
 QPushButton#lpBtnQuickProfiles,
 QPushButton#lpBtnBackup,
 QPushButton#lpBtnRestore,
@@ -346,6 +350,8 @@ QPushButton#lpBtnQuickApply {
 QPushButton#lpBtnImport:hover,
 QPushButton#lpBtnApiImport:hover,
 QPushButton#lpBtnCsvImport:hover,
+QPushButton#lpBtnAiStart:hover,
+QPushButton#lpBtnAiApply:hover,
 QPushButton#lpBtnQuickProfiles:hover,
 QPushButton#lpBtnBackup:hover,
 QPushButton#lpBtnRestore:hover,
@@ -357,6 +363,8 @@ QPushButton#lpBtnQuickApply:hover {
 
 QPushButton#lpBtnApiImport:disabled,
 QPushButton#lpBtnCsvImport:disabled,
+QPushButton#lpBtnAiStart:disabled,
+QPushButton#lpBtnAiApply:disabled,
 QPushButton#lpBtnQuickApply:disabled,
 QPushButton#lpBtnQuickDelete:disabled {
 	background-color: #1C1F26;
@@ -384,6 +392,14 @@ QGroupBox {
 	font-weight: 600;
 }
 
+QGroupBox#lpAnimGroup {
+	background-color: #272A33;
+	border: 1px solid #3C404D;
+	border-radius: 8px;
+	margin-top: 8px;
+	padding-top: 8px;
+}
+
 QGroupBox::title {
 	subcontrol-origin: margin;
 	subcontrol-position: top left;
@@ -392,10 +408,48 @@ QGroupBox::title {
 	color: #3DAEE9;
 }
 
+QGroupBox::indicator {
+	width: 14px;
+	height: 14px;
+	background-color: #323A44;
+	border: 1px solid #3C404D;
+	border-radius: 4px;
+}
+
+QGroupBox::indicator:hover {
+	border: 1px solid #3DAEE9;
+}
+
+QGroupBox::indicator:checked {
+	background-color: #3DAEE9;
+	border: 1px solid #3DAEE9;
+}
+
+QTableWidget {
+	background-color: #272A33;
+	border: 1px solid #3C404D;
+	border-radius: 8px;
+	gridline-color: #3C404D;
+	color: #EFF0F1;
+	selection-background-color: rgba(61, 174, 233, 0.25);
+	selection-color: #EFF0F1;
+}
+
+QHeaderView::section {
+	background-color: #323A44;
+	color: #B0B6BD;
+	padding: 6px 8px;
+	border: none;
+	border-bottom: 1px solid #3C404D;
+	font-weight: 600;
+	font-size: 11px;
+}
+
 QLabel#lpImportStatus,
 QLabel#lpDockStatus,
 QLabel#lpQuickStatus,
-QLabel#lpSettingsStatus {
+QLabel#lpSettingsStatus,
+QLabel#lpAiSourceLabel {
 	color: #B0B6BD;
 	font-size: 12px;
 }

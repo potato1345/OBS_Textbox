@@ -35,19 +35,24 @@ with this program. If not, see <https://www.gnu.org/licenses/>
 #include <QFrame>
 #include <QGroupBox>
 #include <QHBoxLayout>
+#include <QHeaderView>
 #include <QLabel>
 #include <QLineEdit>
 #include <QMessageBox>
 #include <QMetaObject>
+#include <QPlainTextEdit>
 #include <QPointer>
 #include <QPushButton>
 #include <QScrollArea>
 #include <QSizePolicy>
 #include <QSlider>
+#include <QTableWidget>
+#include <QTableWidgetItem>
 #include <QVBoxLayout>
 
 #include <algorithm>
 #include <filesystem>
+#include <memory>
 #include <thread>
 
 namespace {
@@ -329,6 +334,113 @@ void LiedplanDock::create_row_widget(const LiedplanCard &card)
 	rainbow_cb->setChecked(card.rainbow_corners);
 	inner_layout->addWidget(rainbow_cb);
 
+	auto *anim_group = new QGroupBox(card_inner);
+	anim_group->setObjectName(QStringLiteral("lpAnimGroup"));
+	anim_group->setTitle(QStringLiteral("🎬 Animation"));
+	anim_group->setCheckable(true);
+	anim_group->setChecked(false);
+
+	auto *anim_group_layout = new QVBoxLayout(anim_group);
+	anim_group_layout->setContentsMargins(10, 8, 10, 10);
+	anim_group_layout->setSpacing(6);
+
+	auto *anim_body = new QWidget(anim_group);
+	auto *anim_body_layout = new QVBoxLayout(anim_body);
+	anim_body_layout->setContentsMargins(0, 0, 0, 0);
+	anim_body_layout->setSpacing(8);
+
+	// 1. Datei + 📁 Picker
+	auto *anim_file_lbl = new QLabel(QStringLiteral("DATEI"), anim_body);
+	anim_file_lbl->setObjectName(QStringLiteral("lpFieldLabel"));
+	auto *anim_file_row = new QHBoxLayout();
+	anim_file_row->setContentsMargins(0, 0, 0, 0);
+	anim_file_row->setSpacing(6);
+	auto *anim_file_edit =
+		new QLineEdit(QString::fromUtf8(card.anim_file.c_str()), anim_body);
+	anim_file_edit->setObjectName(QStringLiteral("lpAnimFile"));
+	anim_file_edit->setReadOnly(false);
+	anim_file_edit->setPlaceholderText(QStringLiteral("Dateiname, Pfad oder URL"));
+	anim_file_edit->setFixedHeight(34);
+	auto *anim_file_pick = new QPushButton(QStringLiteral("📁"), anim_body);
+	anim_file_pick->setObjectName(QStringLiteral("lpAnimFilePick"));
+	anim_file_pick->setFixedHeight(34);
+	anim_file_pick->setToolTip(QStringLiteral("Animationsdatei auswählen"));
+	anim_file_row->addWidget(anim_file_edit, 1);
+	anim_file_row->addWidget(anim_file_pick);
+	anim_body_layout->addWidget(anim_file_lbl);
+	anim_body_layout->addLayout(anim_file_row);
+
+	// 2. Skalierung (1x, 2x, 3x, 4x, 6x, 8x, 10x, 12x)
+	auto *anim_scale_lbl = new QLabel(QStringLiteral("SKALIERUNG"), anim_body);
+	anim_scale_lbl->setObjectName(QStringLiteral("lpFieldLabel"));
+	auto *anim_scale_combo = new QComboBox(anim_body);
+	anim_scale_combo->setObjectName(QStringLiteral("lpAnimScale"));
+	anim_scale_combo->setFixedHeight(34);
+	constexpr int kScaleValues[] = {1, 2, 3, 4, 6, 8, 10, 12};
+	int anim_scale_idx = 2; // Default "3x"
+	for (int si = 0; si < 8; ++si) {
+		const int sv = kScaleValues[si];
+		anim_scale_combo->addItem(QStringLiteral("%1x").arg(sv), sv);
+		if (sv == card.anim_scale)
+			anim_scale_idx = si;
+	}
+	anim_scale_combo->setCurrentIndex(anim_scale_idx);
+	anim_body_layout->addWidget(anim_scale_lbl);
+	anim_body_layout->addWidget(anim_scale_combo);
+
+	// 3. X-Versatz (-1200..1200, step 5)
+	const int init_anim_x = std::clamp(card.anim_x, -1200, 1200);
+	auto *anim_x_hdr = new QHBoxLayout();
+	anim_x_hdr->setContentsMargins(0, 0, 0, 0);
+	auto *anim_x_lbl = new QLabel(QStringLiteral("X-VERSATZ"), anim_body);
+	anim_x_lbl->setObjectName(QStringLiteral("lpFieldLabel"));
+	auto *anim_x_val =
+		new QLabel(QStringLiteral("%1px").arg(init_anim_x), anim_body);
+	anim_x_val->setObjectName(QStringLiteral("lpFieldLabel"));
+	anim_x_hdr->addWidget(anim_x_lbl);
+	anim_x_hdr->addStretch(1);
+	anim_x_hdr->addWidget(anim_x_val);
+	auto *anim_x_slider = new QSlider(Qt::Horizontal, anim_body);
+	anim_x_slider->setObjectName(QStringLiteral("lpAnimX"));
+	anim_x_slider->setRange(-1200, 1200);
+	anim_x_slider->setSingleStep(5);
+	anim_x_slider->setPageStep(25);
+	anim_x_slider->setValue(init_anim_x);
+	anim_body_layout->addLayout(anim_x_hdr);
+	anim_body_layout->addWidget(anim_x_slider);
+
+	// 4. Y-Versatz (-1200..1200, step 5)
+	const int init_anim_y = std::clamp(card.anim_y, -1200, 1200);
+	auto *anim_y_hdr = new QHBoxLayout();
+	anim_y_hdr->setContentsMargins(0, 0, 0, 0);
+	auto *anim_y_lbl = new QLabel(QStringLiteral("Y-VERSATZ"), anim_body);
+	anim_y_lbl->setObjectName(QStringLiteral("lpFieldLabel"));
+	auto *anim_y_val =
+		new QLabel(QStringLiteral("%1px").arg(init_anim_y), anim_body);
+	anim_y_val->setObjectName(QStringLiteral("lpFieldLabel"));
+	anim_y_hdr->addWidget(anim_y_lbl);
+	anim_y_hdr->addStretch(1);
+	anim_y_hdr->addWidget(anim_y_val);
+	auto *anim_y_slider = new QSlider(Qt::Horizontal, anim_body);
+	anim_y_slider->setObjectName(QStringLiteral("lpAnimY"));
+	anim_y_slider->setRange(-1200, 1200);
+	anim_y_slider->setSingleStep(5);
+	anim_y_slider->setPageStep(25);
+	anim_y_slider->setValue(init_anim_y);
+	anim_body_layout->addLayout(anim_y_hdr);
+	anim_body_layout->addWidget(anim_y_slider);
+
+	// 5. Aktiv-Checkbox
+	auto *anim_show_cb = new QCheckBox(QStringLiteral("Aktiv"), anim_body);
+	anim_show_cb->setObjectName(QStringLiteral("lpAnimShow"));
+	anim_show_cb->setChecked(card.show_anim);
+	anim_body_layout->addWidget(anim_show_cb);
+
+	anim_body->setVisible(false);
+	anim_group_layout->addWidget(anim_body);
+	connect(anim_group, &QGroupBox::toggled, anim_body, &QWidget::setVisible);
+	inner_layout->addWidget(anim_group);
+
 	auto *actions_layout = new QHBoxLayout();
 	actions_layout->setContentsMargins(0, 4, 0, 0);
 	actions_layout->setSpacing(8);
@@ -358,7 +470,7 @@ void LiedplanDock::create_row_widget(const LiedplanCard &card)
 		if (LiedplanCard *c = find_card_mut(card_id)) {
 			c->zeile1 = text.toUtf8().toStdString();
 			save_state();
-			liedplan_scene::update_everywhere(*c, false);
+			liedplan_scene::update_everywhere(*c, false, state_.settings);
 		}
 	});
 
@@ -366,7 +478,7 @@ void LiedplanDock::create_row_widget(const LiedplanCard &card)
 		if (LiedplanCard *c = find_card_mut(card_id)) {
 			c->zeile2 = text.toUtf8().toStdString();
 			save_state();
-			liedplan_scene::update_everywhere(*c, false);
+			liedplan_scene::update_everywhere(*c, false, state_.settings);
 		}
 	});
 
@@ -374,7 +486,7 @@ void LiedplanDock::create_row_widget(const LiedplanCard &card)
 		if (LiedplanCard *c = find_card_mut(card_id)) {
 			c->zeile3 = text.toUtf8().toStdString();
 			save_state();
-			liedplan_scene::update_everywhere(*c, false);
+			liedplan_scene::update_everywhere(*c, false, state_.settings);
 		}
 	});
 
@@ -387,7 +499,7 @@ void LiedplanDock::create_row_widget(const LiedplanCard &card)
 					c->box_color = prof->box_color;
 				}
 				save_state();
-				liedplan_scene::update_everywhere(*c, false);
+				liedplan_scene::update_everywhere(*c, false, state_.settings);
 			}
 		});
 
@@ -402,7 +514,7 @@ void LiedplanDock::create_row_widget(const LiedplanCard &card)
 				c->corner_color_a = hex.toUtf8().toStdString();
 				color_a_btn->setText(hex.toUpper());
 				save_state();
-				liedplan_scene::update_everywhere(*c, false);
+				liedplan_scene::update_everywhere(*c, false, state_.settings);
 			}
 		}
 	});
@@ -418,7 +530,7 @@ void LiedplanDock::create_row_widget(const LiedplanCard &card)
 				c->corner_color_b = hex.toUtf8().toStdString();
 				color_b_btn->setText(hex.toUpper());
 				save_state();
-				liedplan_scene::update_everywhere(*c, false);
+				liedplan_scene::update_everywhere(*c, false, state_.settings);
 			}
 		}
 	});
@@ -427,7 +539,7 @@ void LiedplanDock::create_row_widget(const LiedplanCard &card)
 		if (LiedplanCard *c = find_card_mut(card_id)) {
 			c->corner_opacity_a = std::clamp(val, 0, 255);
 			save_state();
-			liedplan_scene::update_everywhere(*c, false);
+			liedplan_scene::update_everywhere(*c, false, state_.settings);
 		}
 	});
 
@@ -435,7 +547,7 @@ void LiedplanDock::create_row_widget(const LiedplanCard &card)
 		if (LiedplanCard *c = find_card_mut(card_id)) {
 			c->corner_opacity_b = std::clamp(val, 0, 255);
 			save_state();
-			liedplan_scene::update_everywhere(*c, false);
+			liedplan_scene::update_everywhere(*c, false, state_.settings);
 		}
 	});
 
@@ -443,19 +555,80 @@ void LiedplanDock::create_row_widget(const LiedplanCard &card)
 		if (LiedplanCard *c = find_card_mut(card_id)) {
 			c->rainbow_corners = checked;
 			save_state();
-			liedplan_scene::update_everywhere(*c, false);
+			liedplan_scene::update_everywhere(*c, false, state_.settings);
+		}
+	});
+
+	connect(anim_file_edit, &QLineEdit::textChanged, this,
+		[this, card_id](const QString &text) {
+			if (LiedplanCard *c = find_card_mut(card_id)) {
+				c->anim_file = text.toUtf8().toStdString();
+				save_state();
+				liedplan_scene::update_everywhere(*c, false, state_.settings);
+			}
+		});
+
+	connect(anim_file_pick, &QPushButton::clicked, this, [this, anim_file_edit]() {
+		const QString start_dir =
+			QString::fromUtf8(state_.settings.animation_dir.c_str());
+		const QString chosen = QFileDialog::getOpenFileName(
+			this, QStringLiteral("Animationsdatei wählen"), start_dir,
+			QStringLiteral(
+				"Animationen (*.gif *.webm *.mp4 *.mov *.m4v);;Bilder (*.png *.jpg *.jpeg);;Alle Dateien (*.*)"));
+		if (!chosen.isEmpty()) {
+			anim_file_edit->setText(chosen);
+		}
+	});
+
+	connect(anim_scale_combo, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
+		[this, card_id, anim_scale_combo](int idx) {
+			if (LiedplanCard *c = find_card_mut(card_id)) {
+				const int sc = anim_scale_combo->itemData(idx).toInt();
+				c->anim_scale = sc > 0 ? sc : 3;
+				save_state();
+				liedplan_scene::update_everywhere(*c, false, state_.settings);
+			}
+		});
+
+	connect(anim_x_slider, &QSlider::valueChanged, this,
+		[this, card_id, anim_x_val](int val) {
+			const int clamped = std::clamp(val, -1200, 1200);
+			anim_x_val->setText(QStringLiteral("%1px").arg(clamped));
+			if (LiedplanCard *c = find_card_mut(card_id)) {
+				c->anim_x = clamped;
+				save_state();
+				liedplan_scene::update_everywhere(*c, false, state_.settings);
+			}
+		});
+
+	connect(anim_y_slider, &QSlider::valueChanged, this,
+		[this, card_id, anim_y_val](int val) {
+			const int clamped = std::clamp(val, -1200, 1200);
+			anim_y_val->setText(QStringLiteral("%1px").arg(clamped));
+			if (LiedplanCard *c = find_card_mut(card_id)) {
+				c->anim_y = clamped;
+				save_state();
+				liedplan_scene::update_everywhere(*c, false, state_.settings);
+			}
+		});
+
+	connect(anim_show_cb, &QCheckBox::toggled, this, [this, card_id](bool checked) {
+		if (LiedplanCard *c = find_card_mut(card_id)) {
+			c->show_anim = checked;
+			save_state();
+			liedplan_scene::update_everywhere(*c, false, state_.settings);
 		}
 	});
 
 	connect(to_scene_btn, &QPushButton::clicked, this, [this, card_id]() {
 		if (LiedplanCard *c = find_card_mut(card_id)) {
-			liedplan_scene::send_to_current_scene(*c);
+			liedplan_scene::send_to_current_scene(*c, state_.settings);
 		}
 	});
 
 	connect(clear_src_btn, &QPushButton::clicked, this, [this, card_id]() {
 		if (LiedplanCard *c = find_card_mut(card_id)) {
-			liedplan_scene::update_everywhere(*c, true);
+			liedplan_scene::update_everywhere(*c, true, state_.settings);
 		}
 	});
 
@@ -531,7 +704,7 @@ void LiedplanDock::sync_all_cards_live(const std::vector<std::string> &previous_
 		}
 	}
 	for (const auto &card : state_.cards) {
-		liedplan_scene::update_everywhere(card, false);
+		liedplan_scene::update_everywhere(card, false, state_.settings);
 	}
 }
 
@@ -562,7 +735,7 @@ void LiedplanDock::apply_import_result(const liedplan_import::LiedplanImportResu
 
 	save_state();
 	for (std::size_t i = 0; i < count; ++i) {
-		liedplan_scene::update_everywhere(state_.cards[i], false);
+		liedplan_scene::update_everywhere(state_.cards[i], false, state_.settings);
 	}
 	rebuild_rows();
 }
@@ -573,7 +746,7 @@ void LiedplanDock::on_open_import_dialog()
 	dlg.setObjectName(QStringLiteral("lpImportDialog"));
 	dlg.setWindowTitle(QStringLiteral("Liedplan-Import"));
 	dlg.setStyleSheet(liedplan_theme::stylesheet());
-	dlg.setMinimumWidth(500);
+	dlg.setMinimumWidth(540);
 
 	auto *root = new QVBoxLayout(&dlg);
 	root->setContentsMargins(16, 16, 16, 16);
@@ -649,7 +822,153 @@ void LiedplanDock::on_open_import_dialog()
 	csv_layout->addWidget(csv_btn);
 	root->addWidget(csv_group);
 
-	// Gruppe 3: Kopfdaten (erst nach erfolgreichem Laden sichtbar)
+	// Gruppe 3 (M5 D3): 🤖 AI-Import (PDF/Dokument)
+	auto *ai_group = new QGroupBox(QStringLiteral("🤖 AI-Import (PDF/Dokument)"), &dlg);
+	ai_group->setObjectName(QStringLiteral("lpAiImportGroup"));
+	auto *ai_layout = new QVBoxLayout(ai_group);
+	ai_layout->setContentsMargins(12, 16, 12, 12);
+	ai_layout->setSpacing(8);
+
+	auto *lbl_ai_file = new QLabel(QStringLiteral("DOKUMENT (PDF / DOCX)"), ai_group);
+	lbl_ai_file->setObjectName(QStringLiteral("lpFieldLabel"));
+	auto *ai_file_row = new QHBoxLayout();
+	ai_file_row->setSpacing(6);
+	auto *ai_file_edit = new QLineEdit(ai_group);
+	ai_file_edit->setObjectName(QStringLiteral("lpAiFilePath"));
+	ai_file_edit->setPlaceholderText(QStringLiteral("PDF- oder DOCX-Datei auswählen …"));
+	auto *ai_file_btn = new QPushButton(QStringLiteral("📂 Datei wählen …"), ai_group);
+	ai_file_btn->setObjectName(QStringLiteral("lpBtnAiFilePick"));
+	ai_file_row->addWidget(ai_file_edit, 1);
+	ai_file_row->addWidget(ai_file_btn);
+	ai_layout->addWidget(lbl_ai_file);
+	ai_layout->addLayout(ai_file_row);
+
+	auto *lbl_ai_key = new QLabel(QStringLiteral("API-KEY"), ai_group);
+	lbl_ai_key->setObjectName(QStringLiteral("lpFieldLabel"));
+	auto *ai_key_row = new QHBoxLayout();
+	ai_key_row->setSpacing(6);
+	std::string env_key_err;
+	const std::string prefilled_key =
+		liedplan_ai::read_env_key(state_.settings.openrouter_key_path, env_key_err);
+	auto *ai_key_edit =
+		new QLineEdit(QString::fromUtf8(prefilled_key.c_str()), ai_group);
+	ai_key_edit->setObjectName(QStringLiteral("lpAiApiKey"));
+	ai_key_edit->setEchoMode(QLineEdit::Password);
+	ai_key_edit->setPlaceholderText(
+		QStringLiteral("OpenRouter API-Key (leer = lokale Offline-Analyse)"));
+	auto *ai_key_toggle = new QPushButton(QStringLiteral("👁"), ai_group);
+	ai_key_toggle->setObjectName(QStringLiteral("lpBtnAiKeyToggle"));
+	ai_key_toggle->setToolTip(QStringLiteral("API-Key ein-/ausblenden"));
+	ai_key_row->addWidget(ai_key_edit, 1);
+	ai_key_row->addWidget(ai_key_toggle);
+	ai_layout->addWidget(lbl_ai_key);
+	ai_layout->addLayout(ai_key_row);
+
+	connect(ai_key_toggle, &QPushButton::clicked, &dlg, [ai_key_edit]() {
+		ai_key_edit->setEchoMode(ai_key_edit->echoMode() == QLineEdit::Password
+						 ? QLineEdit::Normal
+						 : QLineEdit::Password);
+	});
+
+	// Einklappbarer System-Prompt
+	auto *prompt_group = new QGroupBox(QStringLiteral("System-Prompt"), ai_group);
+	prompt_group->setObjectName(QStringLiteral("lpAnimGroup"));
+	prompt_group->setCheckable(true);
+	prompt_group->setChecked(false);
+	auto *prompt_group_layout = new QVBoxLayout(prompt_group);
+	prompt_group_layout->setContentsMargins(8, 8, 8, 8);
+	prompt_group_layout->setSpacing(6);
+
+	auto *prompt_body = new QWidget(prompt_group);
+	auto *prompt_body_layout = new QVBoxLayout(prompt_body);
+	prompt_body_layout->setContentsMargins(0, 0, 0, 0);
+	prompt_body_layout->setSpacing(6);
+
+	const std::string init_prompt = state_.settings.ai_system_prompt.empty()
+						? liedplan_ai::kDefaultSystemPrompt
+						: state_.settings.ai_system_prompt;
+	auto *ai_prompt_edit =
+		new QPlainTextEdit(QString::fromUtf8(init_prompt.c_str()), prompt_body);
+	ai_prompt_edit->setObjectName(QStringLiteral("lpAiSystemPrompt"));
+	ai_prompt_edit->setFixedHeight(110);
+
+	auto *ai_prompt_reset_btn =
+		new QPushButton(QStringLiteral("Zurücksetzen"), prompt_body);
+	ai_prompt_reset_btn->setObjectName(QStringLiteral("lpBtnAiPromptReset"));
+	prompt_body_layout->addWidget(ai_prompt_edit);
+	prompt_body_layout->addWidget(ai_prompt_reset_btn);
+	prompt_body->setVisible(false);
+	prompt_group_layout->addWidget(prompt_body);
+	connect(prompt_group, &QGroupBox::toggled, prompt_body, &QWidget::setVisible);
+	ai_layout->addWidget(prompt_group);
+
+	connect(ai_prompt_reset_btn, &QPushButton::clicked, &dlg, [this, ai_prompt_edit]() {
+		ai_prompt_edit->setPlainText(
+			QString::fromUtf8(liedplan_ai::kDefaultSystemPrompt));
+		state_.settings.ai_system_prompt.clear();
+		save_state();
+	});
+
+	auto *ai_start_btn = new QPushButton(QStringLiteral("Starten"), ai_group);
+	ai_start_btn->setObjectName(QStringLiteral("lpBtnAiStart"));
+	ai_layout->addWidget(ai_start_btn);
+
+	auto *ai_status_lbl = new QLabel(
+		prefilled_key.empty()
+			? QStringLiteral("Kein API-Key – lokale Offline-Analyse")
+			: QStringLiteral("Bereit für AI-Import."),
+		ai_group);
+	ai_status_lbl->setObjectName(QStringLiteral("lpImportStatus"));
+	ai_status_lbl->setWordWrap(true);
+	ai_layout->addWidget(ai_status_lbl);
+
+	connect(ai_key_edit, &QLineEdit::textChanged, &dlg,
+		[ai_status_lbl](const QString &txt) {
+			if (txt.trimmed().isEmpty()) {
+				ai_status_lbl->setText(
+					QStringLiteral("Kein API-Key – lokale Offline-Analyse"));
+			} else {
+				ai_status_lbl->setText(QStringLiteral("Bereit für AI-Import."));
+			}
+		});
+
+	// AI-Preview-Box (Tabelle + Quellen-Label + Übernehmen)
+	auto *ai_preview_group = new QGroupBox(QStringLiteral("Programmvorschau"), ai_group);
+	auto *ai_preview_layout = new QVBoxLayout(ai_preview_group);
+	ai_preview_layout->setContentsMargins(10, 14, 10, 10);
+	ai_preview_layout->setSpacing(8);
+
+	auto *ai_source_lbl = new QLabel(ai_preview_group);
+	ai_source_lbl->setObjectName(QStringLiteral("lpAiSourceLabel"));
+	ai_source_lbl->setWordWrap(true);
+
+	auto *ai_table = new QTableWidget(0, 3, ai_preview_group);
+	ai_table->setObjectName(QStringLiteral("lpAiPreviewTable"));
+	ai_table->setHorizontalHeaderLabels({
+		QStringLiteral("Zeile 1"),
+		QStringLiteral("Zeile 2"),
+		QStringLiteral("Zeile 3"),
+	});
+	ai_table->horizontalHeader()->setStretchLastSection(true);
+	ai_table->horizontalHeader()->setSectionResizeMode(0, QHeaderView::ResizeToContents);
+	ai_table->horizontalHeader()->setSectionResizeMode(1, QHeaderView::ResizeToContents);
+	ai_table->verticalHeader()->setVisible(false);
+	ai_table->setEditTriggers(QAbstractItemView::NoEditTriggers);
+	ai_table->setSelectionBehavior(QAbstractItemView::SelectRows);
+	ai_table->setMinimumHeight(160);
+
+	auto *ai_apply_btn = new QPushButton(QStringLiteral("Übernehmen"), ai_preview_group);
+	ai_apply_btn->setObjectName(QStringLiteral("lpBtnAiApply"));
+
+	ai_preview_layout->addWidget(ai_source_lbl);
+	ai_preview_layout->addWidget(ai_table);
+	ai_preview_layout->addWidget(ai_apply_btn);
+	ai_preview_group->setVisible(false);
+	ai_layout->addWidget(ai_preview_group);
+
+	root->addWidget(ai_group);
+
+	// Gruppe 4: Kopfdaten (erst nach erfolgreichem Laden sichtbar)
 	auto *kopf_group = new QGroupBox(QStringLiteral("Kopfdaten"), &dlg);
 	auto *kopf_layout = new QVBoxLayout(kopf_group);
 	kopf_layout->setContentsMargins(12, 16, 12, 12);
@@ -677,6 +996,18 @@ void LiedplanDock::on_open_import_dialog()
 	error_lbl->setWordWrap(true);
 	error_lbl->setVisible(false);
 	root->addWidget(error_lbl);
+
+	auto pending_ai_res = std::make_shared<liedplan_ai::AiResult>();
+
+	connect(ai_file_btn, &QPushButton::clicked, &dlg, [&dlg, ai_file_edit]() {
+		const QString chosen = QFileDialog::getOpenFileName(
+			&dlg, QStringLiteral("Liedplan-Dokument auswählen"),
+			ai_file_edit->text(),
+			QStringLiteral("Dokumente (*.pdf *.docx);;Alle Dateien (*.*)"));
+		if (!chosen.isEmpty()) {
+			ai_file_edit->setText(chosen);
+		}
+	});
 
 	auto handle_success = [this, kopf_group, lbl_woche, lbl_tag, lbl_organist, lbl_zeitstempel,
 			       status_lbl, error_lbl](
@@ -714,6 +1045,230 @@ void LiedplanDock::on_open_import_dialog()
 
 	QPointer<QDialog> dlg_ptr(&dlg);
 	QPointer<LiedplanDock> self_ptr(this);
+
+	connect(ai_start_btn, &QPushButton::clicked, &dlg,
+		[this, &dlg, dlg_ptr, self_ptr, api_btn, csv_btn, ai_start_btn, ai_file_edit,
+		 ai_key_edit, ai_prompt_edit, ai_status_lbl, status_lbl, error_lbl,
+		 ai_preview_group, ai_source_lbl, ai_table, pending_ai_res]() {
+			QString doc_file = ai_file_edit->text().trimmed();
+			if (doc_file.isEmpty()) {
+				doc_file = QFileDialog::getOpenFileName(
+					&dlg, QStringLiteral("Liedplan-Dokument auswählen"),
+					QString(),
+					QStringLiteral(
+						"Dokumente (*.pdf *.docx);;Alle Dateien (*.*)"));
+				if (doc_file.isEmpty())
+					return;
+				ai_file_edit->setText(doc_file);
+			}
+
+			const std::string prompt_str =
+				ai_prompt_edit->toPlainText().trimmed().toUtf8().toStdString();
+			state_.settings.ai_system_prompt =
+				(prompt_str == liedplan_ai::kDefaultSystemPrompt) ? "" : prompt_str;
+			save_state();
+
+			const std::string file_utf8 = doc_file.toUtf8().toStdString();
+			const std::string api_key =
+				ai_key_edit->text().trimmed().toUtf8().toStdString();
+			const std::string sys_prompt =
+				prompt_str.empty() ? liedplan_ai::kDefaultSystemPrompt : prompt_str;
+			const std::string python_exe = state_.settings.markitdown_python;
+			const std::string lieder_path = state_.settings.lieder_path;
+
+			api_btn->setEnabled(false);
+			csv_btn->setEnabled(false);
+			ai_start_btn->setEnabled(false);
+			ai_preview_group->setVisible(false);
+			error_lbl->clear();
+			error_lbl->setVisible(false);
+			ai_status_lbl->setText(QStringLiteral("Text aus Dokument extrahieren..."));
+			status_lbl->setText(QStringLiteral("Text aus Dokument extrahieren..."));
+
+			std::thread([self_ptr, dlg_ptr, api_btn, csv_btn, ai_start_btn,
+				     ai_status_lbl, status_lbl, error_lbl, ai_preview_group,
+				     ai_source_lbl, ai_table, pending_ai_res, file_utf8, api_key,
+				     sys_prompt, python_exe, lieder_path]() {
+				auto post_progress = [self_ptr, dlg_ptr, ai_status_lbl,
+						      status_lbl](const std::string &msg) {
+					if (!self_ptr)
+						return;
+					const QString qmsg = QString::fromUtf8(msg.c_str());
+					QMetaObject::invokeMethod(
+						self_ptr.data(),
+						[self_ptr, dlg_ptr, ai_status_lbl, status_lbl,
+						 qmsg]() {
+							if (!self_ptr || !dlg_ptr)
+								return;
+							ai_status_lbl->setText(qmsg);
+							status_lbl->setText(qmsg);
+						},
+						Qt::QueuedConnection);
+				};
+
+				liedplan_ai::AiResult ai_res;
+				std::string fatal_err;
+
+				try {
+					std::string ext_err;
+					const std::string text =
+						liedplan_ai::extract_document_text(
+							file_utf8, python_exe, ext_err);
+					if (text.empty()) {
+						throw std::runtime_error(
+							ext_err.empty()
+								? "Kein Text im Dokument gefunden."
+								: ext_err);
+					}
+
+					if (!api_key.empty()) {
+						try {
+							ai_res = liedplan_ai::process_with_llm(
+								api_key, text, sys_prompt,
+								lieder_path, post_progress);
+						} catch (const std::exception &llm_ex) {
+							post_progress(
+								"Free-Tier nicht erreichbar – nutze lokalen Offline-Parser...");
+							auto local_items =
+								liedplan_ai::parse_liedplan_locally(
+									text);
+							if (local_items.empty())
+								throw std::runtime_error(
+									llm_ex.what());
+							ai_res.items = std::move(local_items);
+							ai_res.model_label = "Offline-Fallback";
+						}
+					} else {
+						post_progress(
+							"Kein API-Key – lokale Offline-Analyse");
+						auto local_items =
+							liedplan_ai::parse_liedplan_locally(text);
+						if (local_items.empty()) {
+							throw std::runtime_error(
+								"Weder API-Key vorhanden noch konnte der lokale Parser Programmpunkte erkennen.");
+						}
+						ai_res.items = std::move(local_items);
+						ai_res.model_label = "Lokal (ohne API-Key)";
+					}
+
+					if (ai_res.items.empty()) {
+						throw std::runtime_error(
+							"Keine Programmpunkte erkannt.");
+					}
+				} catch (const std::exception &ex) {
+					fatal_err = ex.what();
+				}
+
+				if (!self_ptr)
+					return;
+
+				QMetaObject::invokeMethod(
+					self_ptr.data(),
+					[self_ptr, dlg_ptr, api_btn, csv_btn, ai_start_btn,
+					 ai_status_lbl, status_lbl, error_lbl, ai_preview_group,
+					 ai_source_lbl, ai_table, pending_ai_res,
+					 ai_res = std::move(ai_res),
+					 fatal_err = std::move(fatal_err)]() mutable {
+						if (!self_ptr || !dlg_ptr)
+							return;
+						api_btn->setEnabled(true);
+						csv_btn->setEnabled(true);
+						ai_start_btn->setEnabled(true);
+
+						if (!fatal_err.empty()) {
+							const QString qerr =
+								QString::fromUtf8(fatal_err.c_str());
+							error_lbl->setText(qerr);
+							error_lbl->setVisible(true);
+							ai_status_lbl->setText(qerr);
+							status_lbl->setText(qerr);
+							self_ptr->set_dock_status(qerr, true);
+							return;
+						}
+
+						*pending_ai_res = std::move(ai_res);
+						const QString src_tag =
+							QStringLiteral("AI-Import (%1)")
+								.arg(QString::fromUtf8(
+									pending_ai_res->model_label
+										.c_str()));
+						ai_source_lbl->setText(src_tag);
+
+						ai_table->setRowCount(static_cast<int>(
+							pending_ai_res->items.size()));
+						for (std::size_t r = 0;
+						     r < pending_ai_res->items.size(); ++r) {
+							const auto &pt = pending_ai_res->items[r];
+							ai_table->setItem(
+								static_cast<int>(r), 0,
+								new QTableWidgetItem(
+									QString::fromUtf8(
+										pt.zeile1.c_str())));
+							ai_table->setItem(
+								static_cast<int>(r), 1,
+								new QTableWidgetItem(
+									QString::fromUtf8(
+										pt.zeile2.c_str())));
+							ai_table->setItem(
+								static_cast<int>(r), 2,
+								new QTableWidgetItem(
+									QString::fromUtf8(
+										pt.zeile3.c_str())));
+						}
+						ai_preview_group->setVisible(true);
+						const QString ok_msg =
+							QStringLiteral(
+								"Vorschau: %1 Punkte (%2)")
+								.arg(pending_ai_res->items.size())
+								.arg(src_tag);
+						ai_status_lbl->setText(ok_msg);
+						status_lbl->setText(ok_msg);
+					},
+					Qt::QueuedConnection);
+			}).detach();
+		});
+
+	connect(ai_apply_btn, &QPushButton::clicked, &dlg,
+		[this, &dlg, pending_ai_res]() {
+			if (pending_ai_res->items.empty())
+				return;
+
+			if (state_.cards.empty()) {
+				for (int i = 0; i < kDefaultCardCount; ++i)
+					state_.add_card();
+			}
+
+			const std::size_t total_items = pending_ai_res->items.size();
+			const std::size_t n = std::min(total_items, state_.cards.size());
+			const std::size_t ignored = (total_items > n) ? (total_items - n) : 0;
+
+			for (std::size_t i = 0; i < n; ++i) {
+				state_.cards[i].zeile1 = pending_ai_res->items[i].zeile1;
+				state_.cards[i].zeile2 = pending_ai_res->items[i].zeile2;
+				state_.cards[i].zeile3 = pending_ai_res->items[i].zeile3;
+			}
+
+			save_state();
+			for (std::size_t i = 0; i < n; ++i) {
+				liedplan_scene::update_everywhere(
+					state_.cards[i], false, state_.settings);
+			}
+			rebuild_rows();
+
+			const QString label_q =
+				QString::fromUtf8(pending_ai_res->model_label.c_str());
+			QString dock_msg =
+				QStringLiteral("AI-Import: %1 Punkte (Quelle: %2)")
+					.arg(n)
+					.arg(label_q);
+			if (ignored > 0) {
+				dock_msg += QStringLiteral(" — Übernommen: %1 Punkte (%2 weitere ignoriert)")
+						    .arg(n)
+						    .arg(ignored);
+			}
+			set_dock_status(dock_msg, false);
+			dlg.accept();
+		});
 
 	connect(api_btn, &QPushButton::clicked, &dlg,
 		[this, dlg_ptr, self_ptr, api_btn, csv_btn, status_lbl, error_lbl, handle_success,
@@ -1055,11 +1610,13 @@ void LiedplanDock::on_open_settings_dialog()
 	dlg.setObjectName(QStringLiteral("lpSettingsDialog"));
 	dlg.setWindowTitle(QStringLiteral("Einstellungen"));
 	dlg.setStyleSheet(liedplan_theme::stylesheet());
-	dlg.setMinimumWidth(480);
+	dlg.setMinimumWidth(520);
 
 	auto *root = new QVBoxLayout(&dlg);
 	root->setContentsMargins(16, 16, 16, 16);
 	root->setSpacing(12);
+
+	const LiedplanSettings def_settings;
 
 	auto *oauth_group = new QGroupBox(QStringLiteral("Google-Forms-API & OAuth"), &dlg);
 	auto *oauth_layout = new QVBoxLayout(oauth_group);
@@ -1094,6 +1651,58 @@ void LiedplanDock::on_open_settings_dialog()
 	oauth_layout->addLayout(token_row);
 	root->addWidget(oauth_group);
 
+	// Gruppe 2 (M5): AI-Import & Animationen Pfade
+	auto *m5_group = new QGroupBox(QStringLiteral("AI-Import & Animationen"), &dlg);
+	auto *m5_layout = new QVBoxLayout(m5_group);
+	m5_layout->setContentsMargins(12, 16, 12, 12);
+	m5_layout->setSpacing(8);
+
+	auto make_path_row = [m5_group](QVBoxLayout *parent_l, const QString &label_txt,
+					const std::string &cur_val,
+					const std::string &def_val,
+					QPushButton *&out_btn) -> QLineEdit * {
+		auto *lbl = new QLabel(label_txt, m5_group);
+		lbl->setObjectName(QStringLiteral("lpFieldLabel"));
+		auto *row = new QHBoxLayout();
+		row->setSpacing(8);
+		const std::string v = cur_val.empty() ? def_val : cur_val;
+		auto *edit = new QLineEdit(QString::fromUtf8(v.c_str()), m5_group);
+		edit->setPlaceholderText(QString::fromUtf8(def_val.c_str()));
+		out_btn = new QPushButton(QStringLiteral("📂 …"), m5_group);
+		out_btn->setObjectName(QStringLiteral("lpBtn"));
+		row->addWidget(edit, 1);
+		row->addWidget(out_btn);
+		parent_l->addWidget(lbl);
+		parent_l->addLayout(row);
+		return edit;
+	};
+
+	QPushButton *browse_key_btn = nullptr;
+	auto *edit_key_path = make_path_row(
+		m5_layout, QStringLiteral("OPENROUTER-API-KEY-PFAD (api.env)"),
+		state_.settings.openrouter_key_path, def_settings.openrouter_key_path,
+		browse_key_btn);
+
+	QPushButton *browse_py_btn = nullptr;
+	auto *edit_py_path = make_path_row(
+		m5_layout, QStringLiteral("MARKITDOWN-PYTHON-PFAD"),
+		state_.settings.markitdown_python, def_settings.markitdown_python,
+		browse_py_btn);
+
+	QPushButton *browse_anim_btn = nullptr;
+	auto *edit_anim_dir = make_path_row(
+		m5_layout, QStringLiteral("ANIMATIONS-ORDNER"),
+		state_.settings.animation_dir, def_settings.animation_dir,
+		browse_anim_btn);
+
+	QPushButton *browse_lieder_btn = nullptr;
+	auto *edit_lieder_path = make_path_row(
+		m5_layout, QStringLiteral("LIEDER-REFERENZ-PFAD (lieder.md)"),
+		state_.settings.lieder_path, def_settings.lieder_path,
+		browse_lieder_btn);
+
+	root->addWidget(m5_group);
+
 	auto *status_lbl = new QLabel(&dlg);
 	status_lbl->setObjectName(QStringLiteral("lpSettingsStatus"));
 	status_lbl->setWordWrap(true);
@@ -1118,19 +1727,83 @@ void LiedplanDock::on_open_settings_dialog()
 			edit_token->setText(chosen);
 	});
 
-	connect(reset_btn, &QPushButton::clicked, &dlg, [edit_form, edit_token]() {
-		edit_form->setText(QString::fromUtf8(liedplan_import::kDefaultFormId));
-		edit_token->setText(QString::fromUtf8(liedplan_import::kDefaultTokenPath));
+	connect(browse_key_btn, &QPushButton::clicked, &dlg, [&dlg, edit_key_path]() {
+		const QString chosen = QFileDialog::getOpenFileName(
+			&dlg, QStringLiteral("OpenRouter-Key-Datei (api.env) wählen"),
+			edit_key_path->text(), QStringLiteral("Env-Dateien (*.env);;Alle Dateien (*.*)"));
+		if (!chosen.isEmpty())
+			edit_key_path->setText(chosen);
 	});
 
+	connect(browse_py_btn, &QPushButton::clicked, &dlg, [&dlg, edit_py_path]() {
+		const QString chosen = QFileDialog::getOpenFileName(
+			&dlg, QStringLiteral("MarkItDown-Python-Executable wählen"),
+			edit_py_path->text(),
+			QStringLiteral("Ausführbare Dateien (*.exe);;Alle Dateien (*.*)"));
+		if (!chosen.isEmpty())
+			edit_py_path->setText(chosen);
+	});
+
+	connect(browse_anim_btn, &QPushButton::clicked, &dlg, [&dlg, edit_anim_dir]() {
+		const QString chosen = QFileDialog::getExistingDirectory(
+			&dlg, QStringLiteral("Animations-Ordner wählen"),
+			edit_anim_dir->text());
+		if (!chosen.isEmpty())
+			edit_anim_dir->setText(chosen);
+	});
+
+	connect(browse_lieder_btn, &QPushButton::clicked, &dlg, [&dlg, edit_lieder_path]() {
+		const QString chosen = QFileDialog::getOpenFileName(
+			&dlg, QStringLiteral("Lieder-Referenzdatei (lieder.md) wählen"),
+			edit_lieder_path->text(),
+			QStringLiteral("Markdown-Dateien (*.md);;Alle Dateien (*.*)"));
+		if (!chosen.isEmpty())
+			edit_lieder_path->setText(chosen);
+	});
+
+	connect(reset_btn, &QPushButton::clicked, &dlg,
+		[edit_form, edit_token, edit_key_path, edit_py_path, edit_anim_dir,
+		 edit_lieder_path, def_settings]() {
+			edit_form->setText(QString::fromUtf8(liedplan_import::kDefaultFormId));
+			edit_token->setText(QString::fromUtf8(liedplan_import::kDefaultTokenPath));
+			edit_key_path->setText(
+				QString::fromUtf8(def_settings.openrouter_key_path.c_str()));
+			edit_py_path->setText(
+				QString::fromUtf8(def_settings.markitdown_python.c_str()));
+			edit_anim_dir->setText(
+				QString::fromUtf8(def_settings.animation_dir.c_str()));
+			edit_lieder_path->setText(
+				QString::fromUtf8(def_settings.lieder_path.c_str()));
+		});
+
 	connect(save_btn, &QPushButton::clicked, &dlg,
-		[this, &dlg, edit_form, edit_token]() {
-			std::string fid = edit_form->text().trimmed().toUtf8().toStdString();
-			std::string tpath = edit_token->text().trimmed().toUtf8().toStdString();
+		[this, &dlg, edit_form, edit_token, edit_key_path, edit_py_path, edit_anim_dir,
+		 edit_lieder_path, def_settings]() {
+			const std::string fid = edit_form->text().trimmed().toUtf8().toStdString();
+			const std::string tpath =
+				edit_token->text().trimmed().toUtf8().toStdString();
+			const std::string kpath =
+				edit_key_path->text().trimmed().toUtf8().toStdString();
+			const std::string pypath =
+				edit_py_path->text().trimmed().toUtf8().toStdString();
+			const std::string adir =
+				edit_anim_dir->text().trimmed().toUtf8().toStdString();
+			const std::string lpath =
+				edit_lieder_path->text().trimmed().toUtf8().toStdString();
+
 			state_.settings.google_form_id =
 				fid.empty() ? liedplan_import::kDefaultFormId : fid;
 			state_.settings.token_path =
 				tpath.empty() ? liedplan_import::kDefaultTokenPath : tpath;
+			state_.settings.openrouter_key_path =
+				kpath.empty() ? def_settings.openrouter_key_path : kpath;
+			state_.settings.markitdown_python =
+				pypath.empty() ? def_settings.markitdown_python : pypath;
+			state_.settings.animation_dir =
+				adir.empty() ? def_settings.animation_dir : adir;
+			state_.settings.lieder_path =
+				lpath.empty() ? def_settings.lieder_path : lpath;
+
 			save_state();
 			set_dock_status(QStringLiteral("Einstellungen gespeichert."), false);
 			dlg.accept();

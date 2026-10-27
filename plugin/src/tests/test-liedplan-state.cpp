@@ -450,6 +450,99 @@ int main()
 		      err);
 	}
 
+	// 16. (M5 #11) Anim-Roundtrip + Settings-Roundtrip: Karte mit allen 5 Anim-Feldern + Settings mit 5 neuen Feldern -> save -> load -> ==
+	{
+		const std::string path = (temp_dir / "roundtrip_m5_anim.json").u8string();
+		LiedplanState s1;
+		s1.settings.openrouter_key_path = "C:\\custom\\api.env";
+		s1.settings.markitdown_python = "C:\\custom\\python.exe";
+		s1.settings.animation_dir = "C:\\custom\\anim";
+		s1.settings.lieder_path = "C:\\custom\\lieder.md";
+		s1.settings.ai_system_prompt = "Custom Prompt 123";
+
+		LiedplanCard &c = s1.add_card();
+		c.zeile1 = "Eröffnung";
+		c.zeile2 = "144, 1+4+6";
+		c.zeile3 = "Nun jauchzt dem Herren";
+		c.anim_file = "C:\\Users\\Johann\\Desktop\\GitHub\\OBS_Textbox\\animation\\1_advent.gif";
+		c.show_anim = true;
+		c.anim_scale = 4;
+		c.anim_x = -50;
+		c.anim_y = 120;
+
+		s1.save_quick_profile("Advent-Profil");
+
+		const std::string save_err = s1.save(path);
+		LiedplanState s2;
+		const std::string load_err = s2.load(path);
+
+		const bool ok = save_err.empty() && load_err.empty() && (s1 == s2) &&
+				s2.cards.size() == 1 &&
+				s2.cards[0].anim_file == c.anim_file &&
+				s2.cards[0].show_anim == true &&
+				s2.cards[0].anim_scale == 4 &&
+				s2.cards[0].anim_x == -50 &&
+				s2.cards[0].anim_y == 120 &&
+				s2.quick_profiles.size() == 1 &&
+				s2.quick_profiles[0].cards[0].anim_file == c.anim_file &&
+				s2.settings.ai_system_prompt == "Custom Prompt 123";
+		check(ok, "16. M5 Anim- & Settings-Roundtrip: alle 5 Anim-Felder + 5 Settings-Felder identisch nach save/load",
+		      save_err + " " + load_err);
+	}
+
+	// 17. (M5 #12) M5 Backward-Compat: State-JSON OHNE Anim-Felder und Settings OHNE die 5 neuen Keys -> Defaults
+	{
+		const std::filesystem::path fs_path = temp_dir / "legacy_m4_no_anim.json";
+		{
+			std::ofstream out(fs_path, std::ios::binary | std::ios::trunc);
+			out << R"({
+  "version": 1,
+  "next_id": 2,
+  "active_profile": "OBS Dark",
+  "settings": {
+    "google_form_id": "form_abc",
+    "token_path": "C:\\token.json"
+  },
+  "cards": [
+    {
+      "id": "box1",
+      "zeile1": "144",
+      "zeile2": "1",
+      "zeile3": "Lied",
+      "profile": "OBS Dark",
+      "text_color": "#eff0f1",
+      "text_opacity": 255,
+      "box_color": "#3C404D",
+      "box_opacity": 255,
+      "corner_color_a": "#fce647",
+      "corner_color_b": "#fce647",
+      "corner_opacity_a": 255,
+      "corner_opacity_b": 255,
+      "rainbow_corners": false
+    }
+  ]
+})";
+		}
+		LiedplanState s;
+		const std::string err = s.load(fs_path.u8string());
+		const LiedplanSettings def_settings;
+		const bool ok =
+			err.empty() && s.cards.size() == 1 &&
+			s.cards[0].anim_file.empty() &&
+			s.cards[0].show_anim == false &&
+			s.cards[0].anim_scale == 3 &&
+			s.cards[0].anim_x == 0 &&
+			s.cards[0].anim_y == 0 &&
+			s.settings.google_form_id == "form_abc" &&
+			s.settings.openrouter_key_path == def_settings.openrouter_key_path &&
+			s.settings.markitdown_python == def_settings.markitdown_python &&
+			s.settings.animation_dir == def_settings.animation_dir &&
+			s.settings.lieder_path == def_settings.lieder_path &&
+			s.settings.ai_system_prompt.empty();
+		check(ok, "17. M5 Backward-Compat: fehlende Anim-Felder und Settings-Keys erhalten Defaults",
+		      err);
+	}
+
 	std::error_code ec;
 	std::filesystem::remove_all(temp_dir, ec);
 
@@ -457,6 +550,6 @@ int main()
 		std::cerr << g_failures << " test(s) failed.\n";
 		return 1;
 	}
-	std::cout << "All 15 checks passed.\n";
+	std::cout << "All 17 checks passed.\n";
 	return 0;
 }

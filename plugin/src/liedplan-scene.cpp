@@ -100,7 +100,7 @@ obs_data_t *make_settings(const LiedplanCard &card)
 	return make_settings(card, local_file);
 }
 
-void send_to_current_scene(const LiedplanCard &card)
+void send_to_current_scene(const LiedplanCard &card, const LiedplanSettings &settings)
 {
 #ifdef ENABLE_FRONTEND_API
 	obs_source_t *scene_src = obs_frontend_get_current_scene();
@@ -121,10 +121,10 @@ void send_to_current_scene(const LiedplanCard &card)
 		obs_source_t *src = obs_sceneitem_get_source(item);
 		if (is_browser_source(src)) {
 			std::string html_path;
-			if (liedplan_html::write_card(card, html_path)) {
+			if (liedplan_html::write_card(card, html_path, settings)) {
 				obs_log(LOG_INFO, "Liedplan: HTML geschrieben: %s", html_path.c_str());
 			}
-			liedplan_html::push_update(src, card, false);
+			liedplan_html::push_update(src, card, false, settings);
 		} else {
 			const char *old_id = src ? obs_source_get_id(src) : "";
 			obs_log(LOG_INFO, "Liedplan: migriere %s (alter Typ '%s' -> %s)",
@@ -136,14 +136,14 @@ void send_to_current_scene(const LiedplanCard &card)
 
 	if (!item) {
 		std::string html_path;
-		if (liedplan_html::write_card(card, html_path)) {
+		if (liedplan_html::write_card(card, html_path, settings)) {
 			obs_log(LOG_INFO, "Liedplan: HTML geschrieben: %s", html_path.c_str());
 		}
 
-		obs_data_t *settings = make_settings(card, html_path);
+		obs_data_t *bs_settings = make_settings(card, html_path);
 		obs_source_t *src =
-			obs_source_create(kBrowserSourceId, name.c_str(), settings, nullptr);
-		obs_data_release(settings);
+			obs_source_create(kBrowserSourceId, name.c_str(), bs_settings, nullptr);
+		obs_data_release(bs_settings);
 
 		if (src) {
 			item = obs_scene_add(scene, src);
@@ -163,10 +163,11 @@ void send_to_current_scene(const LiedplanCard &card)
 	obs_source_release(scene_src);
 #else
 	(void)card;
+	(void)settings;
 #endif
 }
 
-void update_everywhere(const LiedplanCard &card, bool clear)
+void update_everywhere(const LiedplanCard &card, bool clear, const LiedplanSettings &settings)
 {
 	LiedplanCard disk_card = card;
 	if (clear) {
@@ -176,7 +177,7 @@ void update_everywhere(const LiedplanCard &card, bool clear)
 	}
 
 	std::string html_path;
-	if (liedplan_html::write_card(disk_card, html_path)) {
+	if (liedplan_html::write_card(disk_card, html_path, settings)) {
 		obs_log(LOG_INFO, "Liedplan: HTML geschrieben: %s", html_path.c_str());
 	}
 
@@ -192,7 +193,7 @@ void update_everywhere(const LiedplanCard &card, bool clear)
 		if (!is_browser_source(src))
 			continue;
 
-		liedplan_html::push_update(src, card, clear);
+		liedplan_html::push_update(src, card, clear, settings);
 	}
 }
 

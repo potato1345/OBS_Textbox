@@ -67,6 +67,16 @@ LiedplanCard card_from_json(const nlohmann::json &item)
 		c.corner_opacity_b = item["corner_opacity_b"].get<int>();
 	if (item.contains("rainbow_corners") && item["rainbow_corners"].is_boolean())
 		c.rainbow_corners = item["rainbow_corners"].get<bool>();
+	if (item.contains("anim_file") && item["anim_file"].is_string())
+		c.anim_file = item["anim_file"].get<std::string>();
+	if (item.contains("show_anim") && item["show_anim"].is_boolean())
+		c.show_anim = item["show_anim"].get<bool>();
+	if (item.contains("anim_scale") && item["anim_scale"].is_number_integer())
+		c.anim_scale = item["anim_scale"].get<int>();
+	if (item.contains("anim_x") && item["anim_x"].is_number_integer())
+		c.anim_x = item["anim_x"].get<int>();
+	if (item.contains("anim_y") && item["anim_y"].is_number_integer())
+		c.anim_y = item["anim_y"].get<int>();
 	return c;
 }
 
@@ -87,6 +97,11 @@ nlohmann::json card_to_json(const LiedplanCard &c)
 		{"corner_opacity_a", c.corner_opacity_a},
 		{"corner_opacity_b", c.corner_opacity_b},
 		{"rainbow_corners", c.rainbow_corners},
+		{"anim_file", c.anim_file},
+		{"show_anim", c.show_anim},
+		{"anim_scale", c.anim_scale},
+		{"anim_x", c.anim_x},
+		{"anim_y", c.anim_y},
 	};
 }
 
@@ -131,6 +146,11 @@ nlohmann::json state_to_json(const LiedplanState &s)
 		 {
 			 {"google_form_id", s.settings.google_form_id},
 			 {"token_path", s.settings.token_path},
+			 {"openrouter_key_path", s.settings.openrouter_key_path},
+			 {"markitdown_python", s.settings.markitdown_python},
+			 {"animation_dir", s.settings.animation_dir},
+			 {"lieder_path", s.settings.lieder_path},
+			 {"ai_system_prompt", s.settings.ai_system_prompt},
 		 }},
 		{"quick_profiles", std::move(qp_json)},
 		{"cards", std::move(cards_json)},
@@ -163,6 +183,16 @@ std::string state_from_json(LiedplanState &s, const nlohmann::json &root)
 			loaded_settings.google_form_id = st["google_form_id"].get<std::string>();
 		if (st.contains("token_path") && st["token_path"].is_string())
 			loaded_settings.token_path = st["token_path"].get<std::string>();
+		if (st.contains("openrouter_key_path") && st["openrouter_key_path"].is_string())
+			loaded_settings.openrouter_key_path = st["openrouter_key_path"].get<std::string>();
+		if (st.contains("markitdown_python") && st["markitdown_python"].is_string())
+			loaded_settings.markitdown_python = st["markitdown_python"].get<std::string>();
+		if (st.contains("animation_dir") && st["animation_dir"].is_string())
+			loaded_settings.animation_dir = st["animation_dir"].get<std::string>();
+		if (st.contains("lieder_path") && st["lieder_path"].is_string())
+			loaded_settings.lieder_path = st["lieder_path"].get<std::string>();
+		if (st.contains("ai_system_prompt") && st["ai_system_prompt"].is_string())
+			loaded_settings.ai_system_prompt = st["ai_system_prompt"].get<std::string>();
 	}
 
 	std::vector<LiedplanQuickProfile> loaded_quick_profiles;

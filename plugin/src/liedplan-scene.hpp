@@ -33,10 +33,12 @@ obs_data_t *make_settings(const LiedplanCard &card);
 obs_data_t *make_settings(const LiedplanCard &card, const std::string &local_file);
 
 // Legt die Text-Quelle in der aktuellen Szene an oder aktualisiert sie dort.
-void send_to_current_scene(const LiedplanCard &card);
+void send_to_current_scene(const LiedplanCard &card,
+			   const LiedplanSettings &settings = LiedplanSettings());
 
 // Aktualisiert alle bereits platzierten Kopien dieser Karte in allen Szenen.
-void update_everywhere(const LiedplanCard &card, bool clear);
+void update_everywhere(const LiedplanCard &card, bool clear,
+		       const LiedplanSettings &settings = LiedplanSettings());
 
 // Entfernt alle Szenen-Items dieser Karte aus allen Szenen und gibt die Source frei.
 void remove_everywhere(const std::string &card_id);
