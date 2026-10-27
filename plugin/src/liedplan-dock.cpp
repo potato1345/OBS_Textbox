@@ -714,8 +714,8 @@ void LiedplanDock::set_dock_status(const QString &msg, bool is_error)
 		return;
 	dock_status_lbl_->setText(msg);
 	dock_status_lbl_->setStyleSheet(
-		is_error ? QStringLiteral("color: #E85D5D; font-size: 12px; font-weight: 600;")
-			 : QStringLiteral("color: #B0B6BD; font-size: 12px;"));
+		is_error ? QStringLiteral("color: #E85E75; font-size: 10pt; font-weight: bold;")
+		 : QStringLiteral("color: #969696; font-size: 10pt;"));
 	dock_status_lbl_->setVisible(!msg.isEmpty());
 }
 
