@@ -89,6 +89,9 @@ add_test(NAME liedplan-state COMMAND liedplan-tests)
 add_executable(liedplan-textfmt-tests src/tests/test-liedplan-textfmt.cpp)
 add_test(NAME liedplan-textfmt COMMAND liedplan-textfmt-tests)
 
+add_executable(liedplan-theme-icons-tests src/tests/test-liedplan-theme-icons.cpp)
+add_test(NAME liedplan-theme-icons COMMAND liedplan-theme-icons-tests)
+
 add_executable(
   liedplan-import-tests
   src/tests/test-liedplan-import.cpp

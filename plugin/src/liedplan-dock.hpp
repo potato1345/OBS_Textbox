@@ -22,6 +22,7 @@ with this program. If not, see <https://www.gnu.org/licenses/>
 #include "liedplan-import.hpp"
 #include "liedplan-state.hpp"
 
+#include <QIcon>
 #include <QWidget>
 #include <string>
 #include <vector>
@@ -52,7 +53,11 @@ private:
 	void set_dock_status(const QString &msg, bool is_error = false);
 	void save_state();
 
+	/* Ui4: OBS-Theme-Icon laden (leeres QIcon, falls kein Icon-Dir vorhanden). */
+	QIcon theme_icon(const char *name) const;
+
 	std::string state_path_;
+	QString icon_dir_;
 	LiedplanState state_;
 	QVBoxLayout *cards_layout_ = nullptr;
 	QLabel *dock_status_lbl_ = nullptr;

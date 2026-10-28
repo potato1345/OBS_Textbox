@@ -23,7 +23,10 @@ with this program. If not, see <https://www.gnu.org/licenses/>
 #include "liedplan-dock.hpp"
 #include "liedplan-profiles.hpp"
 #include "liedplan-scene.hpp"
+#include "liedplan-theme-icons.hpp"
 #include "liedplan-theme.hpp"
+
+#include <obs.h>
 
 #include <QCheckBox>
 #include <QColor>
@@ -36,6 +39,7 @@ with this program. If not, see <https://www.gnu.org/licenses/>
 #include <QGroupBox>
 #include <QHBoxLayout>
 #include <QHeaderView>
+#include <QIcon>
 #include <QLabel>
 #include <QLineEdit>
 #include <QMessageBox>
@@ -67,7 +71,26 @@ LiedplanDock::LiedplanDock(const std::string &state_path, QWidget *parent)
 {
 	setObjectName(QStringLiteral("liedplanDock"));
 	setAttribute(Qt::WA_StyledBackground, true);
-	setStyleSheet(liedplan_theme::stylesheet());
+
+	/*
+	Ui4: OBS-Theme-Icons ausliefern — in der DLL eingebettet, beim Dock-Build
+	nach <config>/liedplan-for-obs/icons/ (neben liedplan-state.json) geschrieben.
+	Version-Gated: No-Op, wenn der Satz aktuell ist (s. liedplan-theme-icons.hpp).
+	Bei Fehlschlag: Dock ohne Icons (QSS ohne Icon-Regeln) — nicht fatal.
+	*/
+	if (!state_path_.empty()) {
+		const std::filesystem::path icons_dir =
+			std::filesystem::u8path(state_path_).parent_path() / "icons";
+		std::string icon_err;
+		if (liedplan_theme_icons::write_icons(icons_dir, false, &icon_err)) {
+			const auto u8 = icons_dir.u8string();
+			icon_dir_ = QString::fromUtf8(u8.data(), static_cast<int>(u8.size()));
+		} else {
+			blog(LOG_WARNING, "Liedplan: Icons konnten nicht geschrieben werden: %s",
+			     icon_err.c_str());
+		}
+	}
+	setStyleSheet(liedplan_theme::stylesheet(icon_dir_));
 
 	auto *root_layout = new QVBoxLayout(this);
 	root_layout->setContentsMargins(8, 8, 8, 8);
@@ -77,14 +100,20 @@ LiedplanDock::LiedplanDock(const std::string &state_path, QWidget *parent)
 	button_row->setContentsMargins(8, 2, 8, 2);
 	button_row->setSpacing(8);
 
-	auto *add_btn = new QPushButton(QStringLiteral("＋ Neue Karte"), this);
+	auto *add_btn = new QPushButton(QStringLiteral("Neue Karte"), this);
 	add_btn->setObjectName(QStringLiteral("lpBtnAccent"));
+	add_btn->setIcon(theme_icon("plus.svg"));
+	add_btn->setIconSize(QSize(16, 16));
 
-	auto *clear_btn = new QPushButton(QStringLiteral("🗑 Alle löschen"), this);
+	auto *clear_btn = new QPushButton(QStringLiteral("Alle löschen"), this);
 	clear_btn->setObjectName(QStringLiteral("lpBtnRed"));
+	clear_btn->setIcon(theme_icon("trash.svg"));
+	clear_btn->setIconSize(QSize(16, 16));
 
-	auto *import_btn = new QPushButton(QStringLiteral("📥 Import"), this);
+	auto *import_btn = new QPushButton(QStringLiteral("Import"), this);
 	import_btn->setObjectName(QStringLiteral("lpBtnImport"));
+	import_btn->setIcon(theme_icon("download.svg"));
+	import_btn->setIconSize(QSize(16, 16));
 
 	button_row->addWidget(add_btn);
 	button_row->addWidget(clear_btn);
@@ -96,17 +125,23 @@ LiedplanDock::LiedplanDock(const std::string &state_path, QWidget *parent)
 	button_row_m4->setContentsMargins(8, 2, 8, 2);
 	button_row_m4->setSpacing(8);
 
-	auto *quick_btn = new QPushButton(QStringLiteral("⭐ Schnell-Profile"), this);
+	auto *quick_btn = new QPushButton(QStringLiteral("Schnell-Profile"), this);
 	quick_btn->setObjectName(QStringLiteral("lpBtnQuickProfiles"));
 
-	auto *backup_btn = new QPushButton(QStringLiteral("💾 Backup"), this);
+	auto *backup_btn = new QPushButton(QStringLiteral("Backup"), this);
 	backup_btn->setObjectName(QStringLiteral("lpBtnBackup"));
+	backup_btn->setIcon(theme_icon("save.svg"));
+	backup_btn->setIconSize(QSize(16, 16));
 
-	auto *restore_btn = new QPushButton(QStringLiteral("♻️ Restore"), this);
+	auto *restore_btn = new QPushButton(QStringLiteral("Restore"), this);
 	restore_btn->setObjectName(QStringLiteral("lpBtnRestore"));
+	restore_btn->setIcon(theme_icon("revert.svg"));
+	restore_btn->setIconSize(QSize(16, 16));
 
-	auto *settings_btn = new QPushButton(QStringLiteral("⚙ Einstellungen"), this);
+	auto *settings_btn = new QPushButton(QStringLiteral("Einstellungen"), this);
 	settings_btn->setObjectName(QStringLiteral("lpBtnSettings"));
+	settings_btn->setIcon(theme_icon("cogs.svg"));
+	settings_btn->setIconSize(QSize(16, 16));
 
 	button_row_m4->addWidget(quick_btn);
 	button_row_m4->addWidget(backup_btn);
@@ -174,6 +209,13 @@ LiedplanCard *LiedplanDock::find_card_mut(const std::string &id)
 	return nullptr;
 }
 
+QIcon LiedplanDock::theme_icon(const char *name) const
+{
+	if (icon_dir_.isEmpty())
+		return QIcon();
+	return QIcon(icon_dir_ + QLatin1Char('/') + QLatin1String(name));
+}
+
 void LiedplanDock::create_row_widget(const LiedplanCard &card)
 {
 	auto *row_widget = new QFrame(this);
@@ -205,9 +247,11 @@ void LiedplanDock::create_row_widget(const LiedplanCard &card)
 	auto *id_label = new QLabel(QString::fromUtf8(card.id.c_str()), id_bar);
 	id_label->setObjectName(QStringLiteral("lpIdValue"));
 
-	auto *del_btn = new QPushButton(QStringLiteral("✕"), id_bar);
+	auto *del_btn = new QPushButton(id_bar);
 	del_btn->setObjectName(QStringLiteral("lpDelBtn"));
 	del_btn->setFixedSize(28, 28);
+	del_btn->setIcon(theme_icon("close.svg"));
+	del_btn->setIconSize(QSize(16, 16));
 	del_btn->setToolTip(QStringLiteral("Karte löschen"));
 
 	id_layout->addWidget(id_prefix);
@@ -329,14 +373,14 @@ void LiedplanDock::create_row_widget(const LiedplanCard &card)
 
 	inner_layout->addLayout(opacity_layout);
 
-	auto *rainbow_cb = new QCheckBox(QStringLiteral("🌈 Regenbogen-Ecken"), card_inner);
+	auto *rainbow_cb = new QCheckBox(QStringLiteral("Regenbogen-Ecken"), card_inner);
 	rainbow_cb->setObjectName(QStringLiteral("lpRainbow"));
 	rainbow_cb->setChecked(card.rainbow_corners);
 	inner_layout->addWidget(rainbow_cb);
 
 	auto *anim_group = new QGroupBox(card_inner);
 	anim_group->setObjectName(QStringLiteral("lpAnimGroup"));
-	anim_group->setTitle(QStringLiteral("🎬 Animation"));
+	anim_group->setTitle(QStringLiteral("Animation"));
 	anim_group->setCheckable(true);
 	anim_group->setChecked(false);
 
@@ -349,7 +393,7 @@ void LiedplanDock::create_row_widget(const LiedplanCard &card)
 	anim_body_layout->setContentsMargins(0, 0, 0, 0);
 	anim_body_layout->setSpacing(8);
 
-	// 1. Datei + 📁 Picker
+	// 1. Datei + Icon-Picker
 	auto *anim_file_lbl = new QLabel(QStringLiteral("DATEI"), anim_body);
 	anim_file_lbl->setObjectName(QStringLiteral("lpFieldLabel"));
 	auto *anim_file_row = new QHBoxLayout();
@@ -361,9 +405,11 @@ void LiedplanDock::create_row_widget(const LiedplanCard &card)
 	anim_file_edit->setReadOnly(false);
 	anim_file_edit->setPlaceholderText(QStringLiteral("Dateiname, Pfad oder URL"));
 	anim_file_edit->setFixedHeight(34);
-	auto *anim_file_pick = new QPushButton(QStringLiteral("📁"), anim_body);
+	auto *anim_file_pick = new QPushButton(anim_body);
 	anim_file_pick->setObjectName(QStringLiteral("lpAnimFilePick"));
-	anim_file_pick->setFixedHeight(34);
+	anim_file_pick->setFixedSize(34, 34); /* Ui4: Icon-only-Button, OBS-„…“-Format */
+	anim_file_pick->setIcon(theme_icon("download.svg"));
+	anim_file_pick->setIconSize(QSize(16, 16));
 	anim_file_pick->setToolTip(QStringLiteral("Animationsdatei auswählen"));
 	anim_file_row->addWidget(anim_file_edit, 1);
 	anim_file_row->addWidget(anim_file_pick);
@@ -445,12 +491,12 @@ void LiedplanDock::create_row_widget(const LiedplanCard &card)
 	actions_layout->setContentsMargins(0, 4, 0, 0);
 	actions_layout->setSpacing(8);
 
-	auto *to_scene_btn = new QPushButton(QStringLiteral("▶ Zu Szene"), card_inner);
+	auto *to_scene_btn = new QPushButton(QStringLiteral("Zu Szene"), card_inner);
 	to_scene_btn->setObjectName(QStringLiteral("lpBtnGreen"));
 	to_scene_btn->setToolTip(
 		QStringLiteral("Karte als Text-Quelle in die aktuelle Szene legen oder aktualisieren"));
 
-	auto *clear_src_btn = new QPushButton(QStringLiteral("✕ Leeren"), card_inner);
+	auto *clear_src_btn = new QPushButton(QStringLiteral("Leeren"), card_inner);
 	clear_src_btn->setObjectName(QStringLiteral("lpBtnRed"));
 	clear_src_btn->setToolTip(
 		QStringLiteral("Text der Quelle auf leer setzen — die Quelle bleibt in der Szene"));
@@ -745,7 +791,7 @@ void LiedplanDock::on_open_import_dialog()
 	QDialog dlg(this);
 	dlg.setObjectName(QStringLiteral("lpImportDialog"));
 	dlg.setWindowTitle(QStringLiteral("Liedplan-Import"));
-	dlg.setStyleSheet(liedplan_theme::stylesheet());
+	dlg.setStyleSheet(liedplan_theme::stylesheet(icon_dir_));
 	dlg.setMinimumWidth(540);
 
 	auto *root = new QVBoxLayout(&dlg);
@@ -794,8 +840,10 @@ void LiedplanDock::on_open_import_dialog()
 		save_state();
 	});
 
-	auto *api_btn = new QPushButton(QStringLiteral("📥 Neueste Antwort laden"), google_group);
+	auto *api_btn = new QPushButton(QStringLiteral("Neueste Antwort laden"), google_group);
 	api_btn->setObjectName(QStringLiteral("lpBtnApiImport"));
+	api_btn->setIcon(theme_icon("download.svg"));
+	api_btn->setIconSize(QSize(16, 16));
 
 	auto *status_lbl = new QLabel(QStringLiteral("Bereit."), google_group);
 	status_lbl->setObjectName(QStringLiteral("lpImportStatus"));
@@ -817,13 +865,13 @@ void LiedplanDock::on_open_import_dialog()
 	csv_layout->setSpacing(8);
 
 	auto *csv_btn = new QPushButton(
-		QStringLiteral("📂 Datei importieren (CSV / XLSX / ZIP) …"), csv_group);
+		QStringLiteral("Datei importieren (CSV / XLSX / ZIP) …"), csv_group);
 	csv_btn->setObjectName(QStringLiteral("lpBtnCsvImport"));
 	csv_layout->addWidget(csv_btn);
 	root->addWidget(csv_group);
 
-	// Gruppe 3 (M5 D3): 🤖 AI-Import (PDF/Dokument)
-	auto *ai_group = new QGroupBox(QStringLiteral("🤖 AI-Import (PDF/Dokument)"), &dlg);
+	// Gruppe 3 (M5 D3): AI-Import (PDF/Dokument)
+	auto *ai_group = new QGroupBox(QStringLiteral("AI-Import (PDF/Dokument)"), &dlg);
 	ai_group->setObjectName(QStringLiteral("lpAiImportGroup"));
 	auto *ai_layout = new QVBoxLayout(ai_group);
 	ai_layout->setContentsMargins(12, 16, 12, 12);
@@ -836,7 +884,7 @@ void LiedplanDock::on_open_import_dialog()
 	auto *ai_file_edit = new QLineEdit(ai_group);
 	ai_file_edit->setObjectName(QStringLiteral("lpAiFilePath"));
 	ai_file_edit->setPlaceholderText(QStringLiteral("PDF- oder DOCX-Datei auswählen …"));
-	auto *ai_file_btn = new QPushButton(QStringLiteral("📂 Datei wählen …"), ai_group);
+	auto *ai_file_btn = new QPushButton(QStringLiteral("Datei wählen …"), ai_group);
 	ai_file_btn->setObjectName(QStringLiteral("lpBtnAiFilePick"));
 	ai_file_row->addWidget(ai_file_edit, 1);
 	ai_file_row->addWidget(ai_file_btn);
@@ -856,7 +904,8 @@ void LiedplanDock::on_open_import_dialog()
 	ai_key_edit->setEchoMode(QLineEdit::Password);
 	ai_key_edit->setPlaceholderText(
 		QStringLiteral("OpenRouter API-Key (leer = lokale Offline-Analyse)"));
-	auto *ai_key_toggle = new QPushButton(QStringLiteral("👁"), ai_group);
+	/* Ui4: kein Auge-Emoji — natives Text-Toggle (OBS-Style: Text, kein Glyph). */
+	auto *ai_key_toggle = new QPushButton(QStringLiteral("Key zeigen"), ai_group);
 	ai_key_toggle->setObjectName(QStringLiteral("lpBtnAiKeyToggle"));
 	ai_key_toggle->setToolTip(QStringLiteral("API-Key ein-/ausblenden"));
 	ai_key_row->addWidget(ai_key_edit, 1);
@@ -864,10 +913,11 @@ void LiedplanDock::on_open_import_dialog()
 	ai_layout->addWidget(lbl_ai_key);
 	ai_layout->addLayout(ai_key_row);
 
-	connect(ai_key_toggle, &QPushButton::clicked, &dlg, [ai_key_edit]() {
-		ai_key_edit->setEchoMode(ai_key_edit->echoMode() == QLineEdit::Password
-						 ? QLineEdit::Normal
-						 : QLineEdit::Password);
+	connect(ai_key_toggle, &QPushButton::clicked, &dlg, [ai_key_edit, ai_key_toggle]() {
+		const bool now_visible = ai_key_edit->echoMode() != QLineEdit::Password;
+		ai_key_edit->setEchoMode(now_visible ? QLineEdit::Password : QLineEdit::Normal);
+		ai_key_toggle->setText(now_visible ? QStringLiteral("Key zeigen")
+		                                  : QStringLiteral("Key verbergen"));
 	});
 
 	// Einklappbarer System-Prompt
@@ -1027,7 +1077,7 @@ void LiedplanDock::on_open_import_dialog()
 		const QString msg =
 			source_name.isEmpty()
 				? QStringLiteral(
-					  "12 Karten befüllt — im Dock editierbar, „▶ Zu Szene“ legt sie in die Szene.")
+					  "12 Karten befüllt — im Dock editierbar, „Zu Szene“ legt sie in die Szene.")
 				: QStringLiteral("Importiert: %1 Punkte (Quelle: %2)")
 					  .arg(res.punkte.size())
 					  .arg(source_name);
@@ -1381,7 +1431,7 @@ void LiedplanDock::on_open_quick_profiles_dialog()
 	QDialog dlg(this);
 	dlg.setObjectName(QStringLiteral("lpQuickProfilesDialog"));
 	dlg.setWindowTitle(QStringLiteral("Schnell-Profile"));
-	dlg.setStyleSheet(liedplan_theme::stylesheet());
+	dlg.setStyleSheet(liedplan_theme::stylesheet(icon_dir_));
 	dlg.setMinimumWidth(460);
 
 	auto *root = new QVBoxLayout(&dlg);
@@ -1427,10 +1477,12 @@ void LiedplanDock::on_open_quick_profiles_dialog()
 
 	auto *action_row = new QHBoxLayout();
 	action_row->setSpacing(8);
-	auto *apply_btn = new QPushButton(QStringLiteral("▶ Übernehmen"), list_group);
+	auto *apply_btn = new QPushButton(QStringLiteral("Übernehmen"), list_group);
 	apply_btn->setObjectName(QStringLiteral("lpBtnQuickApply"));
-	auto *del_btn = new QPushButton(QStringLiteral("🗑 Löschen"), list_group);
+	auto *del_btn = new QPushButton(QStringLiteral("Löschen"), list_group);
 	del_btn->setObjectName(QStringLiteral("lpBtnQuickDelete"));
+	del_btn->setIcon(theme_icon("trash.svg"));
+	del_btn->setIconSize(QSize(16, 16));
 	action_row->addWidget(apply_btn, 1);
 	action_row->addWidget(del_btn, 1);
 
@@ -1609,7 +1661,7 @@ void LiedplanDock::on_open_settings_dialog()
 	QDialog dlg(this);
 	dlg.setObjectName(QStringLiteral("lpSettingsDialog"));
 	dlg.setWindowTitle(QStringLiteral("Einstellungen"));
-	dlg.setStyleSheet(liedplan_theme::stylesheet());
+	dlg.setStyleSheet(liedplan_theme::stylesheet(icon_dir_));
 	dlg.setMinimumWidth(520);
 
 	auto *root = new QVBoxLayout(&dlg);
@@ -1640,7 +1692,8 @@ void LiedplanDock::on_open_settings_dialog()
 	token_row->setSpacing(8);
 	auto *edit_token = new QLineEdit(QString::fromUtf8(cur_token.c_str()), oauth_group);
 	edit_token->setPlaceholderText(QString::fromUtf8(liedplan_import::kDefaultTokenPath));
-	auto *browse_btn = new QPushButton(QStringLiteral("📂 …"), oauth_group);
+	/* Ui4: „…“ = natives OBS-Browse-Button-Idiom (Properties-Panel). */
+	auto *browse_btn = new QPushButton(QStringLiteral("…"), oauth_group);
 	browse_btn->setObjectName(QStringLiteral("lpBtn"));
 	token_row->addWidget(edit_token, 1);
 	token_row->addWidget(browse_btn);
@@ -1668,7 +1721,7 @@ void LiedplanDock::on_open_settings_dialog()
 		const std::string v = cur_val.empty() ? def_val : cur_val;
 		auto *edit = new QLineEdit(QString::fromUtf8(v.c_str()), m5_group);
 		edit->setPlaceholderText(QString::fromUtf8(def_val.c_str()));
-		out_btn = new QPushButton(QStringLiteral("📂 …"), m5_group);
+		out_btn = new QPushButton(QStringLiteral("…"), m5_group);
 		out_btn->setObjectName(QStringLiteral("lpBtn"));
 		row->addWidget(edit, 1);
 		row->addWidget(out_btn);

@@ -42,7 +42,7 @@ Alle Objekt-Namen (lp*) wie in Ui1/Ui2 — reine QSS-Ebene, null Verhalten.
 
 namespace liedplan_theme {
 
-inline QString stylesheet()
+inline QString base_qss()
 {
 	return QStringLiteral(R"QSS(
 QWidget#liedplanDock,
@@ -629,6 +629,44 @@ QDockWidget::float-button:pressed {
 	background: #1D1F26;
 }
 )QSS");
+}
+
+/*
+Ui4: Natives OBS-Icon (aus dem Yami-Theme, in der Plugin-DLL eingebettet und
+beim Modulstart nach <config>/icons/ geschrieben — s. liedplan-theme-icons.hpp).
+icon_dir = leeres QString -> Stylesheet ohne Icon-Regeln (Fallback).
+WICHTIG: QSS `image:` skaliert NICHT — daher sind alle eingebetteten SVGs
+16x16 (Checkbox-Icons: 128er-ViewBox auf 16 skaliert), und der Indicator
+wird auf 16x16 gesetzt. qsvg.dll liegt in OBS' Qt-imageformats.
+*/
+inline QString stylesheet(const QString &icon_dir = QString())
+{
+	QString s = base_qss();
+	if (icon_dir.isEmpty())
+		return s;
+	QString d = icon_dir;
+	d.replace('\\', '/');
+	const auto icon = [&d](const char *name) {
+		return QStringLiteral("url(\"%1/%2\")").arg(d, QString::fromLatin1(name));
+	};
+	s += QStringLiteral("\n/* ---- Ui4: Natives OBS-Icon (Yami-Theme) ---- */\n");
+	s += QStringLiteral("QCheckBox::indicator { width: 16px; height: 16px; background: transparent; border: none; border-radius: 0px; image: %1; }\n")
+		 .arg(icon("checkbox_unchecked.svg"));
+	s += QStringLiteral("QCheckBox::indicator:hover { image: %1; }\n").arg(icon("checkbox_unchecked_focus.svg"));
+	s += QStringLiteral("QCheckBox::indicator:checked { image: %1; }\n").arg(icon("checkbox_checked.svg"));
+	s += QStringLiteral("QCheckBox::indicator:checked:hover { image: %1; }\n").arg(icon("checkbox_checked_focus.svg"));
+	s += QStringLiteral("QCheckBox::indicator:disabled { image: %1; }\n").arg(icon("checkbox_unchecked_disabled.svg"));
+	s += QStringLiteral("QCheckBox::indicator:checked:disabled { image: %1; }\n").arg(icon("checkbox_checked_disabled.svg"));
+	s += QStringLiteral("QGroupBox::indicator { width: 16px; height: 16px; background: transparent; border: none; border-radius: 0px; image: %1; }\n")
+		 .arg(icon("checkbox_unchecked.svg"));
+	s += QStringLiteral("QGroupBox::indicator:hover { image: %1; }\n").arg(icon("checkbox_unchecked_focus.svg"));
+	s += QStringLiteral("QGroupBox::indicator:checked { image: %1; }\n").arg(icon("checkbox_checked.svg"));
+	s += QStringLiteral("QGroupBox::indicator:checked:hover { image: %1; }\n").arg(icon("checkbox_checked_focus.svg"));
+	s += QStringLiteral("QGroupBox::indicator:disabled { image: %1; }\n").arg(icon("checkbox_unchecked_disabled.svg"));
+	s += QStringLiteral("QGroupBox::indicator:checked:disabled { image: %1; }\n").arg(icon("checkbox_checked_disabled.svg"));
+	s += QStringLiteral("QComboBox::drop-down { image: %1; }\n").arg(icon("collapse.svg"));
+	s += QStringLiteral("QPushButton::menu-indicator { image: %1; width: 16px; }\n").arg(icon("collapse.svg"));
+	return s;
 }
 
 } // namespace liedplan_theme
