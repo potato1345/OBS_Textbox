@@ -18,6 +18,8 @@ with this program. If not, see <https://www.gnu.org/licenses/>
 
 #pragma once
 
+#include "liedplan-profiles.hpp"
+
 #include <cstddef>
 #include <string>
 #include <vector>
@@ -96,7 +98,9 @@ public:
 	std::string active_profile = "OBS Dark";
 	LiedplanSettings settings;
 	std::vector<LiedplanQuickProfile> quick_profiles;
+	std::vector<LiedplanProfile> color_profiles;
 
+	void reset();
 	std::string load(const std::string &path); // "" = ok; sonst Fehlerbeschreibung
 	std::string save(const std::string &path) const; // "" = ok
 	std::string restore_backup(const std::string &path); // "" = ok; bei Fehler bleibt State unverändert
@@ -118,6 +122,10 @@ public:
 	{
 		return cards == other.cards && next_id == other.next_id &&
 		       active_profile == other.active_profile && settings == other.settings &&
-		       quick_profiles == other.quick_profiles;
+		       quick_profiles == other.quick_profiles &&
+		       color_profiles == other.color_profiles;
 	}
 };
+
+std::string liedplan_profile_to_yaml(const LiedplanProfile &p);
+bool liedplan_yaml_to_profile(const std::string &text, LiedplanProfile &out, std::string &err);

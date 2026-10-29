@@ -24,10 +24,12 @@ with this program. If not, see <https://www.gnu.org/licenses/>
 #include "liedplan-profiles.hpp"
 
 #include <algorithm>
+#include <cctype>
 #include <filesystem>
 #include <fstream>
 #include <iterator>
 #include <nlohmann/json.hpp>
+#include <sstream>
 
 namespace {
 
@@ -138,6 +140,15 @@ nlohmann::json state_to_json(const LiedplanState &s)
 		});
 	}
 
+	nlohmann::json cp_json = nlohmann::json::array();
+	for (const auto &cp : s.color_profiles) {
+		cp_json.push_back({
+			{"name", cp.name},
+			{"text_color", cp.text_color},
+			{"box_color", cp.box_color},
+		});
+	}
+
 	return {
 		{"version", 1},
 		{"next_id", s.next_id},
@@ -153,6 +164,7 @@ nlohmann::json state_to_json(const LiedplanState &s)
 			 {"ai_system_prompt", s.settings.ai_system_prompt},
 		 }},
 		{"quick_profiles", std::move(qp_json)},
+		{"color_profiles", std::move(cp_json)},
 		{"cards", std::move(cards_json)},
 	};
 }
@@ -213,6 +225,22 @@ std::string state_from_json(LiedplanState &s, const nlohmann::json &root)
 		}
 	}
 
+	std::vector<LiedplanProfile> loaded_color_profiles;
+	if (root.contains("color_profiles") && root["color_profiles"].is_array()) {
+		for (const auto &cp_item : root["color_profiles"]) {
+			if (!cp_item.is_object())
+				continue;
+			LiedplanProfile cp;
+			if (cp_item.contains("name") && cp_item["name"].is_string())
+				cp.name = cp_item["name"].get<std::string>();
+			if (cp_item.contains("text_color") && cp_item["text_color"].is_string())
+				cp.text_color = cp_item["text_color"].get<std::string>();
+			if (cp_item.contains("box_color") && cp_item["box_color"].is_string())
+				cp.box_color = cp_item["box_color"].get<std::string>();
+			loaded_color_profiles.push_back(std::move(cp));
+		}
+	}
+
 	std::vector<LiedplanCard> loaded_cards;
 	if (root.contains("cards")) {
 		if (!root["cards"].is_array())
@@ -233,10 +261,53 @@ std::string state_from_json(LiedplanState &s, const nlohmann::json &root)
 	s.active_profile = std::move(loaded_active_profile);
 	s.settings = std::move(loaded_settings);
 	s.quick_profiles = std::move(loaded_quick_profiles);
+	s.color_profiles = std::move(loaded_color_profiles);
 	return "";
 }
 
+std::string trim_ws(const std::string &s)
+{
+	const auto b = s.find_first_not_of(" \t\r\n");
+	if (b == std::string::npos)
+		return "";
+	const auto e = s.find_last_not_of(" \t\r\n");
+	return s.substr(b, e - b + 1);
+}
+
+std::string strip_quotes(const std::string &s)
+{
+	std::string res = s;
+	if (!res.empty() && (res.front() == '"' || res.front() == '\''))
+		res.erase(res.begin());
+	if (!res.empty() && (res.back() == '"' || res.back() == '\''))
+		res.pop_back();
+	return res;
+}
+
+bool is_valid_hex_color(const std::string &s)
+{
+	if (s.size() != 4 && s.size() != 7)
+		return false;
+	if (s[0] != '#')
+		return false;
+	for (std::size_t i = 1; i < s.size(); ++i) {
+		if (!std::isxdigit(static_cast<unsigned char>(s[i])))
+			return false;
+	}
+	return true;
+}
+
 } // namespace
+
+void LiedplanState::reset()
+{
+	cards.clear();
+	next_id = 1;
+	active_profile = "OBS Dark";
+	settings = LiedplanSettings{};
+	quick_profiles.clear();
+	color_profiles.clear();
+}
 
 std::string LiedplanState::serialize_json() const
 {
@@ -253,11 +324,7 @@ std::string LiedplanState::deserialize_json(const std::string &json_str)
 
 std::string LiedplanState::load(const std::string &path)
 {
-	cards.clear();
-	next_id = 1;
-	active_profile = "OBS Dark";
-	settings = LiedplanSettings{};
-	quick_profiles.clear();
+	reset();
 
 	if (path.empty())
 		return "";
@@ -418,5 +485,93 @@ bool LiedplanState::remove_quick_profile(std::size_t index)
 	if (index >= quick_profiles.size())
 		return false;
 	quick_profiles.erase(quick_profiles.begin() + static_cast<std::ptrdiff_t>(index));
+	return true;
+}
+
+std::string liedplan_profile_to_yaml(const LiedplanProfile &p)
+{
+	const std::string tc = p.text_color.empty() ? "#000000" : p.text_color;
+	const std::string bc = p.box_color.empty() ? "#ffffff" : p.box_color;
+	std::string yaml = "# Liedplan Farbprofil\n";
+	yaml += "name: \"" + p.name + "\"\n";
+	yaml += "colors:\n";
+	yaml += "  textColor: \"" + tc + "\"\n";
+	yaml += "  cardOuterBg: \"" + bc + "\"\n";
+	return yaml;
+}
+
+bool liedplan_yaml_to_profile(const std::string &text, LiedplanProfile &out, std::string &err)
+{
+	std::istringstream iss(text);
+	std::string raw_line;
+	std::string parsed_name;
+	bool in_colors = false;
+	bool has_text_color = false;
+	bool has_box_color = false;
+	std::string raw_text_color;
+	std::string raw_box_color;
+
+	while (std::getline(iss, raw_line)) {
+		const std::string line = trim_ws(raw_line);
+		if (line.empty() || line[0] == '#')
+			continue;
+
+		if (line.rfind("name:", 0) == 0) {
+			const std::string val = trim_ws(line.substr(5));
+			parsed_name = trim_ws(strip_quotes(val));
+			continue;
+		}
+		if (line.rfind("- name:", 0) == 0) {
+			const std::string val = trim_ws(line.substr(7));
+			parsed_name = trim_ws(strip_quotes(val));
+			continue;
+		}
+
+		if (line == "colors:") {
+			in_colors = true;
+			continue;
+		}
+
+		if (in_colors) {
+			const auto colon_idx = line.find(':');
+			if (colon_idx != std::string::npos) {
+				const std::string key = trim_ws(line.substr(0, colon_idx));
+				const std::string val =
+					strip_quotes(trim_ws(line.substr(colon_idx + 1)));
+				if (key == "textColor") {
+					has_text_color = true;
+					raw_text_color = val;
+				} else if (key == "cardOuterBg") {
+					has_box_color = true;
+					raw_box_color = val;
+				}
+			}
+		}
+	}
+
+	if (parsed_name.empty()) {
+		err = "Profilname fehlt.";
+		return false;
+	}
+
+	if (!has_text_color && !has_box_color) {
+		err = "Keine Farben gefunden (textColor / cardOuterBg).";
+		return false;
+	}
+
+	if (has_text_color && !is_valid_hex_color(raw_text_color)) {
+		err = "Ungültige Farbformat: " + raw_text_color;
+		return false;
+	}
+
+	if (has_box_color && !is_valid_hex_color(raw_box_color)) {
+		err = "Ungültige Farbformat: " + raw_box_color;
+		return false;
+	}
+
+	out.name = std::move(parsed_name);
+	out.text_color = has_text_color ? std::move(raw_text_color) : "#000000";
+	out.box_color = has_box_color ? std::move(raw_box_color) : "#ffffff";
+	err.clear();
 	return true;
 }

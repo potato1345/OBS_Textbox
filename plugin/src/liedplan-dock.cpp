@@ -34,19 +34,23 @@ with this program. If not, see <https://www.gnu.org/licenses/>
 #include <QComboBox>
 #include <QDate>
 #include <QDialog>
+#include <QFile>
 #include <QFileDialog>
 #include <QFrame>
 #include <QGroupBox>
 #include <QHBoxLayout>
 #include <QHeaderView>
 #include <QIcon>
+#include <QInputDialog>
 #include <QLabel>
 #include <QLineEdit>
+#include <QListWidget>
 #include <QMessageBox>
 #include <QMetaObject>
 #include <QPlainTextEdit>
 #include <QPointer>
 #include <QPushButton>
+#include <QRegularExpression>
 #include <QScrollArea>
 #include <QSizePolicy>
 #include <QSlider>
@@ -294,6 +298,16 @@ void LiedplanDock::create_row_widget(const LiedplanCard &card)
 	auto *lbl_prof = new QLabel(QStringLiteral("PROFIL"), card_inner);
 	lbl_prof->setObjectName(QStringLiteral("lpFieldLabel"));
 
+	auto *prof_row = new QHBoxLayout();
+	prof_row->setContentsMargins(0, 0, 0, 0);
+	prof_row->setSpacing(6);
+
+	/*
+	 * M6-B2: Dropdown füllt mit 6 Standard-Profilen + Custom-Profilen aus
+	 * state_.color_profiles. Zeigt card.profile auf ein gelöschtes Profil,
+	 * bleibt das harmlos: die auf der Karte gebakten Farben (text_color /
+	 * box_color) werden NICHT automatisch zurückgesetzt.
+	 */
 	auto *profile_combo = new QComboBox(card_inner);
 	profile_combo->setFixedHeight(34);
 	int selected_index = 0;
@@ -303,11 +317,57 @@ void LiedplanDock::create_row_widget(const LiedplanCard &card)
 		if (profiles[i].name == card.profile)
 			selected_index = static_cast<int>(i);
 	}
+	for (size_t i = 0; i < state_.color_profiles.size(); ++i) {
+		const auto &cp = state_.color_profiles[i];
+		profile_combo->addItem(QString::fromUtf8(cp.name.c_str()));
+		if (cp.name == card.profile)
+			selected_index = static_cast<int>(profiles.size() + i);
+	}
 	profile_combo->setCurrentIndex(selected_index);
 
+	auto *new_prof_btn = new QPushButton(QStringLiteral("Profil +"), card_inner);
+	new_prof_btn->setObjectName(QStringLiteral("lpBtnNewProfile"));
+	new_prof_btn->setFixedHeight(34);
+	new_prof_btn->setToolTip(
+		QStringLiteral("Aktuelle Text-/Box-Farbe dieser Karte als Profil speichern"));
+
+	prof_row->addWidget(profile_combo, 1);
+	prof_row->addWidget(new_prof_btn);
+
 	prof_layout->addWidget(lbl_prof);
-	prof_layout->addWidget(profile_combo);
+	prof_layout->addLayout(prof_row);
 	inner_layout->addLayout(prof_layout);
+
+	// M6-A8: Freie Text-/Box-Farbe (Color-Picker). PROFIL-Dropdown bleibt
+	// "Reset auf Profilsatz" und aktualisiert die Button-Labels (s. Connect unten).
+	const QString hex_text =
+		QString::fromUtf8((card.text_color.empty() ? "#000000" : card.text_color).c_str()).toUpper();
+	const QString hex_box =
+		QString::fromUtf8((card.box_color.empty() ? "#ffffff" : card.box_color).c_str()).toUpper();
+
+	auto *text_color_layout = new QVBoxLayout();
+	text_color_layout->setContentsMargins(0, 0, 0, 0);
+	text_color_layout->setSpacing(4);
+	auto *lbl_text_color = new QLabel(QStringLiteral("TEXT-FARBE"), card_inner);
+	lbl_text_color->setObjectName(QStringLiteral("lpFieldLabel"));
+	auto *text_color_btn = new QPushButton(hex_text, card_inner);
+	text_color_btn->setObjectName(QStringLiteral("lpTextColor"));
+	text_color_btn->setFixedHeight(34);
+	text_color_layout->addWidget(lbl_text_color);
+	text_color_layout->addWidget(text_color_btn);
+	inner_layout->addLayout(text_color_layout);
+
+	auto *box_color_layout = new QVBoxLayout();
+	box_color_layout->setContentsMargins(0, 0, 0, 0);
+	box_color_layout->setSpacing(4);
+	auto *lbl_box_color = new QLabel(QStringLiteral("BOX-FARBE"), card_inner);
+	lbl_box_color->setObjectName(QStringLiteral("lpFieldLabel"));
+	auto *box_color_btn = new QPushButton(hex_box, card_inner);
+	box_color_btn->setObjectName(QStringLiteral("lpBoxColor"));
+	box_color_btn->setFixedHeight(34);
+	box_color_layout->addWidget(lbl_box_color);
+	box_color_layout->addWidget(box_color_btn);
+	inner_layout->addLayout(box_color_layout);
 
 	const QString hex_a =
 		QString::fromUtf8((card.corner_color_a.empty() ? "#fce647" : card.corner_color_a).c_str()).toUpper();
@@ -372,6 +432,46 @@ void LiedplanDock::create_row_widget(const LiedplanCard &card)
 	opacity_layout->addLayout(opacity_b_row);
 
 	inner_layout->addLayout(opacity_layout);
+
+	// M6-A7: Text-/Box-Deckkraft (0–255). Alpha wandert über die rgba()-Werte von
+	// --box-bg/--text-color in build_inject_css/push_update; --box-opacity (Show/Hide)
+	// bleibt has_any_text-gesteuert und wird HIER nicht verändert.
+	auto *textbox_opacity_layout = new QVBoxLayout();
+	textbox_opacity_layout->setContentsMargins(0, 0, 0, 0);
+	textbox_opacity_layout->setSpacing(4);
+	auto *lbl_textbox_opacity = new QLabel(QStringLiteral("TEXT-/BOX-DECKKRAFT"), card_inner);
+	lbl_textbox_opacity->setObjectName(QStringLiteral("lpFieldLabel"));
+	textbox_opacity_layout->addWidget(lbl_textbox_opacity);
+
+	auto *text_opacity_row = new QHBoxLayout();
+	text_opacity_row->setContentsMargins(0, 0, 0, 0);
+	text_opacity_row->setSpacing(8);
+	auto *lbl_op_text = new QLabel(QStringLiteral("TEXT"), card_inner);
+	lbl_op_text->setObjectName(QStringLiteral("lpFieldLabel"));
+	auto *text_opacity_slider = new QSlider(Qt::Horizontal, card_inner);
+	text_opacity_slider->setObjectName(QStringLiteral("lpOpacityText"));
+	text_opacity_slider->setRange(0, 255);
+	text_opacity_slider->setValue(std::clamp(card.text_opacity, 0, 255));
+	text_opacity_row->addWidget(lbl_op_text);
+	text_opacity_row->addWidget(text_opacity_slider, 1);
+	textbox_opacity_layout->addLayout(text_opacity_row);
+
+	auto *box_opacity_row = new QHBoxLayout();
+	box_opacity_row->setContentsMargins(0, 0, 0, 0);
+	box_opacity_row->setSpacing(8);
+	auto *lbl_op_box = new QLabel(QStringLiteral("BOX"), card_inner);
+	lbl_op_box->setObjectName(QStringLiteral("lpFieldLabel"));
+	auto *box_opacity_slider = new QSlider(Qt::Horizontal, card_inner);
+	box_opacity_slider->setObjectName(QStringLiteral("lpOpacityBox"));
+	box_opacity_slider->setRange(0, 255);
+	box_opacity_slider->setValue(std::clamp(card.box_opacity, 0, 255));
+	box_opacity_slider->setToolTip(
+		QStringLiteral("0 = Box-Hintergrund unsichtbar (Text und Ecken bleiben sichtbar)"));
+	box_opacity_row->addWidget(lbl_op_box);
+	box_opacity_row->addWidget(box_opacity_slider, 1);
+	textbox_opacity_layout->addLayout(box_opacity_row);
+
+	inner_layout->addLayout(textbox_opacity_layout);
 
 	auto *rainbow_cb = new QCheckBox(QStringLiteral("Regenbogen-Ecken"), card_inner);
 	rainbow_cb->setObjectName(QStringLiteral("lpRainbow"));
@@ -537,17 +637,64 @@ void LiedplanDock::create_row_widget(const LiedplanCard &card)
 	});
 
 	connect(profile_combo, &QComboBox::currentTextChanged, this,
-		[this, card_id](const QString &profile_text) {
+		[this, card_id, text_color_btn, box_color_btn](const QString &profile_text) {
 			if (LiedplanCard *c = find_card_mut(card_id)) {
 				c->profile = profile_text.toUtf8().toStdString();
-				if (const LiedplanProfile *prof = profile_by_name(c->profile)) {
+				if (const LiedplanProfile *prof =
+					    liedplan_profile_lookup(c->profile, state_.color_profiles)) {
 					c->text_color = prof->text_color;
 					c->box_color = prof->box_color;
 				}
+				// M6-A8: Profil-Dropdown = Reset auf Profilsatz → Button-Labels
+				// auf die (neuen) Werte aktualisieren.
+				text_color_btn->setText(QString::fromUtf8(
+					(c->text_color.empty() ? "#000000" : c->text_color).c_str()).toUpper());
+				box_color_btn->setText(QString::fromUtf8(
+					(c->box_color.empty() ? "#ffffff" : c->box_color).c_str()).toUpper());
 				save_state();
 				liedplan_scene::update_everywhere(*c, false, state_.settings);
 			}
 		});
+
+	connect(new_prof_btn, &QPushButton::clicked, this, [this, card_id]() {
+		bool ok = false;
+		const QString raw_name = QInputDialog::getText(
+			this, QStringLiteral("Farbprofil speichern"),
+			QStringLiteral("Profilname:"), QLineEdit::Normal, QString(), &ok);
+		if (!ok)
+			return;
+		const QString qname = raw_name.trimmed();
+		if (qname.isEmpty()) {
+			set_dock_status(QStringLiteral("Bitte einen Profilnamen eingeben."), true);
+			return;
+		}
+		const std::string name_utf8 = qname.toUtf8().toStdString();
+		if (liedplan_is_default_profile(name_utf8)) {
+			set_dock_status(
+				QStringLiteral("\"%1\" ist ein geschütztes Standard-Profil.").arg(qname),
+				true);
+			return;
+		}
+		LiedplanCard *c = find_card_mut(card_id);
+		if (!c)
+			return;
+		const std::string tc = c->text_color.empty() ? "#000000" : c->text_color;
+		const std::string bc = c->box_color.empty() ? "#ffffff" : c->box_color;
+		LiedplanProfile prof{name_utf8, tc, bc};
+		auto it = std::find_if(state_.color_profiles.begin(), state_.color_profiles.end(),
+				       [&name_utf8](const LiedplanProfile &p) {
+					       return p.name == name_utf8;
+				       });
+		if (it != state_.color_profiles.end()) {
+			*it = std::move(prof);
+		} else {
+			state_.color_profiles.push_back(std::move(prof));
+		}
+		c->profile = name_utf8;
+		save_state();
+		rebuild_rows();
+		set_dock_status(QStringLiteral("Farbprofil \"%1\" gespeichert").arg(qname), false);
+	});
 
 	connect(color_a_btn, &QPushButton::clicked, this, [this, card_id, color_a_btn]() {
 		if (LiedplanCard *c = find_card_mut(card_id)) {
@@ -581,6 +728,39 @@ void LiedplanDock::create_row_widget(const LiedplanCard &card)
 		}
 	});
 
+	// M6-A8: Freie Text-/Box-Farbe (Color-Picker, Muster = ECKE A/B).
+	connect(text_color_btn, &QPushButton::clicked, this, [this, card_id, text_color_btn]() {
+		if (LiedplanCard *c = find_card_mut(card_id)) {
+			const QString cur_hex = QString::fromUtf8(
+				(c->text_color.empty() ? "#000000" : c->text_color).c_str());
+			const QColor chosen =
+				QColorDialog::getColor(QColor(cur_hex), this, QStringLiteral("Textfarbe"));
+			if (chosen.isValid()) {
+				const QString hex = chosen.name(QColor::HexRgb);
+				c->text_color = hex.toUtf8().toStdString();
+				text_color_btn->setText(hex.toUpper());
+				save_state();
+				liedplan_scene::update_everywhere(*c, false, state_.settings);
+			}
+		}
+	});
+
+	connect(box_color_btn, &QPushButton::clicked, this, [this, card_id, box_color_btn]() {
+		if (LiedplanCard *c = find_card_mut(card_id)) {
+			const QString cur_hex = QString::fromUtf8(
+				(c->box_color.empty() ? "#ffffff" : c->box_color).c_str());
+			const QColor chosen =
+				QColorDialog::getColor(QColor(cur_hex), this, QStringLiteral("Boxfarbe"));
+			if (chosen.isValid()) {
+				const QString hex = chosen.name(QColor::HexRgb);
+				c->box_color = hex.toUtf8().toStdString();
+				box_color_btn->setText(hex.toUpper());
+				save_state();
+				liedplan_scene::update_everywhere(*c, false, state_.settings);
+			}
+		}
+	});
+
 	connect(opacity_a_slider, &QSlider::valueChanged, this, [this, card_id](int val) {
 		if (LiedplanCard *c = find_card_mut(card_id)) {
 			c->corner_opacity_a = std::clamp(val, 0, 255);
@@ -592,6 +772,24 @@ void LiedplanDock::create_row_widget(const LiedplanCard &card)
 	connect(opacity_b_slider, &QSlider::valueChanged, this, [this, card_id](int val) {
 		if (LiedplanCard *c = find_card_mut(card_id)) {
 			c->corner_opacity_b = std::clamp(val, 0, 255);
+			save_state();
+			liedplan_scene::update_everywhere(*c, false, state_.settings);
+		}
+	});
+
+	// M6-A7: Text-/Box-Deckkraft (0–255 → Alpha von --text-color/--box-bg;
+	// --box-opacity (Show/Hide, has_any_text) bleibt davon unberührt).
+	connect(text_opacity_slider, &QSlider::valueChanged, this, [this, card_id](int val) {
+		if (LiedplanCard *c = find_card_mut(card_id)) {
+			c->text_opacity = std::clamp(val, 0, 255);
+			save_state();
+			liedplan_scene::update_everywhere(*c, false, state_.settings);
+		}
+	});
+
+	connect(box_opacity_slider, &QSlider::valueChanged, this, [this, card_id](int val) {
+		if (LiedplanCard *c = find_card_mut(card_id)) {
+			c->box_opacity = std::clamp(val, 0, 255);
 			save_state();
 			liedplan_scene::update_everywhere(*c, false, state_.settings);
 		}
@@ -1756,10 +1954,210 @@ void LiedplanDock::on_open_settings_dialog()
 
 	root->addWidget(m5_group);
 
+	// Gruppe 3 (M6-B2/B3): Eigene Farbprofile + YAML-Export/Import
+	auto *profiles_group = new QGroupBox(QStringLiteral("Farbprofile"), &dlg);
+	auto *profiles_layout = new QVBoxLayout(profiles_group);
+	profiles_layout->setContentsMargins(12, 16, 12, 12);
+	profiles_layout->setSpacing(8);
+
+	auto *lbl_custom_profiles = new QLabel(QStringLiteral("EIGENE FARBPROFILE"), profiles_group);
+	lbl_custom_profiles->setObjectName(QStringLiteral("lpFieldLabel"));
+
+	auto *profile_list = new QListWidget(profiles_group);
+	profile_list->setObjectName(QStringLiteral("lpProfileList"));
+	profile_list->setMinimumHeight(80);
+	profile_list->setMaximumHeight(130);
+
+	auto *del_prof_btn = new QPushButton(QStringLiteral("Löschen"), profiles_group);
+	del_prof_btn->setObjectName(QStringLiteral("lpBtnDeleteProfile"));
+	del_prof_btn->setIcon(theme_icon("trash.svg"));
+	del_prof_btn->setIconSize(QSize(16, 16));
+	del_prof_btn->setEnabled(false);
+
+	auto *lbl_yaml_profiles = new QLabel(QStringLiteral("YAML-EXPORT / -IMPORT"), profiles_group);
+	lbl_yaml_profiles->setObjectName(QStringLiteral("lpFieldLabel"));
+
+	auto *yaml_combo = new QComboBox(profiles_group);
+	yaml_combo->setObjectName(QStringLiteral("lpYamlProfileCombo"));
+	yaml_combo->setFixedHeight(34);
+
+	auto *yaml_btn_row = new QHBoxLayout();
+	yaml_btn_row->setSpacing(8);
+	auto *export_yaml_btn = new QPushButton(QStringLiteral("YAML exportieren …"), profiles_group);
+	export_yaml_btn->setObjectName(QStringLiteral("lpBtnExportYaml"));
+	auto *import_yaml_btn = new QPushButton(QStringLiteral("YAML importieren …"), profiles_group);
+	import_yaml_btn->setObjectName(QStringLiteral("lpBtnImportYaml"));
+	yaml_btn_row->addWidget(export_yaml_btn, 1);
+	yaml_btn_row->addWidget(import_yaml_btn, 1);
+
+	profiles_layout->addWidget(lbl_custom_profiles);
+	profiles_layout->addWidget(profile_list);
+	profiles_layout->addWidget(del_prof_btn);
+	profiles_layout->addWidget(lbl_yaml_profiles);
+	profiles_layout->addWidget(yaml_combo);
+	profiles_layout->addLayout(yaml_btn_row);
+	root->addWidget(profiles_group);
+
 	auto *status_lbl = new QLabel(&dlg);
 	status_lbl->setObjectName(QStringLiteral("lpSettingsStatus"));
 	status_lbl->setWordWrap(true);
 	root->addWidget(status_lbl);
+
+	auto refresh_profiles_ui = [this, profile_list, del_prof_btn, yaml_combo]() {
+		profile_list->clear();
+		for (const auto &cp : state_.color_profiles) {
+			const QString tc_hex = QString::fromUtf8(
+				(cp.text_color.empty() ? "#000000" : cp.text_color).c_str()).toUpper();
+			const QString bc_hex = QString::fromUtf8(
+				(cp.box_color.empty() ? "#ffffff" : cp.box_color).c_str()).toUpper();
+			const QString item_txt = QStringLiteral("%1  —  TEXT %2 · BOX %3")
+							 .arg(QString::fromUtf8(cp.name.c_str()),
+							      tc_hex, bc_hex);
+			profile_list->addItem(item_txt);
+		}
+		del_prof_btn->setEnabled(profile_list->currentRow() >= 0);
+
+		const QString prev_yaml = yaml_combo->currentText();
+		yaml_combo->clear();
+		for (const auto &sp : liedplan_profiles()) {
+			yaml_combo->addItem(QString::fromUtf8(sp.name.c_str()));
+		}
+		for (const auto &cp : state_.color_profiles) {
+			yaml_combo->addItem(QString::fromUtf8(cp.name.c_str()));
+		}
+		const int prev_idx = yaml_combo->findText(prev_yaml);
+		if (prev_idx >= 0)
+			yaml_combo->setCurrentIndex(prev_idx);
+	};
+
+	refresh_profiles_ui();
+
+	connect(profile_list, &QListWidget::currentRowChanged, &dlg,
+		[del_prof_btn](int row) {
+			del_prof_btn->setEnabled(row >= 0);
+		});
+
+	connect(del_prof_btn, &QPushButton::clicked, &dlg,
+		[this, profile_list, status_lbl, refresh_profiles_ui]() {
+			const int row = profile_list->currentRow();
+			if (row < 0 ||
+			    static_cast<std::size_t>(row) >= state_.color_profiles.size())
+				return;
+			const QString qname = QString::fromUtf8(
+				state_.color_profiles[static_cast<std::size_t>(row)].name.c_str());
+			state_.color_profiles.erase(
+				state_.color_profiles.begin() +
+				static_cast<std::ptrdiff_t>(row));
+			save_state();
+			rebuild_rows();
+			refresh_profiles_ui();
+			const QString msg = QStringLiteral("Farbprofil \"%1\" gelöscht").arg(qname);
+			status_lbl->setText(msg);
+			set_dock_status(msg, false);
+		});
+
+	connect(export_yaml_btn, &QPushButton::clicked, &dlg,
+		[this, &dlg, yaml_combo, status_lbl]() {
+			const std::string active_name =
+				yaml_combo->currentText().toUtf8().toStdString();
+			const LiedplanProfile *prof =
+				liedplan_profile_lookup(active_name, state_.color_profiles);
+			if (!prof)
+				return;
+			const QString qprof_name = QString::fromUtf8(prof->name.c_str());
+			QString sanitized = qprof_name;
+			sanitized.replace(QRegularExpression(QStringLiteral("[^a-zA-Z0-9_-]")),
+					  QStringLiteral("_"));
+			const QString default_file =
+				QStringLiteral("farbprofil_%1.yaml").arg(sanitized);
+			const QString out_file = QFileDialog::getSaveFileName(
+				&dlg, QStringLiteral("Farbprofil als YAML exportieren"),
+				default_file, QStringLiteral("YAML-Dateien (*.yaml *.yml)"));
+			if (out_file.isEmpty())
+				return;
+
+			const std::string yaml_str = liedplan_profile_to_yaml(*prof);
+			QFile f(out_file);
+			if (!f.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
+				const QString err_msg = QStringLiteral("Export fehlgeschlagen: %1")
+								.arg(f.errorString());
+				status_lbl->setText(err_msg);
+				set_dock_status(err_msg, true);
+				return;
+			}
+			const qint64 written =
+				f.write(yaml_str.data(), static_cast<qint64>(yaml_str.size()));
+			f.close();
+			if (written != static_cast<qint64>(yaml_str.size())) {
+				const QString err_msg =
+					QStringLiteral("Export fehlgeschlagen: Schreibfehler.");
+				status_lbl->setText(err_msg);
+				set_dock_status(err_msg, true);
+				return;
+			}
+
+			const QString msg =
+				QStringLiteral("Profil \"%1\" exportiert").arg(qprof_name);
+			status_lbl->setText(msg);
+			set_dock_status(msg, false);
+		});
+
+	connect(import_yaml_btn, &QPushButton::clicked, &dlg,
+		[this, &dlg, yaml_combo, status_lbl, refresh_profiles_ui]() {
+			const QString in_file = QFileDialog::getOpenFileName(
+				&dlg, QStringLiteral("Farbprofil aus YAML importieren"),
+				QString(), QStringLiteral("YAML-Dateien (*.yaml *.yml)"));
+			if (in_file.isEmpty())
+				return;
+
+			QFile f(in_file);
+			if (!f.open(QIODevice::ReadOnly)) {
+				const QString err_msg = QStringLiteral("Import fehlgeschlagen: %1")
+								.arg(f.errorString());
+				status_lbl->setText(err_msg);
+				set_dock_status(err_msg, true);
+				return;
+			}
+			const QByteArray raw = f.readAll();
+			f.close();
+
+			LiedplanProfile imported;
+			std::string parse_err;
+			if (!liedplan_yaml_to_profile(raw.toStdString(), imported, parse_err)) {
+				const QString qerr = QString::fromUtf8(parse_err.c_str());
+				status_lbl->setText(qerr);
+				set_dock_status(qerr, true);
+				return;
+			}
+
+			if (liedplan_is_default_profile(imported.name)) {
+				imported.name += " (Import)";
+			}
+
+			auto it = std::find_if(
+				state_.color_profiles.begin(), state_.color_profiles.end(),
+				[&imported](const LiedplanProfile &p) {
+					return p.name == imported.name;
+				});
+			if (it != state_.color_profiles.end()) {
+				*it = imported;
+			} else {
+				state_.color_profiles.push_back(imported);
+			}
+
+			save_state();
+			rebuild_rows();
+			refresh_profiles_ui();
+			const QString qimp_name = QString::fromUtf8(imported.name.c_str());
+			const int imp_idx = yaml_combo->findText(qimp_name);
+			if (imp_idx >= 0)
+				yaml_combo->setCurrentIndex(imp_idx);
+
+			const QString msg =
+				QStringLiteral("Profil \"%1\" importiert").arg(qimp_name);
+			status_lbl->setText(msg);
+			set_dock_status(msg, false);
+		});
 
 	auto *btn_row = new QHBoxLayout();
 	btn_row->setSpacing(8);

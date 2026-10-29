@@ -198,7 +198,8 @@ QPlainTextEdit:focus {
 	border: 1px solid #284CB8;
 }
 
-QComboBox {
+QComboBox,
+QComboBox#lpYamlProfileCombo {
 	background-color: #3C404D;
 	border: 1px solid #3C404D;
 	border-radius: 4px;
@@ -207,12 +208,15 @@ QComboBox {
 	color: #FFFFFF;
 }
 
-QComboBox:hover {
+QComboBox:hover,
+QComboBox#lpYamlProfileCombo:hover {
 	border: 1px solid #5B6273;
 }
 
 QComboBox:focus,
-QComboBox:on {
+QComboBox:on,
+QComboBox#lpYamlProfileCombo:focus,
+QComboBox#lpYamlProfileCombo:on {
 	border: 1px solid #284CB8;
 }
 
@@ -246,6 +250,10 @@ QComboBox QAbstractItemView::item:selected {
 
 QPushButton,
 QPushButton#lpBtn,
+QPushButton#lpBtnNewProfile,
+QPushButton#lpBtnDeleteProfile,
+QPushButton#lpBtnExportYaml,
+QPushButton#lpBtnImportYaml,
 QPushButton#lpColorA,
 QPushButton#lpColorB {
 	background-color: #3C404D;
@@ -256,14 +264,22 @@ QPushButton#lpColorB {
 }
 
 QPushButton#lpColorA,
-QPushButton#lpColorB {
+QPushButton#lpColorB,
+QPushButton#lpTextColor,
+QPushButton#lpBoxColor {
 	padding: 3px 8px;
 }
 
 QPushButton:hover,
 QPushButton#lpBtn:hover,
+QPushButton#lpBtnNewProfile:hover,
+QPushButton#lpBtnDeleteProfile:hover,
+QPushButton#lpBtnExportYaml:hover,
+QPushButton#lpBtnImportYaml:hover,
 QPushButton#lpColorA:hover,
-QPushButton#lpColorB:hover {
+QPushButton#lpColorB:hover,
+QPushButton#lpTextColor:hover,
+QPushButton#lpBoxColor:hover {
 	background-color: #464B59;
 }
 
@@ -564,7 +580,9 @@ QGroupBox::indicator:checked {
 
 /* ---- Tabellen ---- */
 
-QTableWidget {
+QTableWidget,
+QListWidget,
+QListWidget#lpProfileList {
 	background-color: #272A33;
 	border: 1px solid #3C404D;
 	border-radius: 4px;

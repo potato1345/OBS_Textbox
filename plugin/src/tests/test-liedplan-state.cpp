@@ -543,6 +543,140 @@ int main()
 		      err);
 	}
 
+	// 18. (M6-B3 #1) YAML-Roundtrip: Profil {Mein Profil, #aabbcc, #ddeeff} -> to_yaml -> yaml_to_profile -> identisch
+	{
+		const LiedplanProfile orig{"Mein Profil", "#aabbcc", "#ddeeff"};
+		const std::string yaml = liedplan_profile_to_yaml(orig);
+		LiedplanProfile parsed;
+		std::string err;
+		const bool ok = liedplan_yaml_to_profile(yaml, parsed, err) && err.empty() &&
+				(parsed == orig);
+		check(ok, "18. M6-B3 YAML-Roundtrip: liedplan_profile_to_yaml -> liedplan_yaml_to_profile identisch",
+		      err);
+	}
+
+	// 19. (M6-B3 #2) v2-18-Key-YAML-Import: alle 18 COLOR_KEYS + Kommentare -> extrahiert exakt textColor + cardOuterBg
+	{
+		const std::string v2_yaml = R"(# ============================================================
+# OBS Textbox Farbprofil (v2 18-Key Export)
+# ============================================================
+name: "Midnight Blue"
+colors:
+  bgPrimary: "#0d1117"
+  bgPrimaryOpacity: 255
+  bgSecondary: "#161b22"
+  bgSecondaryOpacity: 255
+  panelBg: "#1c2333"
+  panelBgOpacity: 255
+  border: "#30363d"
+  borderOpacity: 255
+  cardOuterBg: "#252d3a"
+  cardOuterBgOpacity: 255
+  panelBgAlt: "#2a3342"
+  panelBgAltOpacity: 255
+  btnHoverBg: "#2d3748"
+  btnHoverBgOpacity: 255
+  textColor: "#c9d1d9"
+  textColorOpacity: 255
+  accentBlue: "#58a6ff"
+  accentBlueOpacity: 255
+)";
+		LiedplanProfile parsed;
+		std::string err;
+		const bool ok = liedplan_yaml_to_profile(v2_yaml, parsed, err) && err.empty() &&
+				parsed.name == "Midnight Blue" &&
+				parsed.text_color == "#c9d1d9" &&
+				parsed.box_color == "#252d3a";
+		check(ok, "19. M6-B3 v2-18-Key-YAML-Import: extrahiert exakt textColor + cardOuterBg, ignoriert übrige 16 Keys",
+		      err);
+	}
+
+	// 20. (M6-B3 #3) YAML-Fehlerpfade: leerer Name, keine Color-Keys, ungültiges Hex-Format
+	{
+		LiedplanProfile p1, p2, p3;
+		std::string err1, err2, err3;
+		const bool res1 = liedplan_yaml_to_profile(
+			"name: \"\"\ncolors:\n  textColor: \"#112233\"\n  cardOuterBg: \"#445566\"\n",
+			p1, err1);
+		const bool res2 = liedplan_yaml_to_profile(
+			"name: \"Ohne Farben\"\ncolors:\n  bgPrimary: \"#112233\"\n",
+			p2, err2);
+		const bool res3 = liedplan_yaml_to_profile(
+			"name: \"Defekt\"\ncolors:\n  textColor: \"zzz\"\n  cardOuterBg: \"#445566\"\n",
+			p3, err3);
+
+		const bool ok = !res1 && err1 == "Profilname fehlt." && !res2 &&
+				err2.rfind("Keine Farben", 0) == 0 && !res3 &&
+				err3.rfind("Ungültige Farbformat", 0) == 0;
+		check(ok, "20. M6-B3 YAML-Fehlerpfade: leerer Name, keine Farben, ungültiges Farbformat",
+		      err1 + " | " + err2 + " | " + err3);
+	}
+
+	// 21. (M6-B3 #4) YAML-Defaults/Quoting: 3-Digit-Hex, '-Quotes, fehlendes box_color -> #ffffff-Default
+	{
+		const std::string yaml_single =
+			"name: 'Single Quoted'\ncolors:\n  textColor: '#AbC'\n";
+		LiedplanProfile parsed;
+		std::string err;
+		const bool ok = liedplan_yaml_to_profile(yaml_single, parsed, err) &&
+				err.empty() && parsed.name == "Single Quoted" &&
+				parsed.text_color == "#AbC" && parsed.box_color == "#ffffff";
+		check(ok, "21. M6-B3 YAML-Defaults/Quoting: 3-Digit-Hex, '-Quotes und #ffffff-Default bei fehlendem cardOuterBg",
+		      err);
+	}
+
+	// 22. (M6-B2 #5) Lookup: Standard vor Custom, Custom gefunden, unbekannter Name -> nullptr
+	{
+		const std::vector<LiedplanProfile> custom = {
+			{"OBS Dark", "#111111", "#222222"},
+			{"Kirchen-Gold", "#fce647", "#2a1f0d"},
+		};
+		const LiedplanProfile *std_hit = liedplan_profile_lookup("OBS Dark", custom);
+		const LiedplanProfile *cust_hit = liedplan_profile_lookup("Kirchen-Gold", custom);
+		const LiedplanProfile *miss = liedplan_profile_lookup("Unbekannt", custom);
+
+		const bool ok = (std_hit != nullptr && std_hit->text_color == "#eff0f1" &&
+				 std_hit->box_color == "#3C404D") &&
+				(cust_hit != nullptr && cust_hit->text_color == "#fce647" &&
+				 cust_hit->box_color == "#2a1f0d") &&
+				(miss == nullptr);
+		check(ok, "22. M6-B2 Lookup: Standard vor Custom, Custom wird gefunden, Unbekannt -> nullptr");
+	}
+
+	// 23. (M6-B2 #6) State-Seriale: 2 Custom-Profile -> save -> load -> identisch; JSON ohne Key -> leer; reset() -> leer
+	{
+		const std::string path = (temp_dir / "roundtrip_m6_profiles.json").u8string();
+		LiedplanState s1;
+		s1.color_profiles.push_back({"Profil A", "#112233", "#445566"});
+		s1.color_profiles.push_back({"Profil B", "#aabbcc", "#ddeeff"});
+
+		const std::string save_err = s1.save(path);
+		LiedplanState s2;
+		const std::string load_err = s2.load(path);
+
+		const bool roundtrip_ok =
+			save_err.empty() && load_err.empty() && (s1 == s2) &&
+			s2.color_profiles.size() == 2 &&
+			s2.color_profiles[0] == LiedplanProfile{"Profil A", "#112233", "#445566"} &&
+			s2.color_profiles[1] == LiedplanProfile{"Profil B", "#aabbcc", "#ddeeff"};
+
+		// JSON ohne "color_profiles"-Key -> leer (Backward-Compat)
+		LiedplanState s3;
+		s3.color_profiles.push_back({"Alt", "#000000", "#ffffff"});
+		const std::string back_err =
+			s3.load((temp_dir / "legacy_m4_no_anim.json").u8string());
+		const bool back_ok = back_err.empty() && s3.color_profiles.empty();
+
+		// reset() -> leer
+		s2.reset();
+		const bool reset_ok = s2.color_profiles.empty() && s2.cards.empty() &&
+				      s2.next_id == 1;
+
+		check(roundtrip_ok && back_ok && reset_ok,
+		      "23. M6-B2 State-Seriale: save->load mit 2 Custom-Profilen, JSON ohne Key -> leer, reset() -> leer",
+		      save_err + " " + load_err + " " + back_err);
+	}
+
 	std::error_code ec;
 	std::filesystem::remove_all(temp_dir, ec);
 
@@ -550,6 +684,6 @@ int main()
 		std::cerr << g_failures << " test(s) failed.\n";
 		return 1;
 	}
-	std::cout << "All 17 checks passed.\n";
+	std::cout << "All 23 checks passed.\n";
 	return 0;
 }
