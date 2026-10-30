@@ -58,7 +58,7 @@ QDialog#lpSettingsDialog {
 
 QWidget#liedplanDock {
 	background-color: #1D1F26;
-	border: 1px solid #464B59;
+	border: 1px solid #5B6273;
 }
 
 QScrollArea {
