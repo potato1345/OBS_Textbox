@@ -90,6 +90,12 @@ int main()
 	      "version file matches kVersion");
 	check(read_file(dir / "icons" / "plus.svg").find("<svg") != std::string::npos,
 	      "plus.svg contains <svg");
+	const std::string chev_r = read_file(dir / "icons" / "chevron_right.svg");
+	check(chev_r.find("<svg") != std::string::npos && chev_r.find("</svg>") != std::string::npos,
+	      "chevron_right.svg present and SVG well-formed");
+	const std::string chev_d = read_file(dir / "icons" / "chevron_down.svg");
+	check(chev_d.find("<svg") != std::string::npos && chev_d.find("</svg>") != std::string::npos,
+	      "chevron_down.svg present and SVG well-formed");
 
 	// 2. No-Op: zweiter Call ohne force -> true, Inhalte unveraendert
 	const std::string plus_before = read_file(dir / "icons" / "plus.svg");

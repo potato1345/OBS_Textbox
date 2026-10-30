@@ -28,10 +28,12 @@ with this program. If not, see <https://www.gnu.org/licenses/>
 
 #include <obs.h>
 
+#include <QAction>
 #include <QCheckBox>
 #include <QColor>
 #include <QColorDialog>
 #include <QComboBox>
+#include <QCompleter>
 #include <QDate>
 #include <QDialog>
 #include <QFile>
@@ -45,6 +47,7 @@ with this program. If not, see <https://www.gnu.org/licenses/>
 #include <QLabel>
 #include <QLineEdit>
 #include <QListWidget>
+#include <QMenu>
 #include <QMessageBox>
 #include <QMetaObject>
 #include <QPlainTextEdit>
@@ -52,11 +55,16 @@ with this program. If not, see <https://www.gnu.org/licenses/>
 #include <QPushButton>
 #include <QRegularExpression>
 #include <QScrollArea>
+#include <QSignalBlocker>
 #include <QSizePolicy>
 #include <QSlider>
+#include <QStyle>
 #include <QTableWidget>
 #include <QTableWidgetItem>
+#include <QTimer>
+#include <QToolButton>
 #include <QVBoxLayout>
+#include <QVariant>
 
 #include <algorithm>
 #include <filesystem>
@@ -97,93 +105,175 @@ LiedplanDock::LiedplanDock(const std::string &state_path, QWidget *parent)
 	setStyleSheet(liedplan_theme::stylesheet(icon_dir_));
 
 	auto *root_layout = new QVBoxLayout(this);
-	root_layout->setContentsMargins(8, 8, 8, 8);
-	root_layout->setSpacing(6);
+	root_layout->setContentsMargins(4, 4, 4, 4);
+	root_layout->setSpacing(4);
 
-	auto *button_row = new QHBoxLayout();
-	button_row->setContentsMargins(8, 2, 8, 2);
-	button_row->setSpacing(8);
+	auto *top_row = new QHBoxLayout();
+	top_row->setContentsMargins(4, 0, 4, 2);
+	top_row->setSpacing(8);
 
-	auto *add_btn = new QPushButton(QStringLiteral("Neue Karte"), this);
-	add_btn->setObjectName(QStringLiteral("lpBtnAccent"));
-	add_btn->setIcon(theme_icon("plus.svg"));
-	add_btn->setIconSize(QSize(16, 16));
+	profil_select_ = new QComboBox(this);
+	profil_select_->setEditable(true);
+	profil_select_->setInsertPolicy(QComboBox::NoInsert);
+	profil_select_->setMinimumWidth(160);
+	if (QCompleter *c = profil_select_->completer()) {
+		c->setCaseSensitivity(Qt::CaseInsensitive);
+		c->setFilterMode(Qt::MatchContains);
+	}
+	if (profil_select_->lineEdit()) {
+		profil_select_->lineEdit()->setPlaceholderText(QStringLiteral("Profil suchen…"));
+	}
 
-	auto *clear_btn = new QPushButton(QStringLiteral("Alle löschen"), this);
-	clear_btn->setObjectName(QStringLiteral("lpBtnRed"));
-	clear_btn->setIcon(theme_icon("trash.svg"));
-	clear_btn->setIconSize(QSize(16, 16));
+	card_search_ = new QComboBox(this);
+	card_search_->setEditable(true);
+	card_search_->setInsertPolicy(QComboBox::NoInsert);
+	card_search_->setMinimumWidth(140);
+	if (QCompleter *c = card_search_->completer()) {
+		c->setCaseSensitivity(Qt::CaseInsensitive);
+		c->setFilterMode(Qt::MatchContains);
+	}
+	if (card_search_->lineEdit()) {
+		card_search_->lineEdit()->setPlaceholderText(QStringLiteral("Karte suchen…"));
+	}
 
-	auto *import_btn = new QPushButton(QStringLiteral("Import"), this);
-	import_btn->setObjectName(QStringLiteral("lpBtnImport"));
-	import_btn->setIcon(theme_icon("download.svg"));
-	import_btn->setIconSize(QSize(16, 16));
+	top_row->addWidget(profil_select_, 1);
+	top_row->addWidget(card_search_, 1);
+	root_layout->addLayout(top_row);
 
-	button_row->addWidget(add_btn);
-	button_row->addWidget(clear_btn);
-	button_row->addWidget(import_btn);
-	button_row->addStretch(1);
-	root_layout->addLayout(button_row);
+	scroll_area_ = new QScrollArea(this);
+	scroll_area_->setWidgetResizable(true);
+	scroll_area_->setFrameShape(QFrame::NoFrame);
 
-	auto *button_row_m4 = new QHBoxLayout();
-	button_row_m4->setContentsMargins(8, 2, 8, 2);
-	button_row_m4->setSpacing(8);
-
-	auto *quick_btn = new QPushButton(QStringLiteral("Schnell-Profile"), this);
-	quick_btn->setObjectName(QStringLiteral("lpBtnQuickProfiles"));
-
-	auto *backup_btn = new QPushButton(QStringLiteral("Backup"), this);
-	backup_btn->setObjectName(QStringLiteral("lpBtnBackup"));
-	backup_btn->setIcon(theme_icon("save.svg"));
-	backup_btn->setIconSize(QSize(16, 16));
-
-	auto *restore_btn = new QPushButton(QStringLiteral("Restore"), this);
-	restore_btn->setObjectName(QStringLiteral("lpBtnRestore"));
-	restore_btn->setIcon(theme_icon("revert.svg"));
-	restore_btn->setIconSize(QSize(16, 16));
-
-	auto *settings_btn = new QPushButton(QStringLiteral("Einstellungen"), this);
-	settings_btn->setObjectName(QStringLiteral("lpBtnSettings"));
-	settings_btn->setIcon(theme_icon("cogs.svg"));
-	settings_btn->setIconSize(QSize(16, 16));
-
-	button_row_m4->addWidget(quick_btn);
-	button_row_m4->addWidget(backup_btn);
-	button_row_m4->addWidget(restore_btn);
-	button_row_m4->addWidget(settings_btn);
-	button_row_m4->addStretch(1);
-	root_layout->addLayout(button_row_m4);
-
-	dock_status_lbl_ = new QLabel(this);
-	dock_status_lbl_->setObjectName(QStringLiteral("lpDockStatus"));
-	dock_status_lbl_->setContentsMargins(8, 0, 8, 0);
-	dock_status_lbl_->setWordWrap(true);
-	dock_status_lbl_->setVisible(false);
-	root_layout->addWidget(dock_status_lbl_);
-
-	auto *scroll_area = new QScrollArea(this);
-	scroll_area->setWidgetResizable(true);
-	scroll_area->setFrameShape(QFrame::NoFrame);
-
-	auto *cards_container = new QWidget(scroll_area);
+	auto *cards_container = new QWidget(scroll_area_);
 	cards_container->setObjectName(QStringLiteral("lpCardsContainer"));
 	cards_container->setAttribute(Qt::WA_StyledBackground, true);
 
 	cards_layout_ = new QVBoxLayout(cards_container);
-	cards_layout_->setContentsMargins(8, 8, 8, 8);
-	cards_layout_->setSpacing(12);
+	cards_layout_->setContentsMargins(4, 4, 4, 4);
+	cards_layout_->setSpacing(8);
 	cards_layout_->addStretch(1);
 
-	scroll_area->setWidget(cards_container);
-	root_layout->addWidget(scroll_area, 1);
+	scroll_area_->setWidget(cards_container);
+	root_layout->addWidget(scroll_area_, 1);
 
-	connect(add_btn, &QPushButton::clicked, this, &LiedplanDock::on_add_card);
-	connect(clear_btn, &QPushButton::clicked, this, &LiedplanDock::on_clear_all);
-	connect(import_btn, &QPushButton::clicked, this, &LiedplanDock::on_open_import_dialog);
-	connect(quick_btn, &QPushButton::clicked, this, &LiedplanDock::on_open_quick_profiles_dialog);
-	connect(backup_btn, &QPushButton::clicked, this, &LiedplanDock::on_backup_state);
-	connect(restore_btn, &QPushButton::clicked, this, &LiedplanDock::on_restore_state);
-	connect(settings_btn, &QPushButton::clicked, this, &LiedplanDock::on_open_settings_dialog);
+	dock_status_lbl_ = new QLabel(this);
+	dock_status_lbl_->setObjectName(QStringLiteral("lpDockStatus"));
+	dock_status_lbl_->setContentsMargins(4, 0, 4, 0);
+	dock_status_lbl_->setWordWrap(true);
+	dock_status_lbl_->setVisible(false);
+	root_layout->addWidget(dock_status_lbl_);
+
+	auto *bottom_toolbar = new QHBoxLayout();
+	bottom_toolbar->setContentsMargins(4, 2, 4, 4);
+	bottom_toolbar->setSpacing(6);
+
+	auto make_tool_btn = [this](const QString &obj_name, const char *icon_name,
+				    const QString &tooltip) -> QToolButton * {
+		auto *btn = new QToolButton(this);
+		btn->setObjectName(obj_name);
+		btn->setFixedSize(32, 32);
+		btn->setAutoRaise(true);
+		btn->setIcon(theme_icon(icon_name));
+		btn->setIconSize(QSize(16, 16));
+		btn->setToolTip(tooltip);
+		return btn;
+	};
+
+	auto *tool_add = make_tool_btn(QStringLiteral("lpToolAdd"), "plus.svg",
+				       QStringLiteral("Neue Karte"));
+	auto *tool_clear = make_tool_btn(QStringLiteral("lpToolClear"), "trash.svg",
+					 QStringLiteral("Alle Karten löschen"));
+	auto *tool_import = make_tool_btn(
+		QStringLiteral("lpToolImport"), "download.svg",
+		QStringLiteral("AI-Import / Datei-Import (CSV, XLSX, ZIP, Google)"));
+	auto *tool_settings = make_tool_btn(
+		QStringLiteral("lpToolSettings"), "cogs.svg",
+		QStringLiteral("Schnell-Profile / Einstellungen / Backup / Restore"));
+	tool_settings->setPopupMode(QToolButton::InstantPopup);
+
+	auto *settings_menu = new QMenu(tool_settings);
+	QAction *act_quick = settings_menu->addAction(QStringLiteral("Schnell-Profile…"));
+	settings_menu->addSeparator();
+	QAction *act_settings = settings_menu->addAction(QStringLiteral("Einstellungen…"));
+	settings_menu->addSeparator();
+	QAction *act_backup = settings_menu->addAction(QStringLiteral("Backup"));
+	QAction *act_restore = settings_menu->addAction(QStringLiteral("Restore"));
+	tool_settings->setMenu(settings_menu);
+
+	bottom_toolbar->addWidget(tool_add);
+	bottom_toolbar->addWidget(tool_clear);
+	bottom_toolbar->addWidget(tool_import);
+	bottom_toolbar->addWidget(tool_settings);
+	bottom_toolbar->addStretch(1);
+	root_layout->addLayout(bottom_toolbar);
+
+	connect(tool_add, &QToolButton::clicked, this, &LiedplanDock::on_add_card);
+	connect(tool_clear, &QToolButton::clicked, this, &LiedplanDock::on_clear_all);
+	connect(tool_import, &QToolButton::clicked, this, &LiedplanDock::on_open_import_dialog);
+	connect(act_quick, &QAction::triggered, this, &LiedplanDock::on_open_quick_profiles_dialog);
+	connect(act_settings, &QAction::triggered, this, &LiedplanDock::on_open_settings_dialog);
+	connect(act_backup, &QAction::triggered, this, &LiedplanDock::on_backup_state);
+	connect(act_restore, &QAction::triggered, this, &LiedplanDock::on_restore_state);
+
+	connect(profil_select_, QOverload<int>::of(&QComboBox::activated), this, [this](int idx) {
+		if (idx <= 0)
+			return;
+		const QString prof_name = profil_select_->itemData(idx).toString();
+		if (!prof_name.isEmpty())
+			apply_quick_profile(prof_name.toUtf8().toStdString());
+	});
+	if (profil_select_->lineEdit()) {
+		connect(profil_select_->lineEdit(), &QLineEdit::returnPressed, this, [this]() {
+			const QString query = profil_select_->currentText().trimmed();
+			if (query.isEmpty() || query == QStringLiteral("(keines)"))
+				return;
+			for (const auto &qp : state_.quick_profiles) {
+				if (QString::fromUtf8(qp.name.c_str())
+					    .compare(query, Qt::CaseInsensitive) == 0) {
+					apply_quick_profile(qp.name);
+					return;
+				}
+			}
+		});
+	}
+
+	connect(card_search_, QOverload<int>::of(&QComboBox::activated), this, [this](int idx) {
+		if (idx < 0)
+			return;
+		const QString id_q = card_search_->itemData(idx).toString();
+		if (!id_q.isEmpty())
+			flash_row(id_q.toUtf8().toStdString());
+	});
+	if (card_search_->lineEdit()) {
+		connect(card_search_->lineEdit(), &QLineEdit::returnPressed, this, [this]() {
+			const QString query = card_search_->currentText().trimmed();
+			if (query.isEmpty())
+				return;
+			int match_idx = -1;
+			for (int i = 0; i < card_search_->count(); ++i) {
+				if (card_search_->itemData(i).toString().compare(
+					    query, Qt::CaseInsensitive) == 0 ||
+				    card_search_->itemText(i).compare(query, Qt::CaseInsensitive) ==
+					    0) {
+					match_idx = i;
+					break;
+				}
+			}
+			if (match_idx < 0) {
+				for (int i = 0; i < card_search_->count(); ++i) {
+					if (card_search_->itemText(i).contains(
+						    query, Qt::CaseInsensitive)) {
+						match_idx = i;
+						break;
+					}
+				}
+			}
+			if (match_idx >= 0) {
+				const QString id_q = card_search_->itemData(match_idx).toString();
+				flash_row(id_q.toUtf8().toStdString());
+			}
+		});
+	}
 
 	bool file_exists = false;
 	if (!state_path_.empty()) {
@@ -201,7 +291,7 @@ LiedplanDock::LiedplanDock(const std::string &state_path, QWidget *parent)
 	}
 
 	rebuild_rows();
-	setMinimumSize(440, 260);
+	setMinimumSize(360, 240);
 }
 
 LiedplanCard *LiedplanDock::find_card_mut(const std::string &id)
@@ -224,11 +314,12 @@ void LiedplanDock::create_row_widget(const LiedplanCard &card)
 {
 	auto *row_widget = new QFrame(this);
 	row_widget->setObjectName(QStringLiteral("lpCardOuter"));
+	row_widget->setProperty("lpCardId", QString::fromUtf8(card.id.c_str()));
 	row_widget->setMinimumWidth(320);
 	row_widget->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
 
 	auto *outer_layout = new QVBoxLayout(row_widget);
-	outer_layout->setContentsMargins(2, 2, 2, 2);
+	outer_layout->setContentsMargins(1, 1, 1, 1);
 	outer_layout->setSpacing(0);
 
 	auto *card_inner = new QFrame(row_widget);
@@ -236,13 +327,13 @@ void LiedplanDock::create_row_widget(const LiedplanCard &card)
 	outer_layout->addWidget(card_inner);
 
 	auto *inner_layout = new QVBoxLayout(card_inner);
-	inner_layout->setContentsMargins(16, 16, 16, 16);
-	inner_layout->setSpacing(10);
+	inner_layout->setContentsMargins(10, 10, 10, 10);
+	inner_layout->setSpacing(8);
 
 	auto *id_bar = new QFrame(card_inner);
 	id_bar->setObjectName(QStringLiteral("lpIdBar"));
 	auto *id_layout = new QHBoxLayout(id_bar);
-	id_layout->setContentsMargins(12, 6, 12, 6);
+	id_layout->setContentsMargins(8, 4, 8, 4);
 	id_layout->setSpacing(8);
 
 	auto *id_prefix = new QLabel(QStringLiteral("ID"), id_bar);
@@ -250,6 +341,14 @@ void LiedplanDock::create_row_widget(const LiedplanCard &card)
 
 	auto *id_label = new QLabel(QString::fromUtf8(card.id.c_str()), id_bar);
 	id_label->setObjectName(QStringLiteral("lpIdValue"));
+
+	auto *style_toggle_btn = new QToolButton(id_bar);
+	style_toggle_btn->setObjectName(QStringLiteral("lpStyleToggle"));
+	style_toggle_btn->setFixedSize(28, 28);
+	style_toggle_btn->setAutoRaise(true);
+	style_toggle_btn->setIcon(theme_icon("chevron_right.svg"));
+	style_toggle_btn->setIconSize(QSize(16, 16));
+	style_toggle_btn->setToolTip(QStringLiteral("Stil-Optionen ausklappen"));
 
 	auto *del_btn = new QPushButton(id_bar);
 	del_btn->setObjectName(QStringLiteral("lpDelBtn"));
@@ -261,6 +360,7 @@ void LiedplanDock::create_row_widget(const LiedplanCard &card)
 	id_layout->addWidget(id_prefix);
 	id_layout->addWidget(id_label);
 	id_layout->addStretch(1);
+	id_layout->addWidget(style_toggle_btn);
 	id_layout->addWidget(del_btn);
 	inner_layout->addWidget(id_bar);
 	inner_layout->addSpacing(2);
@@ -291,11 +391,17 @@ void LiedplanDock::create_row_widget(const LiedplanCard &card)
 	auto *edit_zeile3 =
 		make_field_row(QStringLiteral("LIEDTITEL"), card.zeile3, QStringLiteral("Liedtitel"), inner_layout);
 
+	auto *style_section = new QFrame(card_inner);
+	style_section->setObjectName(QStringLiteral("lpStyleSection"));
+	auto *style_layout = new QVBoxLayout(style_section);
+	style_layout->setContentsMargins(0, 0, 0, 0);
+	style_layout->setSpacing(8);
+
 	auto *prof_layout = new QVBoxLayout();
 	prof_layout->setContentsMargins(0, 0, 0, 0);
 	prof_layout->setSpacing(4);
 
-	auto *lbl_prof = new QLabel(QStringLiteral("PROFIL"), card_inner);
+	auto *lbl_prof = new QLabel(QStringLiteral("PROFIL"), style_section);
 	lbl_prof->setObjectName(QStringLiteral("lpFieldLabel"));
 
 	auto *prof_row = new QHBoxLayout();
@@ -308,7 +414,7 @@ void LiedplanDock::create_row_widget(const LiedplanCard &card)
 	 * bleibt das harmlos: die auf der Karte gebakten Farben (text_color /
 	 * box_color) werden NICHT automatisch zurückgesetzt.
 	 */
-	auto *profile_combo = new QComboBox(card_inner);
+	auto *profile_combo = new QComboBox(style_section);
 	profile_combo->setFixedHeight(34);
 	int selected_index = 0;
 	const auto &profiles = liedplan_profiles();
@@ -325,7 +431,7 @@ void LiedplanDock::create_row_widget(const LiedplanCard &card)
 	}
 	profile_combo->setCurrentIndex(selected_index);
 
-	auto *new_prof_btn = new QPushButton(QStringLiteral("Profil +"), card_inner);
+	auto *new_prof_btn = new QPushButton(QStringLiteral("Profil +"), style_section);
 	new_prof_btn->setObjectName(QStringLiteral("lpBtnNewProfile"));
 	new_prof_btn->setFixedHeight(34);
 	new_prof_btn->setToolTip(
@@ -336,7 +442,7 @@ void LiedplanDock::create_row_widget(const LiedplanCard &card)
 
 	prof_layout->addWidget(lbl_prof);
 	prof_layout->addLayout(prof_row);
-	inner_layout->addLayout(prof_layout);
+	style_layout->addLayout(prof_layout);
 
 	// M6-A8: Freie Text-/Box-Farbe (Color-Picker). PROFIL-Dropdown bleibt
 	// "Reset auf Profilsatz" und aktualisiert die Button-Labels (s. Connect unten).
@@ -348,26 +454,26 @@ void LiedplanDock::create_row_widget(const LiedplanCard &card)
 	auto *text_color_layout = new QVBoxLayout();
 	text_color_layout->setContentsMargins(0, 0, 0, 0);
 	text_color_layout->setSpacing(4);
-	auto *lbl_text_color = new QLabel(QStringLiteral("TEXT-FARBE"), card_inner);
+	auto *lbl_text_color = new QLabel(QStringLiteral("TEXT-FARBE"), style_section);
 	lbl_text_color->setObjectName(QStringLiteral("lpFieldLabel"));
-	auto *text_color_btn = new QPushButton(hex_text, card_inner);
+	auto *text_color_btn = new QPushButton(hex_text, style_section);
 	text_color_btn->setObjectName(QStringLiteral("lpTextColor"));
 	text_color_btn->setFixedHeight(34);
 	text_color_layout->addWidget(lbl_text_color);
 	text_color_layout->addWidget(text_color_btn);
-	inner_layout->addLayout(text_color_layout);
+	style_layout->addLayout(text_color_layout);
 
 	auto *box_color_layout = new QVBoxLayout();
 	box_color_layout->setContentsMargins(0, 0, 0, 0);
 	box_color_layout->setSpacing(4);
-	auto *lbl_box_color = new QLabel(QStringLiteral("BOX-FARBE"), card_inner);
+	auto *lbl_box_color = new QLabel(QStringLiteral("BOX-FARBE"), style_section);
 	lbl_box_color->setObjectName(QStringLiteral("lpFieldLabel"));
-	auto *box_color_btn = new QPushButton(hex_box, card_inner);
+	auto *box_color_btn = new QPushButton(hex_box, style_section);
 	box_color_btn->setObjectName(QStringLiteral("lpBoxColor"));
 	box_color_btn->setFixedHeight(34);
 	box_color_layout->addWidget(lbl_box_color);
 	box_color_layout->addWidget(box_color_btn);
-	inner_layout->addLayout(box_color_layout);
+	style_layout->addLayout(box_color_layout);
 
 	const QString hex_a =
 		QString::fromUtf8((card.corner_color_a.empty() ? "#fce647" : card.corner_color_a).c_str()).toUpper();
@@ -377,40 +483,40 @@ void LiedplanDock::create_row_widget(const LiedplanCard &card)
 	auto *corner_a_layout = new QVBoxLayout();
 	corner_a_layout->setContentsMargins(0, 0, 0, 0);
 	corner_a_layout->setSpacing(4);
-	auto *lbl_corner_a = new QLabel(QStringLiteral("ECKE A"), card_inner);
+	auto *lbl_corner_a = new QLabel(QStringLiteral("ECKE A"), style_section);
 	lbl_corner_a->setObjectName(QStringLiteral("lpFieldLabel"));
-	auto *color_a_btn = new QPushButton(hex_a, card_inner);
+	auto *color_a_btn = new QPushButton(hex_a, style_section);
 	color_a_btn->setObjectName(QStringLiteral("lpColorA"));
 	color_a_btn->setFixedHeight(34);
 	corner_a_layout->addWidget(lbl_corner_a);
 	corner_a_layout->addWidget(color_a_btn);
-	inner_layout->addLayout(corner_a_layout);
+	style_layout->addLayout(corner_a_layout);
 
 	auto *corner_b_layout = new QVBoxLayout();
 	corner_b_layout->setContentsMargins(0, 0, 0, 0);
 	corner_b_layout->setSpacing(4);
-	auto *lbl_corner_b = new QLabel(QStringLiteral("ECKE B"), card_inner);
+	auto *lbl_corner_b = new QLabel(QStringLiteral("ECKE B"), style_section);
 	lbl_corner_b->setObjectName(QStringLiteral("lpFieldLabel"));
-	auto *color_b_btn = new QPushButton(hex_b, card_inner);
+	auto *color_b_btn = new QPushButton(hex_b, style_section);
 	color_b_btn->setObjectName(QStringLiteral("lpColorB"));
 	color_b_btn->setFixedHeight(34);
 	corner_b_layout->addWidget(lbl_corner_b);
 	corner_b_layout->addWidget(color_b_btn);
-	inner_layout->addLayout(corner_b_layout);
+	style_layout->addLayout(corner_b_layout);
 
 	auto *opacity_layout = new QVBoxLayout();
 	opacity_layout->setContentsMargins(0, 0, 0, 0);
 	opacity_layout->setSpacing(4);
-	auto *lbl_opacity = new QLabel(QStringLiteral("ECKEN-DECKKRAFT"), card_inner);
+	auto *lbl_opacity = new QLabel(QStringLiteral("ECKEN-DECKKRAFT"), style_section);
 	lbl_opacity->setObjectName(QStringLiteral("lpFieldLabel"));
 	opacity_layout->addWidget(lbl_opacity);
 
 	auto *opacity_a_row = new QHBoxLayout();
 	opacity_a_row->setContentsMargins(0, 0, 0, 0);
 	opacity_a_row->setSpacing(8);
-	auto *lbl_op_a = new QLabel(QStringLiteral("A"), card_inner);
+	auto *lbl_op_a = new QLabel(QStringLiteral("A"), style_section);
 	lbl_op_a->setObjectName(QStringLiteral("lpFieldLabel"));
-	auto *opacity_a_slider = new QSlider(Qt::Horizontal, card_inner);
+	auto *opacity_a_slider = new QSlider(Qt::Horizontal, style_section);
 	opacity_a_slider->setObjectName(QStringLiteral("lpOpacityA"));
 	opacity_a_slider->setRange(0, 255);
 	opacity_a_slider->setValue(std::clamp(card.corner_opacity_a, 0, 255));
@@ -421,9 +527,9 @@ void LiedplanDock::create_row_widget(const LiedplanCard &card)
 	auto *opacity_b_row = new QHBoxLayout();
 	opacity_b_row->setContentsMargins(0, 0, 0, 0);
 	opacity_b_row->setSpacing(8);
-	auto *lbl_op_b = new QLabel(QStringLiteral("B"), card_inner);
+	auto *lbl_op_b = new QLabel(QStringLiteral("B"), style_section);
 	lbl_op_b->setObjectName(QStringLiteral("lpFieldLabel"));
-	auto *opacity_b_slider = new QSlider(Qt::Horizontal, card_inner);
+	auto *opacity_b_slider = new QSlider(Qt::Horizontal, style_section);
 	opacity_b_slider->setObjectName(QStringLiteral("lpOpacityB"));
 	opacity_b_slider->setRange(0, 255);
 	opacity_b_slider->setValue(std::clamp(card.corner_opacity_b, 0, 255));
@@ -431,7 +537,7 @@ void LiedplanDock::create_row_widget(const LiedplanCard &card)
 	opacity_b_row->addWidget(opacity_b_slider, 1);
 	opacity_layout->addLayout(opacity_b_row);
 
-	inner_layout->addLayout(opacity_layout);
+	style_layout->addLayout(opacity_layout);
 
 	// M6-A7: Text-/Box-Deckkraft (0–255). Alpha wandert über die rgba()-Werte von
 	// --box-bg/--text-color in build_inject_css/push_update; --box-opacity (Show/Hide)
@@ -439,16 +545,16 @@ void LiedplanDock::create_row_widget(const LiedplanCard &card)
 	auto *textbox_opacity_layout = new QVBoxLayout();
 	textbox_opacity_layout->setContentsMargins(0, 0, 0, 0);
 	textbox_opacity_layout->setSpacing(4);
-	auto *lbl_textbox_opacity = new QLabel(QStringLiteral("TEXT-/BOX-DECKKRAFT"), card_inner);
+	auto *lbl_textbox_opacity = new QLabel(QStringLiteral("TEXT-/BOX-DECKKRAFT"), style_section);
 	lbl_textbox_opacity->setObjectName(QStringLiteral("lpFieldLabel"));
 	textbox_opacity_layout->addWidget(lbl_textbox_opacity);
 
 	auto *text_opacity_row = new QHBoxLayout();
 	text_opacity_row->setContentsMargins(0, 0, 0, 0);
 	text_opacity_row->setSpacing(8);
-	auto *lbl_op_text = new QLabel(QStringLiteral("TEXT"), card_inner);
+	auto *lbl_op_text = new QLabel(QStringLiteral("TEXT"), style_section);
 	lbl_op_text->setObjectName(QStringLiteral("lpFieldLabel"));
-	auto *text_opacity_slider = new QSlider(Qt::Horizontal, card_inner);
+	auto *text_opacity_slider = new QSlider(Qt::Horizontal, style_section);
 	text_opacity_slider->setObjectName(QStringLiteral("lpOpacityText"));
 	text_opacity_slider->setRange(0, 255);
 	text_opacity_slider->setValue(std::clamp(card.text_opacity, 0, 255));
@@ -459,9 +565,9 @@ void LiedplanDock::create_row_widget(const LiedplanCard &card)
 	auto *box_opacity_row = new QHBoxLayout();
 	box_opacity_row->setContentsMargins(0, 0, 0, 0);
 	box_opacity_row->setSpacing(8);
-	auto *lbl_op_box = new QLabel(QStringLiteral("BOX"), card_inner);
+	auto *lbl_op_box = new QLabel(QStringLiteral("BOX"), style_section);
 	lbl_op_box->setObjectName(QStringLiteral("lpFieldLabel"));
-	auto *box_opacity_slider = new QSlider(Qt::Horizontal, card_inner);
+	auto *box_opacity_slider = new QSlider(Qt::Horizontal, style_section);
 	box_opacity_slider->setObjectName(QStringLiteral("lpOpacityBox"));
 	box_opacity_slider->setRange(0, 255);
 	box_opacity_slider->setValue(std::clamp(card.box_opacity, 0, 255));
@@ -471,14 +577,14 @@ void LiedplanDock::create_row_widget(const LiedplanCard &card)
 	box_opacity_row->addWidget(box_opacity_slider, 1);
 	textbox_opacity_layout->addLayout(box_opacity_row);
 
-	inner_layout->addLayout(textbox_opacity_layout);
+	style_layout->addLayout(textbox_opacity_layout);
 
-	auto *rainbow_cb = new QCheckBox(QStringLiteral("Regenbogen-Ecken"), card_inner);
+	auto *rainbow_cb = new QCheckBox(QStringLiteral("Regenbogen-Ecken"), style_section);
 	rainbow_cb->setObjectName(QStringLiteral("lpRainbow"));
 	rainbow_cb->setChecked(card.rainbow_corners);
-	inner_layout->addWidget(rainbow_cb);
+	style_layout->addWidget(rainbow_cb);
 
-	auto *anim_group = new QGroupBox(card_inner);
+	auto *anim_group = new QGroupBox(style_section);
 	anim_group->setObjectName(QStringLiteral("lpAnimGroup"));
 	anim_group->setTitle(QStringLiteral("Animation"));
 	anim_group->setCheckable(true);
@@ -585,7 +691,21 @@ void LiedplanDock::create_row_widget(const LiedplanCard &card)
 	anim_body->setVisible(false);
 	anim_group_layout->addWidget(anim_body);
 	connect(anim_group, &QGroupBox::toggled, anim_body, &QWidget::setVisible);
-	inner_layout->addWidget(anim_group);
+	style_layout->addWidget(anim_group);
+
+	style_section->setVisible(false);
+	inner_layout->addWidget(style_section);
+
+	connect(style_toggle_btn, &QToolButton::clicked, this,
+		[this, style_section, style_toggle_btn]() {
+			const bool expand = !style_section->isVisible();
+			style_section->setVisible(expand);
+			style_toggle_btn->setIcon(
+				theme_icon(expand ? "chevron_down.svg" : "chevron_right.svg"));
+			style_toggle_btn->setToolTip(
+				expand ? QStringLiteral("Stil-Optionen einklappen")
+				       : QStringLiteral("Stil-Optionen ausklappen"));
+		});
 
 	auto *actions_layout = new QHBoxLayout();
 	actions_layout->setContentsMargins(0, 4, 0, 0);
@@ -633,6 +753,25 @@ void LiedplanDock::create_row_widget(const LiedplanCard &card)
 			c->zeile3 = text.toUtf8().toStdString();
 			save_state();
 			liedplan_scene::update_everywhere(*c, false, state_.settings);
+		}
+		if (card_search_) {
+			const QSignalBlocker blocker(card_search_);
+			const QString prev_text = card_search_->currentText();
+			const QString id_q = QString::fromUtf8(card_id.c_str());
+			for (int i = 0; i < card_search_->count(); ++i) {
+				if (card_search_->itemData(i).toString() == id_q) {
+					QString t3 = text.trimmed();
+					if (t3.size() > 20)
+						t3 = t3.left(20);
+					card_search_->setItemText(
+						i, t3.isEmpty()
+							   ? id_q
+							   : QStringLiteral("%1 · %2").arg(id_q, t3));
+					break;
+				}
+			}
+			if (card_search_->lineEdit())
+				card_search_->lineEdit()->setText(prev_text);
 		}
 	});
 
@@ -889,6 +1028,7 @@ void LiedplanDock::create_row_widget(const LiedplanCard &card)
 		row_widgets_.erase(std::remove(row_widgets_.begin(), row_widgets_.end(), row_widget),
 				   row_widgets_.end());
 		row_widget->deleteLater();
+		refresh_top_row();
 	});
 
 	const int insert_idx = std::max(0, cards_layout_->count() - 1);
@@ -907,12 +1047,102 @@ void LiedplanDock::rebuild_rows()
 	for (const auto &card : state_.cards) {
 		create_row_widget(card);
 	}
+	refresh_top_row();
+}
+
+void LiedplanDock::refresh_top_row()
+{
+	if (profil_select_) {
+		const QSignalBlocker blocker(profil_select_);
+		profil_select_->clear();
+		profil_select_->addItem(QStringLiteral("(keines)"), QString());
+		int active_idx = 0;
+		for (std::size_t i = 0; i < state_.quick_profiles.size(); ++i) {
+			const QString qname =
+				QString::fromUtf8(state_.quick_profiles[i].name.c_str());
+			profil_select_->addItem(qname, qname);
+			if (state_.quick_profiles[i].name == state_.active_profile)
+				active_idx = static_cast<int>(i) + 1;
+		}
+		profil_select_->setCurrentIndex(active_idx);
+	}
+
+	if (card_search_) {
+		const QSignalBlocker blocker(card_search_);
+		const QString prev_text = card_search_->currentText();
+		card_search_->clear();
+		for (const auto &card : state_.cards) {
+			const QString id_q = QString::fromUtf8(card.id.c_str());
+			QString t3 = QString::fromUtf8(card.zeile3.c_str()).trimmed();
+			if (t3.size() > 20)
+				t3 = t3.left(20);
+			const QString label =
+				t3.isEmpty() ? id_q : QStringLiteral("%1 · %2").arg(id_q, t3);
+			card_search_->addItem(label, id_q);
+		}
+		card_search_->setCurrentIndex(-1);
+		if (card_search_->lineEdit())
+			card_search_->lineEdit()->setText(prev_text);
+	}
+}
+
+void LiedplanDock::apply_quick_profile(const std::string &name)
+{
+	if (name.empty())
+		return;
+
+	std::vector<std::string> prev_ids;
+	prev_ids.reserve(state_.cards.size());
+	for (const auto &c : state_.cards)
+		prev_ids.push_back(c.id);
+
+	if (state_.apply_quick_profile(name)) {
+		state_.active_profile = name;
+		save_state();
+		sync_all_cards_live(prev_ids);
+		rebuild_rows();
+		set_dock_status(QStringLiteral("Schnell-Profil übernommen: %1")
+					.arg(QString::fromUtf8(name.c_str())),
+				false);
+	}
+}
+
+void LiedplanDock::flash_row(const std::string &card_id)
+{
+	if (card_id.empty())
+		return;
+	const QString target_id = QString::fromUtf8(card_id.c_str());
+	for (QWidget *w : row_widgets_) {
+		if (!w || w->property("lpCardId").toString() != target_id)
+			continue;
+		if (scroll_area_)
+			scroll_area_->ensureWidgetVisible(w);
+		w->setProperty("lpFlash", QStringLiteral("true"));
+		if (QStyle *st = w->style()) {
+			st->unpolish(w);
+			st->polish(w);
+		}
+		w->update();
+		QPointer<QWidget> w_ptr(w);
+		QTimer::singleShot(1200, this, [w_ptr]() {
+			if (!w_ptr)
+				return;
+			w_ptr->setProperty("lpFlash", QVariant());
+			if (QStyle *st = w_ptr->style()) {
+				st->unpolish(w_ptr.data());
+				st->polish(w_ptr.data());
+			}
+			w_ptr->update();
+		});
+		break;
+	}
 }
 
 void LiedplanDock::on_add_card()
 {
 	const LiedplanCard &card = state_.add_card();
 	create_row_widget(card);
+	refresh_top_row();
 	save_state();
 }
 
@@ -1730,23 +1960,13 @@ void LiedplanDock::on_open_quick_profiles_dialog()
 			if (idx < 0 || static_cast<std::size_t>(idx) >= state_.quick_profiles.size())
 				return;
 
-			std::vector<std::string> prev_ids;
-			prev_ids.reserve(state_.cards.size());
-			for (const auto &c : state_.cards)
-				prev_ids.push_back(c.id);
-
 			const std::string prof_name =
 				state_.quick_profiles[static_cast<std::size_t>(idx)].name;
-			if (state_.apply_quick_profile(static_cast<std::size_t>(idx))) {
-				save_state();
-				sync_all_cards_live(prev_ids);
-				rebuild_rows();
-				const QString msg =
-					QStringLiteral("Schnell-Profil übernommen: %1")
-						.arg(QString::fromUtf8(prof_name.c_str()));
-				status_lbl->setText(msg);
-				set_dock_status(msg, false);
-			}
+			apply_quick_profile(prof_name);
+			const QString msg =
+				QStringLiteral("Schnell-Profil übernommen: %1")
+					.arg(QString::fromUtf8(prof_name.c_str()));
+			status_lbl->setText(msg);
 		});
 
 	connect(del_btn, &QPushButton::clicked, &dlg,
@@ -1760,6 +1980,7 @@ void LiedplanDock::on_open_quick_profiles_dialog()
 			if (state_.remove_quick_profile(static_cast<std::size_t>(idx))) {
 				save_state();
 				refresh_combo();
+				refresh_top_row();
 				const QString msg =
 					QStringLiteral("Schnell-Profil gelöscht: %1")
 						.arg(QString::fromUtf8(prof_name.c_str()));
@@ -1769,6 +1990,7 @@ void LiedplanDock::on_open_quick_profiles_dialog()
 		});
 
 	dlg.exec();
+	refresh_top_row();
 }
 
 void LiedplanDock::on_backup_state()

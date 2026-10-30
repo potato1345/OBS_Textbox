@@ -27,7 +27,11 @@ with this program. If not, see <https://www.gnu.org/licenses/>
 #include <string>
 #include <vector>
 
+class QComboBox;
 class QLabel;
+class QMenu;
+class QScrollArea;
+class QToolButton;
 class QVBoxLayout;
 
 class LiedplanDock : public QWidget {
@@ -41,6 +45,9 @@ private:
 	LiedplanCard *find_card_mut(const std::string &id);
 	void create_row_widget(const LiedplanCard &card);
 	void rebuild_rows();
+	void refresh_top_row();
+	void apply_quick_profile(const std::string &name);
+	void flash_row(const std::string &card_id);
 	void on_add_card();
 	void on_clear_all();
 	void on_open_import_dialog();
@@ -59,6 +66,9 @@ private:
 	std::string state_path_;
 	QString icon_dir_;
 	LiedplanState state_;
+	QComboBox *profil_select_ = nullptr;
+	QComboBox *card_search_ = nullptr;
+	QScrollArea *scroll_area_ = nullptr;
 	QVBoxLayout *cards_layout_ = nullptr;
 	QLabel *dock_status_lbl_ = nullptr;
 	std::vector<QWidget *> row_widgets_;

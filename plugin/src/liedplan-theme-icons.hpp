@@ -31,7 +31,7 @@ with this program. If not, see <https://www.gnu.org/licenses/>
 
 namespace liedplan_theme_icons {
 
-static const int kVersion = 1;
+static const int kVersion = 2;
 
 inline const std::vector<std::pair<std::string, std::string>> &icons();
 
@@ -187,6 +187,8 @@ inline const std::vector<std::pair<std::string, std::string>> &icons()
 	<line fill="none" stroke="#4A4C53" stroke-width="12" stroke-miterlimit="10" x1="98.213" y1="38.12" x2="45.165" y2="91.168"/>
 </g>
 </svg> )SVGICON"},
+		{"chevron_right.svg", R"SVGICON(<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width="16" height="16"><path fill="#fefefe" d="M5.5 2.75L4.25 4 8 8l-3.75 4 1.25 1.25L10.5 8Z"/></svg> )SVGICON"},
+		{"chevron_down.svg", R"SVGICON(<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width="16" height="16"><path fill="#fefefe" d="M2.75 5.5L4 4.25 8 8l4-3.75L13.25 5.5 8 10.75Z"/></svg> )SVGICON"},
 	};
 	return items;
 }

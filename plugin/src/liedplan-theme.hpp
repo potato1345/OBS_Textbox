@@ -646,6 +646,47 @@ QDockWidget::close-button:pressed,
 QDockWidget::float-button:pressed {
 	background: #1D1F26;
 }
+
+/* ---- M7: Untere Icon-Toolbar, Karten-Flash, einklappbare Stil-Sektion ---- */
+
+QFrame#lpCardOuter[lpFlash="true"] {
+	border: 1px solid #476BD7;
+}
+
+QFrame#lpStyleSection {
+	background: transparent;
+	border: none;
+}
+
+QToolButton#lpToolAdd,
+QToolButton#lpToolClear,
+QToolButton#lpToolImport,
+QToolButton#lpToolSettings,
+QToolButton#lpStyleToggle {
+	background: #3C404D;
+	border: 1px solid #3C404D;
+	border-radius: 4px;
+}
+
+QToolButton#lpToolAdd:hover,
+QToolButton#lpToolClear:hover,
+QToolButton#lpToolImport:hover,
+QToolButton#lpToolSettings:hover {
+	background: #476BD7;
+	border-color: #476BD7;
+}
+
+QToolButton#lpToolAdd:pressed,
+QToolButton#lpToolClear:pressed,
+QToolButton#lpToolImport:pressed,
+QToolButton#lpToolSettings:pressed {
+	background: #284CB8;
+	border-color: #284CB8;
+}
+
+QToolButton#lpStyleToggle:hover {
+	background: #476BD7;
+}
 )QSS");
 }
 
