@@ -111,13 +111,19 @@ QMenu::separator {
 QFrame#lpCardOuter {
 	background-color: transparent;
 	border: 1px solid #3C404D;
-	border-radius: 4px 4px 10px 10px;
+	border-top-left-radius: 4px;
+	border-top-right-radius: 4px;
+	border-bottom-left-radius: 10px;
+	border-bottom-right-radius: 10px;
 }
 
 QFrame#lpCardInner {
 	background-color: #272A33;
 	border: none;
-	border-radius: 0px 0px 9px 9px;
+	border-top-left-radius: 0px;
+	border-top-right-radius: 0px;
+	border-bottom-left-radius: 9px;
+	border-bottom-right-radius: 9px;
 }
 
 QFrame#lpCardInner:hover {
@@ -127,7 +133,10 @@ QFrame#lpCardInner:hover {
 QFrame#lpIdBar {
 	background-color: #3C404D;
 	border: none;
-	border-radius: 3px 3px 0px 0px;
+	border-top-left-radius: 3px;
+	border-top-right-radius: 3px;
+	border-bottom-left-radius: 0px;
+	border-bottom-right-radius: 0px;
 }
 
 /* ---- Labels ---- */
