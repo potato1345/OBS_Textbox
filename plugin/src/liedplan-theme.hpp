@@ -56,6 +56,11 @@ QDialog#lpSettingsDialog {
 	font-size: 11pt;
 }
 
+QWidget#liedplanDock {
+	background-color: #1D1F26;
+	border: 1px solid #464B59;
+}
+
 QScrollArea {
 	background-color: transparent;
 	border: none;
@@ -104,16 +109,15 @@ QMenu::separator {
 /* ---- Karten: OBS-Panel statt Web-Card ---- */
 
 QFrame#lpCardOuter {
-	background-color: #3C404D;
+	background-color: transparent;
 	border: 1px solid #3C404D;
 	border-radius: 4px;
 }
 
 QFrame#lpCardInner {
 	background-color: #272A33;
-	border: 1px solid #3C404D;
-	border-top: none;
-	border-radius: 0px 0px 4px 4px;
+	border: none;
+	border-radius: 0px 0px 3px 3px;
 }
 
 QFrame#lpCardInner:hover {

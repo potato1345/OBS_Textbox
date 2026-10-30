@@ -319,7 +319,7 @@ void LiedplanDock::create_row_widget(const LiedplanCard &card)
 	row_widget->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
 
 	auto *outer_layout = new QVBoxLayout(row_widget);
-	outer_layout->setContentsMargins(1, 1, 1, 1);
+	outer_layout->setContentsMargins(0, 0, 0, 0);
 	outer_layout->setSpacing(0);
 
 	auto *card_inner = new QFrame(row_widget);
@@ -346,9 +346,9 @@ void LiedplanDock::create_row_widget(const LiedplanCard &card)
 	style_toggle_btn->setObjectName(QStringLiteral("lpStyleToggle"));
 	style_toggle_btn->setFixedSize(28, 28);
 	style_toggle_btn->setAutoRaise(true);
-	style_toggle_btn->setIcon(theme_icon("chevron_right.svg"));
+	style_toggle_btn->setIcon(theme_icon("chevron_down.svg"));
 	style_toggle_btn->setIconSize(QSize(16, 16));
-	style_toggle_btn->setToolTip(QStringLiteral("Stil-Optionen ausklappen"));
+	style_toggle_btn->setToolTip(QStringLiteral("Stil-Optionen einklappen"));
 
 	auto *del_btn = new QPushButton(id_bar);
 	del_btn->setObjectName(QStringLiteral("lpDelBtn"));
@@ -693,7 +693,7 @@ void LiedplanDock::create_row_widget(const LiedplanCard &card)
 	connect(anim_group, &QGroupBox::toggled, anim_body, &QWidget::setVisible);
 	style_layout->addWidget(anim_group);
 
-	style_section->setVisible(false);
+	style_section->setVisible(true);
 	inner_layout->addWidget(style_section);
 
 	connect(style_toggle_btn, &QToolButton::clicked, this,
@@ -721,13 +721,8 @@ void LiedplanDock::create_row_widget(const LiedplanCard &card)
 	clear_src_btn->setToolTip(
 		QStringLiteral("Text der Quelle auf leer setzen — die Quelle bleibt in der Szene"));
 
-	auto *remove_src_btn = new QPushButton(QStringLiteral("Entf."), card_inner);
-	remove_src_btn->setObjectName(QStringLiteral("lpBtn"));
-	remove_src_btn->setToolTip(QStringLiteral("Quelle aus allen Szenen entfernen"));
-
 	actions_layout->addWidget(to_scene_btn, 1);
 	actions_layout->addWidget(clear_src_btn, 1);
-	actions_layout->addWidget(remove_src_btn);
 	inner_layout->addLayout(actions_layout);
 
 	const std::string card_id = card.id;
@@ -1013,10 +1008,6 @@ void LiedplanDock::create_row_widget(const LiedplanCard &card)
 		if (LiedplanCard *c = find_card_mut(card_id)) {
 			liedplan_scene::update_everywhere(*c, true, state_.settings);
 		}
-	});
-
-	connect(remove_src_btn, &QPushButton::clicked, this, [card_id]() {
-		liedplan_scene::remove_everywhere(card_id);
 	});
 
 	connect(del_btn, &QPushButton::clicked, this, [this, card_id, row_widget]() {
