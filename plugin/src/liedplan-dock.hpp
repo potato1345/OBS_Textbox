@@ -46,6 +46,7 @@ private:
 	void create_row_widget(const LiedplanCard &card);
 	void rebuild_rows();
 	void refresh_top_row();
+	void sync_profil_del_state();
 	void apply_quick_profile(const std::string &name);
 	void flash_row(const std::string &card_id);
 	void on_add_card();
@@ -67,6 +68,7 @@ private:
 	QString icon_dir_;
 	LiedplanState state_;
 	QComboBox *profil_select_ = nullptr;
+	QToolButton *profil_del_btn_ = nullptr;
 	QComboBox *card_search_ = nullptr;
 	QScrollArea *scroll_area_ = nullptr;
 	QVBoxLayout *cards_layout_ = nullptr;

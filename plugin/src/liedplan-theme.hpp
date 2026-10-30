@@ -111,13 +111,13 @@ QMenu::separator {
 QFrame#lpCardOuter {
 	background-color: transparent;
 	border: 1px solid #3C404D;
-	border-radius: 4px;
+	border-radius: 4px 4px 10px 10px;
 }
 
 QFrame#lpCardInner {
 	background-color: #272A33;
 	border: none;
-	border-radius: 0px 0px 3px 3px;
+	border-radius: 0px 0px 9px 9px;
 }
 
 QFrame#lpCardInner:hover {
@@ -666,7 +666,8 @@ QToolButton#lpToolAdd,
 QToolButton#lpToolClear,
 QToolButton#lpToolImport,
 QToolButton#lpToolSettings,
-QToolButton#lpStyleToggle {
+QToolButton#lpStyleToggle,
+QToolButton#lpProfilDelBtn {
 	background: #3C404D;
 	border: 1px solid #3C404D;
 	border-radius: 4px;
@@ -675,7 +676,8 @@ QToolButton#lpStyleToggle {
 QToolButton#lpToolAdd:hover,
 QToolButton#lpToolClear:hover,
 QToolButton#lpToolImport:hover,
-QToolButton#lpToolSettings:hover {
+QToolButton#lpToolSettings:hover,
+QToolButton#lpProfilDelBtn:hover {
 	background: #476BD7;
 	border-color: #476BD7;
 }
@@ -683,7 +685,8 @@ QToolButton#lpToolSettings:hover {
 QToolButton#lpToolAdd:pressed,
 QToolButton#lpToolClear:pressed,
 QToolButton#lpToolImport:pressed,
-QToolButton#lpToolSettings:pressed {
+QToolButton#lpToolSettings:pressed,
+QToolButton#lpProfilDelBtn:pressed {
 	background: #284CB8;
 	border-color: #284CB8;
 }

@@ -137,6 +137,15 @@ LiedplanDock::LiedplanDock(const std::string &state_path, QWidget *parent)
 	}
 
 	top_row->addWidget(profil_select_, 1);
+	profil_del_btn_ = new QToolButton(this);
+	profil_del_btn_->setObjectName(QStringLiteral("lpProfilDelBtn"));
+	profil_del_btn_->setFixedSize(28, 28);
+	profil_del_btn_->setAutoRaise(true);
+	profil_del_btn_->setIcon(theme_icon("trash.svg"));
+	profil_del_btn_->setIconSize(QSize(16, 16));
+	profil_del_btn_->setToolTip(QStringLiteral("Gewähltes Schnell-Profil löschen"));
+	profil_del_btn_->setEnabled(false);
+	top_row->addWidget(profil_del_btn_);
 	top_row->addWidget(card_search_, 1);
 	root_layout->addLayout(top_row);
 
@@ -236,6 +245,28 @@ LiedplanDock::LiedplanDock(const std::string &state_path, QWidget *parent)
 			}
 		});
 	}
+
+	sync_profil_del_state();
+	connect(profil_select_, QOverload<int>::of(&QComboBox::currentIndexChanged),
+		this, [this](int) { sync_profil_del_state(); });
+	connect(profil_del_btn_, &QToolButton::clicked, this, [this]() {
+		const int idx = profil_select_->currentIndex();
+		if (idx <= 0 || idx >= profil_select_->count())
+			return;
+		const QString prof_name = profil_select_->itemData(idx).toString();
+		if (prof_name.isEmpty())
+			return;
+		if (state_.remove_quick_profile(static_cast<std::size_t>(idx) - 1)) {
+			if (state_.active_profile == prof_name.toUtf8().toStdString())
+				state_.active_profile.clear();
+			save_state();
+			refresh_top_row();
+			const QString msg =
+				QStringLiteral("Schnell-Profil gelöscht: %1")
+					.arg(prof_name);
+			set_dock_status(msg, false);
+		}
+	});
 
 	connect(card_search_, QOverload<int>::of(&QComboBox::activated), this, [this](int idx) {
 		if (idx < 0)
@@ -353,7 +384,7 @@ void LiedplanDock::create_row_widget(const LiedplanCard &card)
 	auto *del_btn = new QPushButton(id_bar);
 	del_btn->setObjectName(QStringLiteral("lpDelBtn"));
 	del_btn->setFixedSize(28, 28);
-	del_btn->setIcon(theme_icon("close.svg"));
+	del_btn->setIcon(theme_icon("trash.svg"));
 	del_btn->setIconSize(QSize(16, 16));
 	del_btn->setToolTip(QStringLiteral("Karte löschen"));
 
@@ -1041,6 +1072,16 @@ void LiedplanDock::rebuild_rows()
 	refresh_top_row();
 }
 
+void LiedplanDock::sync_profil_del_state()
+{
+	if (!profil_del_btn_ || !profil_select_)
+		return;
+	const int idx = profil_select_->currentIndex();
+	const bool valid = idx > 0 && idx < profil_select_->count() &&
+			   !profil_select_->itemData(idx).toString().isEmpty();
+	profil_del_btn_->setEnabled(valid);
+}
+
 void LiedplanDock::refresh_top_row()
 {
 	if (profil_select_) {
@@ -1056,6 +1097,7 @@ void LiedplanDock::refresh_top_row()
 				active_idx = static_cast<int>(i) + 1;
 		}
 		profil_select_->setCurrentIndex(active_idx);
+		sync_profil_del_state();
 	}
 
 	if (card_search_) {
