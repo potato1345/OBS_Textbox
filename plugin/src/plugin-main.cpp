@@ -40,6 +40,8 @@ OBS_DECLARE_MODULE()
 #ifdef ENABLE_QT
 #include "liedplan-dock.hpp"
 #include <QDockWidget>
+#include <QEvent>
+#include <QRect>
 #include <string>
 
 /*
@@ -49,6 +51,47 @@ und er wird nur ueber das Docks-Menue sichtbar. M0 soll den Test-Dock
 unmittelbar in der OBS-Oberflaeche zeigen (rechts, neben "controls").
 */
 static QDockWidget *g_dock = nullptr;
+
+/*
+M7h: Runde untere Fensterecken im Floating-Zustand.
+Ein floatender QDockWidget ist ein opak-rechteckiges Top-Level-Fenster;
+ein QSS border-radius am Kind (LiedplanDock) rundet nur die gemalte
+Flaeche — hinter den Ecken bleibt die undurchsichtige Fensterregion.
+Fuellig transparente Ecken brauchen daher ein transluzentes +
+framelesses Fenster, damit der abgerundete Kind-Hintergrund bis an
+den Fensterrand reicht. Beides wird beim ersten Show des
+Floating-Zustands genau einmal gesetzt (Guard: Attribut-Check).
+*/
+struct LiedplanFloatRoundedHelper : public QObject
+{
+	QDockWidget *dock;
+
+	explicit LiedplanFloatRoundedHelper(QDockWidget *d) : QObject(d), dock(d)
+	{
+		dock->installEventFilter(this);
+	}
+
+	bool eventFilter(QObject *obj, QEvent *ev) override
+	{
+		if (obj == dock &&
+		    (ev->type() == QEvent::Show || ev->type() == QEvent::WindowStateChange)) {
+			if (dock->isWindow() &&
+			    !(dock->windowState() &
+			      (Qt::WindowMinimized | Qt::WindowFullScreen))) {
+				if (!dock->testAttribute(Qt::WA_TranslucentBackground)) {
+					const QRect geom = dock->geometry();
+					dock->setAttribute(Qt::WA_TranslucentBackground, true);
+					dock->setWindowFlags(
+						dock->windowFlags() | Qt::FramelessWindowHint);
+					dock->setGeometry(geom);
+					dock->hide();
+					dock->show();
+				}
+			}
+		}
+		return QObject::eventFilter(obj, ev);
+	}
+};
 #endif /* ENABLE_QT */
 #endif /* ENABLE_FRONTEND_API */
 
@@ -71,6 +114,8 @@ bool obs_module_load(void)
 		g_dock->setObjectName(QStringLiteral("liedplan"));
 		g_dock->setWindowTitle(QStringLiteral("Liedplan"));
 		g_dock->setWidget(new LiedplanDock(state_path, g_dock));
+		/* M7h: runde untere Ecken im Floating-Zustand (liefert sich selbst) */
+		new LiedplanFloatRoundedHelper(g_dock);
 		bool ok = obs_frontend_add_custom_qdock("liedplan", g_dock);
 		if (!ok) {
 			/* Registrierung fehlgeschlagen: Widget nicht hängen lassen */
