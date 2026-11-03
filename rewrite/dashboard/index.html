@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="OBS Textbox Dashboard v2 – Live-Steuerung für dynamische Textbox-Overlays in OBS Studio.">
+    <title>OBS Textbox Dashboard</title>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+    <link rel="stylesheet" href="./css/dashboard.css">
+    <script src="./vendor/pdf.min.js"></script>
+</head>
+<body>
+
+    <!-- ============================================================
+         HEADER & TOOLBAR
+         ============================================================ -->
+    <header class="app-header">
+        <div class="header-top">
+            <div class="brand-section">
+                <h1 class="app-title">
+                    <span>OBS Textbox</span>
+                    <span class="version-tag">v2</span>
+                </h1>
+                <div class="obs-status-indicator" id="header-obs-status">
+                    <span class="status-dot"></span>
+                    <span id="header-obs-label">Nicht verbunden</span>
+                    <button type="button" class="btn" id="btn-header-connect" style="padding: 2px 8px; font-size: 0.76rem;">Verbinden</button>
+                </div>
+            </div>
+
+            <div class="header-actions">
+                <button type="button" class="btn" id="btn-open-settings">
+                    <span class="btn-icon">⚙</span> Einstellungen
+                </button>
+                <button type="button" class="btn" id="btn-export-json" title="Gesamte Konfiguration als JSON exportieren">
+                    <span class="btn-icon">📤</span> Export
+                </button>
+                <button type="button" class="btn" id="btn-import-json" title="Konfiguration aus JSON importieren">
+                    <span class="btn-icon">📥</span> Import
+                </button>
+            </div>
+        </div>
+
+        <!-- Schnell-Profile Zeile -->
+        <div class="quick-profiles-bar" id="quick-profiles-wrapper">
+            <span class="quick-profiles-label">Schnell-Profile:</span>
+            <div class="quick-profiles-list" id="quick-profiles-list">
+                <!-- Werden dynamisch befüllt -->
+            </div>
+            <button type="button" class="btn-chip-add" id="btn-open-save-profile">＋ Profil speichern</button>
+        </div>
+
+        <!-- Toolbar -->
+        <div class="toolbar">
+            <button type="button" class="btn btn-accent" id="btn-add-box">
+                <span class="btn-icon">＋</span> Neue Box
+            </button>
+            <button type="button" class="btn btn-red" id="btn-clear-all">
+                <span class="btn-icon">🗑</span> Alle leeren
+            </button>
+            <button type="button" class="btn btn-ai" id="btn-open-import">
+                <span class="btn-icon">📥</span> Import (AI · Datei · Forms)
+            </button>
+        </div>
+    </header>
+
+    <!-- ============================================================
+         MAIN DASHBOARD GRID
+         ============================================================ -->
+    <main class="dashboard-main">
+        <div class="cards-grid" id="dashboard">
+            <!-- Karten werden via JavaScript gerendert -->
+        </div>
+    </main>
+
+    <!-- ============================================================
+         DIALOG: EINSTELLUNGEN
+         ============================================================ -->
+    <dialog id="settings-dialog" closedby="any" aria-labelledby="settings-dialog-title">
+        <div class="dialog-content">
+            <div class="dialog-header">
+                <h2 class="dialog-title" id="settings-dialog-title">⚙ Einstellungen</h2>
+                <button type="button" class="btn-icon-subtle" onclick="this.closest('dialog').close()" title="Schließen">✕</button>
+            </div>
+            <div class="dialog-body">
+                <!-- Verbindung -->
+                <div class="settings-group">
+                    <h3 class="settings-group-title">OBS WebSocket Verbindung</h3>
+                    <div class="field-row">
+                        <label class="field-label-small" for="ws-password">OBS WebSocket Passwort</label>
+                        <div class="input-with-button">
+                            <input type="password" id="ws-password" class="text-input" placeholder="Passwort aus OBS Studio...">
+                            <button type="button" class="btn" id="btn-toggle-ws-pw" title="Passwort anzeigen/verbergen">👁</button>
+                        </div>
+                    </div>
+                    <div class="checkbox-label">
+                        <input type="checkbox" id="setting-auto-send">
+                        <span>Auto-Send bei Änderungen aktivieren</span>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 4px;">
+                        <span id="settings-connection-status" class="status-text status-offline">Status: Nicht verbunden</span>
+                        <button type="button" class="btn btn-accent" id="btn-settings-connect">Mit OBS verbinden</button>
+                    </div>
+                </div>
+
+                <!-- Farbprofile -->
+                <div class="settings-group">
+                    <h3 class="settings-group-title">Dashboard-Farben &amp; Farbprofile</h3>
+                    <div class="color-profile-bar">
+                        <div class="field-row">
+                            <label class="field-label-small" for="color-profile-select">Aktives Farbprofil</label>
+                            <select id="color-profile-select" class="select-input"></select>
+                        </div>
+                        <div class="color-profile-controls">
+                            <button type="button" class="btn" id="btn-show-save-color-profile">💾 Als Profil speichern</button>
+                            <button type="button" class="btn" id="btn-export-color-profile">📤 Export (YAML)</button>
+                            <button type="button" class="btn" id="btn-import-color-profile">📥 Import (YAML)</button>
+                            <button type="button" class="btn btn-red" id="btn-delete-color-profile">🗑 Löschen</button>
+                        </div>
+                        <div class="color-profile-save-box" id="color-profile-save-box" hidden>
+                            <input type="text" id="input-color-profile-name" class="text-input" placeholder="Neuer Profilname...">
+                            <button type="button" class="btn btn-accent" id="btn-confirm-save-profile">Speichern</button>
+                            <button type="button" class="btn" id="btn-cancel-save-profile">Abbrechen</button>
+                        </div>
+                    </div>
+
+                    <!-- Einzelfarben Grid -->
+                    <div class="theme-grid">
+                        <div class="color-picker-pair">
+                            <label class="field-label-small">Hintergrund</label>
+                            <div class="color-inputs-group">
+                                <input type="color" id="theme-bgPrimary" class="color-picker" aria-label="Hintergrundfarbe">
+                                <input type="number" id="theme-bgPrimaryOpacity" class="opacity-number" min="0" max="255" aria-label="Deckkraft Hintergrund">
+                            </div>
+                        </div>
+                        <div class="color-picker-pair">
+                            <label class="field-label-small">Sekundär</label>
+                            <div class="color-inputs-group">
+                                <input type="color" id="theme-bgSecondary" class="color-picker" aria-label="Sekundärfarbe">
+                                <input type="number" id="theme-bgSecondaryOpacity" class="opacity-number" min="0" max="255" aria-label="Deckkraft Sekundärfarbe">
+                            </div>
+                        </div>
+                        <div class="color-picker-pair">
+                            <label class="field-label-small">Panel</label>
+                            <div class="color-inputs-group">
+                                <input type="color" id="theme-panelBg" class="color-picker" aria-label="Panelfarbe">
+                                <input type="number" id="theme-panelBgOpacity" class="opacity-number" min="0" max="255" aria-label="Deckkraft Panel">
+                            </div>
+                        </div>
+                        <div class="color-picker-pair">
+                            <label class="field-label-small">Panel-Rand</label>
+                            <div class="color-inputs-group">
+                                <input type="color" id="theme-border" class="color-picker" aria-label="Randfarbe">
+                                <input type="number" id="theme-borderOpacity" class="opacity-number" min="0" max="255" aria-label="Deckkraft Rand">
+                            </div>
+                        </div>
+                        <div class="color-picker-pair">
+                            <label class="field-label-small">Karten-Rahmen</label>
+                            <div class="color-inputs-group">
+                                <input type="color" id="theme-cardOuterBg" class="color-picker" aria-label="Karten-Rahmenfarbe">
+                                <input type="number" id="theme-cardOuterBgOpacity" class="opacity-number" min="0" max="255" aria-label="Deckkraft Karten-Rahmen">
+                            </div>
+                        </div>
+                        <div class="color-picker-pair">
+                            <label class="field-label-small">Panel-Hover</label>
+                            <div class="color-inputs-group">
+                                <input type="color" id="theme-panelBgAlt" class="color-picker" aria-label="Panel-Hoverfarbe">
+                                <input type="number" id="theme-panelBgAltOpacity" class="opacity-number" min="0" max="255" aria-label="Deckkraft Panel-Hover">
+                            </div>
+                        </div>
+                        <div class="color-picker-pair">
+                            <label class="field-label-small">Button-Hover</label>
+                            <div class="color-inputs-group">
+                                <input type="color" id="theme-btnHoverBg" class="color-picker" aria-label="Button-Hoverfarbe">
+                                <input type="number" id="theme-btnHoverBgOpacity" class="opacity-number" min="0" max="255" aria-label="Deckkraft Button-Hover">
+                            </div>
+                        </div>
+                        <div class="color-picker-pair">
+                            <label class="field-label-small">Textfarbe</label>
+                            <div class="color-inputs-group">
+                                <input type="color" id="theme-textColor" class="color-picker" aria-label="Textfarbe">
+                                <input type="number" id="theme-textColorOpacity" class="opacity-number" min="0" max="255" aria-label="Deckkraft Textfarbe">
+                            </div>
+                        </div>
+                        <div class="color-picker-pair">
+                            <label class="field-label-small">Akzentfarbe</label>
+                            <div class="color-inputs-group">
+                                <input type="color" id="theme-accentBlue" class="color-picker" aria-label="Akzentfarbe">
+                                <input type="number" id="theme-accentBlueOpacity" class="opacity-number" min="0" max="255" aria-label="Deckkraft Akzentfarbe">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="dialog-footer">
+                <button type="button" class="btn" onclick="this.closest('dialog').close()">Schließen</button>
+            </div>
+        </div>
+    </dialog>
+
+    <!-- ============================================================
+         DIALOG: SCHNELL-PROFIL SPEICHERN
+         ============================================================ -->
+    <dialog id="save-profile-dialog" closedby="any" aria-labelledby="save-profile-dialog-title">
+        <div class="dialog-content">
+            <div class="dialog-header">
+                <h2 class="dialog-title" id="save-profile-dialog-title">📋 Schnell-Profil speichern</h2>
+                <button type="button" class="btn-icon-subtle" onclick="this.closest('dialog').close()" title="Schließen">✕</button>
+            </div>
+            <div class="dialog-body">
+                <p style="font-size: 0.85rem; color: #a0a6b2; margin: 0;">Speichert den aktuellen Text- und Farbzustand aller Karten als Schnellzugriff.</p>
+                <div class="field-row">
+                    <label class="field-label-small" for="input-quick-profile-name">Profilname</label>
+                    <input type="text" id="input-quick-profile-name" class="text-input" placeholder="z. B. Sonntag Vormittag">
+                </div>
+            </div>
+            <div class="dialog-footer">
+                <button type="button" class="btn" id="btn-cancel-save-quick-profile">Abbrechen</button>
+                <button type="button" class="btn btn-accent" id="btn-confirm-save-quick-profile">Speichern</button>
+            </div>
+        </div>
+    </dialog>
+
+    <!-- ============================================================
+         DIALOG: EINHEITLICHER IMPORT (AI / DATEI / GOOGLE FORMS)
+         ============================================================ -->
+    <dialog id="import-dialog" closedby="any" aria-labelledby="import-dialog-title">
+        <div class="dialog-content">
+            <div class="dialog-header">
+                <h2 class="dialog-title" id="import-dialog-title">📥 Import Programmpunkte</h2>
+                <button type="button" class="btn-icon-subtle" onclick="this.closest('dialog').close()" title="Schließen">✕</button>
+            </div>
+            <div class="dialog-body">
+                <!-- Tab-Leiste -->
+                <div class="import-tabs">
+                    <button type="button" class="import-tab active" id="import-tab-ai">🤖 AI (PDF/Word)</button>
+                    <button type="button" class="import-tab" id="import-tab-file">📊 Datei (CSV/XLSX/ZIP)</button>
+                    <button type="button" class="import-tab" id="import-tab-google">📋 Google Forms</button>
+                </div>
+
+                <!-- Panel: AI (PDF/Word) -->
+                <div id="import-panel-ai">
+                    <div class="settings-group">
+                        <h3 class="settings-group-title">OpenRouter Einstellungen (optional)</h3>
+                        <div class="field-row">
+                            <label class="field-label-small" for="input-ai-api-key">OpenRouter API Key (Optional)</label>
+                            <div class="input-with-button">
+                                <input type="password" id="input-ai-api-key" class="text-input" placeholder="sk-or-v1-...">
+                                <button type="button" class="btn" id="btn-toggle-ai-key" title="Key anzeigen/verbergen">👁</button>
+                            </div>
+                            <small style="font-size: 0.72rem; color: #8c93a0;">Es werden ausschließlich kostenlose Modelle aufgerufen. Ohne Key wird ein lokaler Parser verwendet.</small>
+                        </div>
+
+                        <div class="field-row">
+                            <div style="display: flex; justify-content: space-between; align-items: center;">
+                                <label class="field-label-small" for="input-ai-system-prompt">System Prompt</label>
+                                <button type="button" class="btn" id="btn-reset-system-prompt" style="padding: 1px 6px; font-size: 0.72rem;">Standard wiederherstellen</button>
+                            </div>
+                            <textarea id="input-ai-system-prompt" class="text-input" rows="4" style="font-family: ui-monospace, monospace; font-size: 0.78rem; resize: vertical;"></textarea>
+                        </div>
+                    </div>
+
+                    <div class="file-dropzone" id="ai-file-dropzone">
+                        <span class="dropzone-icon">📄</span>
+                        <span class="dropzone-text">PDF- oder Word-Dokument (.docx) hier ablegen oder klicken</span>
+                        <input type="file" id="ai-file-input" accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document" hidden>
+                    </div>
+
+                    <div class="settings-group" id="ai-progress-box" hidden>
+                        <div class="progress-list">
+                            <div class="progress-step" id="ai-step-extract">
+                                <span class="step-icon">⚪</span>
+                                <span class="step-text">Dokument extrahieren...</span>
+                            </div>
+                            <div class="progress-step" id="ai-step-llm">
+                                <span class="step-icon">⚪</span>
+                                <span class="step-text">LLM verarbeitet Text...</span>
+                            </div>
+                            <div class="progress-step" id="ai-step-apply">
+                                <span class="step-icon">⚪</span>
+                                <span class="step-text">Vorschau vorbereiten...</span>
+                            </div>
+                        </div>
+                        <div class="live-log-text" id="ai-live-log"></div>
+                        <div id="ai-result-box" hidden>
+                            <details>
+                                <summary style="font-size: 0.75rem; color: var(--accent-blue); cursor: pointer;">Rohdaten anzeigen</summary>
+                                <pre class="raw-output-pre" id="ai-raw-output"></pre>
+                            </details>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Panel: Datei (CSV/XLSX/ZIP) -->
+                <div id="import-panel-file" hidden>
+                    <div class="settings-group">
+                        <h3 class="settings-group-title">Antwort-Export hochladen</h3>
+                        <div class="file-dropzone" id="forms-file-dropzone">
+                            <span class="dropzone-icon">📊</span>
+                            <span class="dropzone-text">CSV, XLSX oder ZIP-Download hier ablegen oder klicken</span>
+                            <input type="file" id="forms-file-input" accept=".csv,.xlsx,.zip" hidden>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Panel: Google Forms -->
+                <div id="import-panel-google" hidden>
+                    <div class="settings-group">
+                        <h3 class="settings-group-title">Direkt über Google Forms API</h3>
+                        <p style="font-size: 0.8rem; color: #a0a6b2; margin: 0;">Lädt alle Einreichungen des Liedplan-Formulars (neueste zuerst) über das Token im Server.</p>
+                        <button type="button" class="btn btn-forms" id="btn-fetch-forms-api">🔄 Alle Einreichungen abrufen</button>
+                    </div>
+                </div>
+
+                <!-- Einreichungsauswahl (nur bei mehreren Einreichungen) -->
+                <div class="settings-group" id="import-response-pick" hidden>
+                    <label class="field-label-small" for="import-response-select">Einreichung wählen (neueste zuerst)</label>
+                    <select id="import-response-select" class="text-input"></select>
+                </div>
+
+                <!-- Gemeinsame Vorschau -->
+                <div id="forms-preview-container" hidden></div>
+
+                <div class="checkbox-label">
+                    <input type="checkbox" id="forms-replace-existing" checked>
+                    <span>Vorhandene Karten im Dashboard ersetzen</span>
+                </div>
+            </div>
+            <div class="dialog-footer">
+                <button type="button" class="btn" onclick="this.closest('dialog').close()">Abbrechen</button>
+                <button type="button" class="btn btn-green" id="btn-apply-forms-data" disabled>In Dashboard übernehmen</button>
+            </div>
+        </div>
+    </dialog>
+
+    <!-- ============================================================
+         SCRIPTS
+         ============================================================ -->
+    <script type="module" src="./js/app.js"></script>
+</body>
+</html>

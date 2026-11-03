@@ -1,4 +1,12 @@
 api.env
+.env
+.env.*
+*.env
+credentials*
+credentials.json
+*token*.json
+*.pem
+*.key
 .DS_Store
 changes.md
 OBS Textbox_ Dynamische Textsteuerung - Google Gemini.md

@@ -1,0 +1,7 @@
+# Pflicht für Word-/PDF-Konvertierung auf dem Server
+markitdown[all]>=0.1.8
+# XLSX-Import der Formular-Antworten (in markitdown[all] meist schon enthalten)
+openpyxl>=3.1
+# Optional: direkter Abruf der Formular-Antworten über die Google Forms API
+# google-api-python-client>=2.0
+# google-auth>=2.0

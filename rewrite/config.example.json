@@ -1,0 +1,8 @@
+{
+  "_hinweis": "Kopieren nach config.json und anpassen. Alle Felder sind optional.",
+  "host": "0.0.0.0",
+  "port": 8080,
+  "google_token_path": "%LOCALAPPDATA%\\hermes\\google_token.json",
+  "google_form_id": "1jreAuzd-jt1x48WDmjaP7v0OusdVO2lb55Kt4JrhEgY",
+  "max_upload_mb": 25
+}

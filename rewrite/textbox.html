@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="description" content="OBS-Browserquelle: Textbox, deren Inhalt über CSS-Variablen gesteuert wird.">
+<title>OBS Textbox Overlay</title>
+<style>
+    /*
+     * Alle sichtbaren Werte kommen aus CSS-Variablen. Pro OBS-Browserquelle wird im
+     * Feld „Benutzerdefiniertes CSS“ mindestens --box-id gesetzt; das Dashboard
+     * hängt dort einen markierten Block mit Text, Farben und Animation an.
+     */
+    :root {
+        --box-id: "default";
+
+        --zeile-1: "";
+        --zeile-2: "";
+        --zeile-3: "";
+
+        --box-bg: rgba(255, 255, 255, 0.75);
+        --box-border: rgba(0, 0, 0, 0.7);
+        --triangle-color-a: #fce647;
+        --triangle-color-b: #fce647;
+        --text-color: #000000;
+        --box-opacity: 1;
+        --rainbow-corners: 0;
+
+        --anim-file: "";
+        --show-anim: 0;
+        --anim-scale: 3;
+        --anim-x: 0px;
+        --anim-y: 0px;
+
+        --corner-size: 50px;
+        --radius: 4px;
+    }
+
+    html, body {
+        background: transparent !important;
+        overflow: hidden !important;
+        scrollbar-width: none;
+    }
+    ::-webkit-scrollbar { display: none; }
+
+    body {
+        margin: 0;
+        /* Freiraum oben/links, damit vergrößerte Animationen nicht abgeschnitten werden */
+        padding: 350px 20px 20px 250px;
+        font-family: "Segoe UI", system-ui, -apple-system, Roboto, sans-serif;
+    }
+
+    .box {
+        position: relative;
+        box-sizing: border-box;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        width: max-content;
+        min-width: 300px;
+        max-width: 800px;
+        min-height: 1.5em;
+        padding: 15px 60px 20px 50px;
+        background: var(--box-bg);
+        border: 0 solid var(--box-border);
+        border-radius: var(--radius);
+        color: var(--text-color);
+        opacity: var(--box-opacity);
+        transition: opacity 0.3s ease;
+    }
+
+    .corner {
+        position: absolute;
+        width: var(--corner-size);
+        height: var(--corner-size);
+        pointer-events: none;
+    }
+    .corner--a {
+        top: 0;
+        left: 0;
+        border-top-left-radius: var(--radius);
+        background: linear-gradient(135deg, var(--triangle-color-a) 50%, transparent 50%);
+    }
+    .corner--b {
+        right: 0;
+        bottom: 0;
+        border-bottom-right-radius: var(--radius);
+        background: linear-gradient(315deg, var(--triangle-color-b) 50%, transparent 50%);
+    }
+    .box.is-rainbow .corner { animation: hue-cycle 12s linear infinite; }
+    @keyframes hue-cycle {
+        from { filter: hue-rotate(0deg); }
+        to   { filter: hue-rotate(360deg); }
+    }
+
+    .line {
+        position: relative;
+        line-height: 1.2;
+        white-space: pre-wrap;
+    }
+    /* Der Text wird vom Browser direkt aus der CSS-Variable gerendert. */
+    .line::before {
+        display: inline-block;
+        white-space: pre-wrap;
+    }
+    .line--1::before { content: var(--zeile-1); font-size: 38px; font-weight: 500; margin-bottom: 5px; }
+    .line--2::before { content: var(--zeile-2); font-size: 32px; font-weight: 400; }
+    .line--3::before { content: var(--zeile-3); font-size: 32px; font-weight: 400; }
+    .line[hidden] { display: none; }
+
+    .anim {
+        position: absolute;
+        right: 0;
+        bottom: 100%;
+        z-index: 2;
+        margin-bottom: 15px;
+        transform: translate(var(--anim-x), var(--anim-y)) scale(var(--anim-scale));
+        transform-origin: bottom right;
+    }
+    .anim[hidden] { display: none; }
+    .anim > img,
+    .anim > video {
+        display: block;
+        image-rendering: pixelated;
+    }
+</style>
+</head>
+<body>
+<main class="box" id="box" aria-live="polite">
+    <div class="corner corner--a"></div>
+    <div class="corner corner--b"></div>
+    <div class="anim" id="anim" hidden></div>
+    <div class="line line--1" data-var="--zeile-1"></div>
+    <div class="line line--2" data-var="--zeile-2"></div>
+    <div class="line line--3" data-var="--zeile-3"></div>
+</main>
+
+<script>
+(() => {
+    "use strict";
+
+    const root = document.documentElement;
+    const box = document.getElementById("box");
+    const anim = document.getElementById("anim");
+    const lines = Array.from(document.querySelectorAll(".line"));
+    const VIDEO_EXT = /\.(webm|mp4|mov|m4v)$/i;
+    let shownAnim = "";
+
+    /** Liest eine Custom Property und entfernt umschließende CSS-String-Quotes. */
+    function readVar(name) {
+        const raw = getComputedStyle(root).getPropertyValue(name).trim();
+        const quoted = raw.length >= 2 && (raw[0] === '"' || raw[0] === "'") && raw[raw.length - 1] === raw[0];
+        return quoted ? raw.slice(1, -1) : raw;
+    }
+
+    function renderAnimation() {
+        const file = readVar("--anim-file");
+        const visible = readVar("--show-anim") === "1" && file !== "";
+        anim.hidden = !visible;
+        const wanted = visible ? file : "";
+        if (wanted === shownAnim) return;
+        shownAnim = wanted;
+        anim.replaceChildren();
+        if (!wanted) return;
+        let media;
+        if (VIDEO_EXT.test(wanted)) {
+            media = document.createElement("video");
+            Object.assign(media, { autoplay: true, loop: true, muted: true, playsInline: true });
+        } else {
+            media = document.createElement("img");
+            media.alt = "";
+        }
+        media.src = wanted;
+        anim.append(media);
+    }
+
+    function render() {
+        for (const line of lines) {
+            line.hidden = readVar(line.dataset.var) === "";
+        }
+        box.classList.toggle("is-rainbow", readVar("--rainbow-corners") === "1");
+        renderAnimation();
+    }
+
+    // OBS injiziert das Custom CSS als <style> zur Laufzeit – auf Änderungen reagieren …
+    let queued = false;
+    const schedule = () => {
+        if (queued) return;
+        queued = true;
+        requestAnimationFrame(() => { queued = false; render(); });
+    };
+    new MutationObserver(schedule).observe(document.head, { childList: true, subtree: true, characterData: true });
+    new MutationObserver(schedule).observe(root, { attributes: true, attributeFilter: ["style"] });
+    // … und zusätzlich periodisch (Sicherheitsnetz, falls die Injektion außerhalb
+    // von <head> und der style-Attribute landet). 2 s reichen: die Observer decken
+    // den Normalfall ab, das Intervall soll CPU in der Browser-Quelle sparen.
+    setInterval(render, 2000);
+    render();
+})();
+</script>
+</body>
+</html>
