@@ -46,12 +46,29 @@ struct LiedplanPoint {
 	}
 };
 
+// Einzelner eingereichter Gottesdienst mit Kopfdaten und 12 Programmpunkten.
+struct LiedplanService {
+	std::string woche;
+	std::string tag;
+	std::string organist;
+	std::string zeitstempel;
+	std::vector<LiedplanPoint> punkte; // exakt 12 Einträge (fehlende leer)
+
+	bool operator==(const LiedplanService &other) const
+	{
+		return woche == other.woche && tag == other.tag && organist == other.organist &&
+		       zeitstempel == other.zeitstempel && punkte == other.punkte;
+	}
+};
+
 struct LiedplanImportResult {
 	std::string woche;
 	std::string tag;
 	std::string organist;
 	std::string zeitstempel;
 	std::vector<LiedplanPoint> punkte; // exakt 12 Einträge (fehlende leer)
+	LiedplanService service; // neuester Gottesdienst (Abwärtskompatibilität)
+	std::vector<LiedplanService> services; // alle Gottesdienste, neueste zuerst
 
 	bool operator==(const LiedplanImportResult &other) const
 	{
@@ -59,6 +76,8 @@ struct LiedplanImportResult {
 		       zeitstempel == other.zeitstempel && punkte == other.punkte;
 	}
 };
+
+using ImportResult = LiedplanImportResult;
 
 enum class ImportError { None, Format, NoResponses, File };
 
@@ -79,6 +98,8 @@ ImportError parse_records(const std::vector<std::string> &header,
 			  std::vector<Record> &out_records,
 			  std::string *out_error = nullptr);
 
+LiedplanService to_service(const Record &record);
+LiedplanImportResult to_import_result(const LiedplanService &service);
 LiedplanImportResult to_import_result(const Record &record);
 LiedplanImportResult to_import_result(const std::vector<Record> &records);
 

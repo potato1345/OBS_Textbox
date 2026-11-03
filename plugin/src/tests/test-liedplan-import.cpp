@@ -443,6 +443,45 @@ int main()
 		check(ok, "20. Zip-Bomb-Cap: ~100 MB Null-Bytes via compress2 -> inflate_data == std::nullopt");
 	}
 
+	// 21. Mehrere Gottesdienste (#1): CSV und ZIP mit 2 Services liefern services.size()==2, newest first, service == neuester
+	{
+		const std::string multi_csv =
+			"Zeitstempel,Woche,Tag,Organist,1. Eröffnung – GL-Nummer,1. Eröffnung – Liedtitel\n"
+			"19.10.2026 18:00:00,KW 42,Samstag,A. Organist,140,Vorabend-Lied\n"
+			"20.10.2026 09:15:32,KW 42,Sonntag,E. Stolper,144,Sonntags-Lied\n";
+
+		ImportResult csv_res;
+		std::size_t csv_count = 0;
+		std::string csv_err;
+		const ImportError err1 = parse_csv_string(multi_csv, csv_res, &csv_count, &csv_err);
+
+		const std::string zip_bytes =
+			build_zip_archive({{"antworten.csv", multi_csv}}, true);
+		ImportResult zip_res;
+		std::size_t zip_count = 0;
+		std::string zip_err;
+		const ImportError err2 = parse_zip_bytes(zip_bytes, zip_res, &zip_count, &zip_err);
+
+		const bool ok =
+			(err1 == ImportError::None) && (csv_count == 2) &&
+			(csv_res.services.size() == 2) &&
+			(csv_res.services[0].zeitstempel == "20.10.2026 09:15:32") &&
+			(csv_res.services[0].tag == "Sonntag") &&
+			(csv_res.services[0].punkte[0].gl == "144") &&
+			(csv_res.services[1].zeitstempel == "19.10.2026 18:00:00") &&
+			(csv_res.services[1].tag == "Samstag") &&
+			(csv_res.services[1].punkte[0].gl == "140") &&
+			(csv_res.service == csv_res.services[0]) &&
+			(csv_res.tag == "Sonntag") &&
+			(err2 == ImportError::None) && (zip_count == 2) &&
+			(zip_res.services.size() == 2) &&
+			(zip_res.services[0] == csv_res.services[0]) &&
+			(zip_res.services[1] == csv_res.services[1]) &&
+			(zip_res.service == zip_res.services[0]);
+		check(ok, "21. Mehrere Gottesdienste: CSV und ZIP mit 2 Services liefern services.size()==2, newest first, service == neuester",
+		      csv_err + " " + zip_err);
+	}
+
 	{
 		std::error_code ec;
 		std::filesystem::remove_all(temp_dir, ec);
@@ -452,6 +491,6 @@ int main()
 		std::cerr << g_failures << " test(s) failed.\n";
 		return 1;
 	}
-	std::cout << "All 20 checks passed.\n";
+	std::cout << "All 21 checks passed.\n";
 	return 0;
 }

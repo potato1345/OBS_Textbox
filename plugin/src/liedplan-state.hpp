@@ -97,6 +97,9 @@ public:
 	LiedplanSettings settings;
 	std::vector<LiedplanQuickProfile> quick_profiles;
 	std::vector<LiedplanProfile> color_profiles;
+	// Einstufiger Undo-Snapshot für destruktive Karten-Aktionen im Dock
+	std::vector<LiedplanCard> undo_snapshot_;
+	bool undo_available_ = false;
 
 	void reset();
 	std::string load(const std::string &path); // "" = ok; sonst Fehlerbeschreibung

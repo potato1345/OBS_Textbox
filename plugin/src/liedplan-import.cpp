@@ -128,6 +128,58 @@ std::string get_record_trimmed(const Record &rec, const std::string &key)
 	return trim_str(it->second);
 }
 
+// Normalisiert deutsche (DD.MM.YYYY ...) und ISO-Zeitstempel für lexikographische Sortierung (neueste zuerst).
+std::string sortable_timestamp_key(std::string_view raw_ts)
+{
+	const std::string ts = trim_str(raw_ts);
+	if (ts.empty())
+		return {};
+
+	std::size_t p = 0;
+	int day = 0;
+	int day_digits = 0;
+	while (p < ts.size() && std::isdigit(static_cast<unsigned char>(ts[p])) && day_digits < 2) {
+		day = day * 10 + (ts[p] - '0');
+		++p;
+		++day_digits;
+	}
+	if (day_digits > 0 && p < ts.size() && ts[p] == '.') {
+		++p;
+		int month = 0;
+		int month_digits = 0;
+		while (p < ts.size() && std::isdigit(static_cast<unsigned char>(ts[p])) &&
+		       month_digits < 2) {
+			month = month * 10 + (ts[p] - '0');
+			++p;
+			++month_digits;
+		}
+		if (month_digits > 0 && p < ts.size() && ts[p] == '.') {
+			++p;
+			int year = 0;
+			int year_digits = 0;
+			while (p < ts.size() && std::isdigit(static_cast<unsigned char>(ts[p])) &&
+			       year_digits < 4) {
+				year = year * 10 + (ts[p] - '0');
+				++p;
+				++year_digits;
+			}
+			if (year_digits == 4) {
+				char buf[16]{};
+				std::snprintf(buf, sizeof(buf), "%04d-%02d-%02d", year, month, day);
+				std::string rest = trim_str(std::string_view(ts).substr(p));
+				if (rest.size() >= 2 &&
+				    std::isdigit(static_cast<unsigned char>(rest[0])) &&
+				    rest[1] == ':') {
+					rest.insert(rest.begin(), '0');
+				}
+				return rest.empty() ? std::string(buf)
+						    : (std::string(buf) + " " + rest);
+			}
+		}
+	}
+	return ts;
+}
+
 #ifdef _WIN32
 
 struct WinHttpHandle {
@@ -574,29 +626,70 @@ ImportError parse_records(const std::vector<std::string> &header,
 	return ImportError::None;
 }
 
-LiedplanImportResult to_import_result(const Record &record)
+// Konvertiert einen einzelnen Record in eine LiedplanService-Struktur (12 Programmpunkte).
+LiedplanService to_service(const Record &record)
 {
-	LiedplanImportResult res;
-	res.woche = get_record_trimmed(record, "woche");
-	res.tag = get_record_trimmed(record, "tag");
-	res.organist = get_record_trimmed(record, "organist");
-	res.zeitstempel = get_record_trimmed(record, "zeitstempel");
-	res.punkte.resize(PROGRAM_POINTS.size());
+	LiedplanService svc;
+	svc.woche = get_record_trimmed(record, "woche");
+	svc.tag = get_record_trimmed(record, "tag");
+	svc.organist = get_record_trimmed(record, "organist");
+	svc.zeitstempel = get_record_trimmed(record, "zeitstempel");
+	svc.punkte.resize(PROGRAM_POINTS.size());
 
 	for (std::size_t i = 0; i < PROGRAM_POINTS.size(); ++i) {
 		const std::string prefix = std::to_string(i + 1) + ".";
-		res.punkte[i].gl = get_record_trimmed(record, prefix + "gl");
-		res.punkte[i].verse = get_record_trimmed(record, prefix + "verse");
-		res.punkte[i].titel = get_record_trimmed(record, prefix + "titel");
+		svc.punkte[i].gl = get_record_trimmed(record, prefix + "gl");
+		svc.punkte[i].verse = get_record_trimmed(record, prefix + "verse");
+		svc.punkte[i].titel = get_record_trimmed(record, prefix + "titel");
 	}
+	return svc;
+}
+
+// Baut ein LiedplanImportResult aus einem einzelnen Gottesdienst (inkl. service und services).
+LiedplanImportResult to_import_result(const LiedplanService &service)
+{
+	LiedplanImportResult res;
+	res.woche = service.woche;
+	res.tag = service.tag;
+	res.organist = service.organist;
+	res.zeitstempel = service.zeitstempel;
+	res.punkte = service.punkte;
+	res.service = service;
+	res.services.push_back(service);
 	return res;
+}
+
+LiedplanImportResult to_import_result(const Record &record)
+{
+	return to_import_result(to_service(record));
 }
 
 LiedplanImportResult to_import_result(const std::vector<Record> &records)
 {
 	if (records.empty())
 		return to_import_result(Record{});
-	return to_import_result(records.back());
+
+	// Alle gefundenen Gottesdienste sammeln und neueste zuerst nach Zeitstempel sortieren.
+	std::vector<LiedplanService> services;
+	services.reserve(records.size());
+	for (auto it = records.rbegin(); it != records.rend(); ++it) {
+		services.push_back(to_service(*it));
+	}
+	std::stable_sort(services.begin(), services.end(),
+			 [](const LiedplanService &a, const LiedplanService &b) {
+				 return sortable_timestamp_key(a.zeitstempel) >
+					sortable_timestamp_key(b.zeitstempel);
+			 });
+
+	LiedplanImportResult res;
+	res.services = std::move(services);
+	res.service = res.services.front();
+	res.woche = res.service.woche;
+	res.tag = res.service.tag;
+	res.organist = res.service.organist;
+	res.zeitstempel = res.service.zeitstempel;
+	res.punkte = res.service.punkte;
+	return res;
 }
 
 ImportError parse_csv_string(const std::string &text,
@@ -1936,10 +2029,21 @@ std::optional<LiedplanImportResult> import_from_api(std::string *out_error,
 			  return response_time_key(a) > response_time_key(b);
 		  });
 
-	const Record latest_record = api_response_to_record(responses->front(), *title_map);
+	// Alle Antworten aus dem Formular in services übernehmen (neueste zuerst).
+	LiedplanImportResult res;
+	res.services.reserve(responses->size());
+	for (const auto &resp_json : *responses) {
+		res.services.push_back(to_service(api_response_to_record(resp_json, *title_map)));
+	}
+	res.service = res.services.front();
+	res.woche = res.service.woche;
+	res.tag = res.service.tag;
+	res.organist = res.service.organist;
+	res.zeitstempel = res.service.zeitstempel;
+	res.punkte = res.service.punkte;
 	if (out_error)
 		out_error->clear();
-	return to_import_result(latest_record);
+	return res;
 }
 
 } // namespace liedplan_import

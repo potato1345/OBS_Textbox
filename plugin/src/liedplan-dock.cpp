@@ -38,6 +38,7 @@
 #include <QHeaderView>
 #include <QIcon>
 #include <QInputDialog>
+#include <QKeySequence>
 #include <QLabel>
 #include <QLineEdit>
 #include <QListWidget>
@@ -49,6 +50,7 @@
 #include <QPushButton>
 #include <QRegularExpression>
 #include <QScrollArea>
+#include <QShortcut>
 #include <QSignalBlocker>
 #include <QSizePolicy>
 #include <QSlider>
@@ -75,10 +77,33 @@ constexpr int kDefaultCardCount = 12;
 
 struct DockSaveScheduler {
 	QPointer<QTimer> timer;
+	QPointer<QPushButton> undo_btn;
 	std::vector<std::string> dirty_cards;
 };
 
 std::map<const LiedplanDock *, DockSaveScheduler> g_dock_schedulers;
+
+// Sichert den aktuellen Kartenstand für einstufiges Undo und aktiviert den Undo-Button.
+void capture_undo_snapshot(const LiedplanDock *dock, LiedplanState &state)
+{
+	state.undo_snapshot_ = state.cards;
+	state.undo_available_ = true;
+	auto it = g_dock_schedulers.find(dock);
+	if (it != g_dock_schedulers.end() && it->second.undo_btn) {
+		it->second.undo_btn->setEnabled(true);
+	}
+}
+
+// Zählt die belegten Programmpunkte (Lieder) eines Gottesdienstes.
+std::size_t count_service_songs(const liedplan_import::LiedplanService &svc)
+{
+	std::size_t count = 0;
+	for (const auto &pt : svc.punkte) {
+		if (!pt.gl.empty() || !pt.verse.empty() || !pt.titel.empty())
+			++count;
+	}
+	return count;
+}
 
 void push_card_live(const LiedplanCard &card, const LiedplanSettings &settings)
 {
@@ -290,6 +315,15 @@ LiedplanDock::LiedplanDock(const std::string &state_path, QWidget *parent)
 				       QStringLiteral("Neue Karte"));
 	auto *tool_clear = make_tool_btn(QStringLiteral("lpToolClear"), "trash.svg",
 					 QStringLiteral("Alle Karten löschen"));
+	// Kompakter Button für einstufiges Rückgängig (Undo) neben „Alle leeren"
+	auto *tool_undo = new QPushButton(QStringLiteral("↶ Rückgängig"), this);
+	tool_undo->setObjectName(QStringLiteral("lpToolUndo"));
+	tool_undo->setFixedHeight(32);
+	tool_undo->setToolTip(
+		QStringLiteral("Letzte destruktive Aktion rückgängig machen (Strg+Z)"));
+	tool_undo->setEnabled(state_.undo_available_);
+	g_dock_schedulers[this].undo_btn = tool_undo;
+
 	auto *tool_import = make_tool_btn(
 		QStringLiteral("lpToolImport"), "download.svg",
 		QStringLiteral("AI-Import / Datei-Import (CSV, XLSX, ZIP, Google)"));
@@ -309,10 +343,43 @@ LiedplanDock::LiedplanDock(const std::string &state_path, QWidget *parent)
 
 	bottom_toolbar->addWidget(tool_add);
 	bottom_toolbar->addWidget(tool_clear);
+	bottom_toolbar->addWidget(tool_undo);
 	bottom_toolbar->addWidget(tool_import);
 	bottom_toolbar->addWidget(tool_settings);
 	bottom_toolbar->addStretch(1);
 	root_layout->addLayout(bottom_toolbar);
+
+	// Gemeinsamer Handler für den Undo-Button und das Tastenkürzel Strg+Z
+	auto perform_undo = [this, tool_undo]() {
+		if (!state_.undo_available_)
+			return;
+		std::vector<std::string> prev_ids;
+		prev_ids.reserve(state_.cards.size());
+		for (const auto &c : state_.cards)
+			prev_ids.push_back(c.id);
+
+		state_.cards = state_.undo_snapshot_;
+		for (const auto &c : state_.cards) {
+			if (c.id.rfind("box", 0) == 0 && c.id.size() > 3) {
+				try {
+					const int num = std::stoi(c.id.substr(3));
+					if (num >= state_.next_id)
+						state_.next_id = num + 1;
+				} catch (...) {
+				}
+			}
+		}
+		save_state();
+		rebuild_rows();
+		sync_all_cards_live(prev_ids);
+		state_.undo_available_ = false;
+		tool_undo->setEnabled(false);
+		set_dock_status(QStringLiteral("Vorheriger Zustand wiederhergestellt"), false);
+	};
+
+	auto *undo_shortcut = new QShortcut(QKeySequence::Undo, this);
+	connect(tool_undo, &QPushButton::clicked, this, perform_undo);
+	connect(undo_shortcut, &QShortcut::activated, this, perform_undo);
 
 	connect(tool_add, &QToolButton::clicked, this, &LiedplanDock::on_add_card);
 	connect(tool_clear, &QToolButton::clicked, this, &LiedplanDock::on_clear_all);
@@ -1145,6 +1212,7 @@ void LiedplanDock::create_row_widget(const LiedplanCard &card)
 	});
 
 	connect(del_btn, &QPushButton::clicked, this, [this, card_id, row_widget]() {
+		capture_undo_snapshot(this, state_);
 		if (state_.remove_card(card_id)) {
 			save_state();
 		}
@@ -1227,12 +1295,19 @@ void LiedplanDock::apply_quick_profile(const std::string &name)
 	if (name.empty())
 		return;
 
+	std::vector<LiedplanCard> prev_cards = state_.cards;
 	std::vector<std::string> prev_ids;
 	prev_ids.reserve(state_.cards.size());
 	for (const auto &c : state_.cards)
 		prev_ids.push_back(c.id);
 
 	if (state_.apply_quick_profile(name)) {
+		state_.undo_snapshot_ = std::move(prev_cards);
+		state_.undo_available_ = true;
+		if (auto it = g_dock_schedulers.find(this);
+		    it != g_dock_schedulers.end() && it->second.undo_btn) {
+			it->second.undo_btn->setEnabled(true);
+		}
 		state_.active_profile = name;
 		save_state();
 		sync_all_cards_live(prev_ids);
@@ -1291,6 +1366,8 @@ void LiedplanDock::on_clear_all()
 	if (reply != QMessageBox::Yes)
 		return;
 
+	capture_undo_snapshot(this, state_);
+
 	std::vector<std::string> ids;
 	ids.reserve(state_.cards.size());
 	for (const auto &c : state_.cards) {
@@ -1331,8 +1408,10 @@ void LiedplanDock::set_dock_status(const QString &msg, bool is_error)
 
 void LiedplanDock::apply_import_result(const liedplan_import::LiedplanImportResult &res)
 {
-	blog(LOG_INFO, "[liedplan] Import übernommen: %zu Programmpunkte", res.punkte.size());
-	const std::size_t total_items = res.punkte.size();
+	capture_undo_snapshot(this, state_);
+	const auto &punkte = !res.punkte.empty() ? res.punkte : res.service.punkte;
+	blog(LOG_INFO, "[liedplan] Import übernommen: %zu Programmpunkte", punkte.size());
+	const std::size_t total_items = punkte.size();
 	while (state_.cards.size() < total_items) {
 		state_.cards.push_back(make_default_card(state_.cards.size()));
 	}
@@ -1343,7 +1422,7 @@ void LiedplanDock::apply_import_result(const liedplan_import::LiedplanImportResu
 	enriched.reserve(total_items);
 	for (std::size_t i = 0; i < total_items; ++i) {
 		enriched.push_back(liedplan_ai::AiPoint{
-			res.punkte[i].gl, res.punkte[i].verse, res.punkte[i].titel});
+			punkte[i].gl, punkte[i].verse, punkte[i].titel});
 	}
 	const auto song_ref = load_song_reference(state_.settings.lieder_path);
 	if (!song_ref.empty()) {
@@ -1602,11 +1681,21 @@ void LiedplanDock::on_open_import_dialog()
 
 	root->addWidget(ai_group);
 
-	// Gruppe 4: Kopfdaten (erst nach erfolgreichem Laden sichtbar)
+	// Gruppe 4: Kopfdaten & Mehr-Gottesdienste-Auswahl (erst nach erfolgreichem Laden sichtbar)
 	auto *kopf_group = new QGroupBox(QStringLiteral("Kopfdaten"), &dlg);
 	auto *kopf_layout = new QVBoxLayout(kopf_group);
 	kopf_layout->setContentsMargins(12, 16, 12, 12);
-	kopf_layout->setSpacing(4);
+	kopf_layout->setSpacing(6);
+
+	auto *lbl_service_select = new QLabel(QStringLiteral("GOTTESDIENST AUSWÄHLEN"), kopf_group);
+	lbl_service_select->setObjectName(QStringLiteral("lpFieldLabel"));
+	auto *service_combo = new QComboBox(kopf_group);
+	service_combo->setObjectName(QStringLiteral("lpServiceSelect"));
+	service_combo->setFixedHeight(34);
+
+	auto *lbl_service_preview = new QLabel(kopf_group);
+	lbl_service_preview->setObjectName(QStringLiteral("lpServicePreview"));
+	lbl_service_preview->setWordWrap(true);
 
 	auto *lbl_woche = new QLabel(QStringLiteral("Woche: —"), kopf_group);
 	lbl_woche->setObjectName(QStringLiteral("lpKopfWochen"));
@@ -1617,10 +1706,18 @@ void LiedplanDock::on_open_import_dialog()
 	auto *lbl_zeitstempel = new QLabel(QStringLiteral("Zeitstempel: —"), kopf_group);
 	lbl_zeitstempel->setObjectName(QStringLiteral("lpKopfZeitstempel"));
 
+	auto *service_apply_btn =
+		new QPushButton(QStringLiteral("In Karten übernehmen"), kopf_group);
+	service_apply_btn->setObjectName(QStringLiteral("lpBtnServiceApply"));
+
+	kopf_layout->addWidget(lbl_service_select);
+	kopf_layout->addWidget(service_combo);
+	kopf_layout->addWidget(lbl_service_preview);
 	kopf_layout->addWidget(lbl_woche);
 	kopf_layout->addWidget(lbl_tag);
 	kopf_layout->addWidget(lbl_organist);
 	kopf_layout->addWidget(lbl_zeitstempel);
+	kopf_layout->addWidget(service_apply_btn);
 	kopf_group->setVisible(false);
 	root->addWidget(kopf_group);
 
@@ -1632,6 +1729,55 @@ void LiedplanDock::on_open_import_dialog()
 	root->addWidget(error_lbl);
 
 	auto pending_ai_res = std::make_shared<liedplan_ai::AiResult>();
+	auto loaded_services =
+		std::make_shared<std::vector<liedplan_import::LiedplanService>>();
+
+	// Aktualisiert die Kopfdaten-Anzeige für den gewählten Gottesdienst.
+	auto update_kopf_labels = [lbl_woche, lbl_tag, lbl_organist, lbl_zeitstempel](
+					  const liedplan_import::LiedplanService &svc) {
+		lbl_woche->setText(QStringLiteral("Woche: ") +
+				   QString::fromUtf8(svc.woche.c_str()));
+		lbl_tag->setText(QStringLiteral("Tag: ") + QString::fromUtf8(svc.tag.c_str()));
+		lbl_organist->setText(QStringLiteral("Organist: ") +
+				      QString::fromUtf8(svc.organist.c_str()));
+		lbl_zeitstempel->setText(QStringLiteral("Zeitstempel: ") +
+					 QString::fromUtf8(svc.zeitstempel.c_str()));
+	};
+
+	connect(service_combo, QOverload<int>::of(&QComboBox::currentIndexChanged), &dlg,
+		[loaded_services, update_kopf_labels](int idx) {
+			if (idx >= 0 &&
+			    static_cast<std::size_t>(idx) < loaded_services->size()) {
+				update_kopf_labels(
+					(*loaded_services)[static_cast<std::size_t>(idx)]);
+			}
+		});
+
+	connect(service_apply_btn, &QPushButton::clicked, &dlg,
+		[this, service_combo, loaded_services, status_lbl, update_kopf_labels]() {
+			const int idx = service_combo->currentIndex();
+			if (idx < 0 ||
+			    static_cast<std::size_t>(idx) >= loaded_services->size())
+				return;
+			const auto &svc = (*loaded_services)[static_cast<std::size_t>(idx)];
+			liedplan_import::ImportResult single_res;
+			single_res.service = svc;
+			single_res.woche = svc.woche;
+			single_res.tag = svc.tag;
+			single_res.organist = svc.organist;
+			single_res.zeitstempel = svc.zeitstempel;
+			single_res.punkte = svc.punkte;
+			single_res.services = {svc};
+			apply_import_result(single_res);
+			update_kopf_labels(svc);
+			const QString msg =
+				QStringLiteral("Gottesdienst übernommen: Woche %1 · %2 · Org: %3")
+					.arg(QString::fromUtf8(svc.woche.c_str()),
+					     QString::fromUtf8(svc.tag.c_str()),
+					     QString::fromUtf8(svc.organist.c_str()));
+			status_lbl->setText(msg);
+			set_dock_status(msg, false);
+		});
 
 	connect(ai_file_btn, &QPushButton::clicked, &dlg, [&dlg, ai_file_edit]() {
 		const QString chosen = QFileDialog::getOpenFileName(
@@ -1643,26 +1789,66 @@ void LiedplanDock::on_open_import_dialog()
 		}
 	});
 
-	auto handle_success = [this, kopf_group, lbl_woche, lbl_tag, lbl_organist, lbl_zeitstempel,
-			       status_lbl, error_lbl](
+	auto handle_success = [this, kopf_group, service_combo, lbl_service_preview,
+			       loaded_services, update_kopf_labels, status_lbl, error_lbl](
 				      const liedplan_import::LiedplanImportResult &res,
 				      const QString &source_name = QString()) {
 		apply_import_result(res);
-		lbl_woche->setText(QStringLiteral("Woche: ") +
-				   QString::fromUtf8(res.woche.c_str()));
-		lbl_tag->setText(QStringLiteral("Tag: ") + QString::fromUtf8(res.tag.c_str()));
-		lbl_organist->setText(QStringLiteral("Organist: ") +
-				      QString::fromUtf8(res.organist.c_str()));
-		lbl_zeitstempel->setText(QStringLiteral("Zeitstempel: ") +
-					 QString::fromUtf8(res.zeitstempel.c_str()));
+
+		loaded_services->clear();
+		if (!res.services.empty()) {
+			*loaded_services = res.services;
+		} else {
+			liedplan_import::LiedplanService fallback_svc = res.service;
+			if (fallback_svc.punkte.empty()) {
+				fallback_svc.woche = res.woche;
+				fallback_svc.tag = res.tag;
+				fallback_svc.organist = res.organist;
+				fallback_svc.zeitstempel = res.zeitstempel;
+				fallback_svc.punkte = res.punkte;
+			}
+			loaded_services->push_back(std::move(fallback_svc));
+		}
+
+		{
+			const QSignalBlocker blocker(service_combo);
+			service_combo->clear();
+			QStringList preview_lines;
+			for (const auto &svc : *loaded_services) {
+				const QString zeit_q = QString::fromUtf8(
+					svc.zeitstempel.empty() ? "—" : svc.zeitstempel.c_str());
+				const QString woche_q = QString::fromUtf8(
+					svc.woche.empty() ? "—" : svc.woche.c_str());
+				const QString tag_q = QString::fromUtf8(
+					svc.tag.empty() ? "—" : svc.tag.c_str());
+				const QString org_q = QString::fromUtf8(
+					svc.organist.empty() ? "—" : svc.organist.c_str());
+				service_combo->addItem(
+					QStringLiteral("%1 · Woche %2 · %3 · Org: %4")
+						.arg(zeit_q, woche_q, tag_q, org_q));
+				preview_lines.append(
+					QStringLiteral("• Woche %1 · %2 · Org: %3 · %4 Lieder")
+						.arg(woche_q, tag_q, org_q)
+						.arg(count_service_songs(svc)));
+			}
+			service_combo->setCurrentIndex(0);
+			lbl_service_preview->setText(preview_lines.join(QLatin1Char('\n')));
+		}
+
+		update_kopf_labels(loaded_services->front());
 		kopf_group->setVisible(true);
 		error_lbl->clear();
 		error_lbl->setVisible(false);
+		const std::size_t svc_count = loaded_services->size();
+		const QString count_str =
+			QStringLiteral("%1 Gottesdienste gefunden").arg(svc_count);
 		const QString msg =
 			source_name.isEmpty()
 				? QStringLiteral(
-					  "12 Karten befüllt — im Dock editierbar, „Zu Szene“ legt sie in die Szene.")
-				: QStringLiteral("Importiert: %1 Punkte (Quelle: %2)")
+					  "%1 — 12 Karten befüllt — im Dock editierbar, „Zu Szene“ legt sie in die Szene.")
+					  .arg(count_str)
+				: QStringLiteral("%1 — Importiert: %2 Punkte (Quelle: %3)")
+					  .arg(count_str)
 					  .arg(res.punkte.size())
 					  .arg(source_name);
 		status_lbl->setText(msg);
@@ -1875,6 +2061,8 @@ void LiedplanDock::on_open_import_dialog()
 		[this, &dlg, pending_ai_res]() {
 			if (pending_ai_res->items.empty())
 				return;
+
+			capture_undo_snapshot(this, state_);
 
 			const std::size_t total_items = pending_ai_res->items.size();
 			while (state_.cards.size() < total_items) {
@@ -2232,12 +2420,19 @@ void LiedplanDock::on_restore_state()
 					return;
 				}
 
+				std::vector<LiedplanCard> prev_cards = self_ptr->state_.cards;
 				std::vector<std::string> prev_ids;
 				prev_ids.reserve(self_ptr->state_.cards.size());
 				for (const auto &c : self_ptr->state_.cards)
 					prev_ids.push_back(c.id);
 
 				self_ptr->state_ = std::move(restored);
+				self_ptr->state_.undo_snapshot_ = std::move(prev_cards);
+				self_ptr->state_.undo_available_ = true;
+				if (auto it = g_dock_schedulers.find(self_ptr.data());
+				    it != g_dock_schedulers.end() && it->second.undo_btn) {
+					it->second.undo_btn->setEnabled(true);
+				}
 				self_ptr->save_state();
 				self_ptr->sync_all_cards_live(prev_ids);
 				self_ptr->rebuild_rows();
