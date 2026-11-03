@@ -1,20 +1,12 @@
 /*
-Liedplan — Standalone OBS-Plugin (T7)
-Copyright (C) 2026 Johann
-
-This program is free software; you can redistribute it and/or modify
-it under the terms of the GNU General Public License as published by
-the Free Software Foundation; either version 2 of the License, or
-(at your option) any later version.
-
-This program is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-GNU General Public License for more details.
-
-You should have received a copy of the GNU General Public License along
-with this program. If not, see <https://www.gnu.org/licenses/>
-*/
+ * liedplan-render.hpp — QPainter-basiertes Rendering von Liedplan-Karten in QImages (v3).
+ *
+ * Zweck:
+ *   - Definiert die Abmessungen der Karten (kLiedplanCardWidth = 800, kLiedplanCardHeight = 400).
+ *   - Deklariert render_card zum Zeichnen von Karten mit Texten, Farbverläufen und Ecken.
+ *
+ * Hinweis: libobs-frei; wird auch in Standalone-Tests (test-render) verwendet.
+ */
 
 #pragma once
 
@@ -23,10 +15,18 @@ with this program. If not, see <https://www.gnu.org/licenses/>
 #include <QImage>
 #include <QtGlobal>
 
+/** Standardbreite einer nativ gerenderten Liedplan-Karte in Pixeln. */
 inline constexpr int kLiedplanCardWidth = 800;
+
+/** Standardhöhe einer nativ gerenderten Liedplan-Karte in Pixeln. */
 inline constexpr int kLiedplanCardHeight = 400;
 
-// Rendert eine LiedplanCard als 800x400 ARGB32-QImage (außen transparent).
-// time_seconds ist für M2a ungenutzt (0.0) und für M2b (Hue-Animation) vorgesehen.
+/**
+ * Rendert eine LiedplanCard als ARGB32-QImage mit transparentem Hintergrund.
+ *
+ * @param card - Die Kartendaten (Texte, Farben, Deckkraft).
+ * @param time_seconds - Zeitstempel für optionale Animationen (z. B. Farbrotation).
+ * @returns Das gerenderte QImage.
+ */
 QImage render_card(const LiedplanCard &card, qreal time_seconds = 0.0);
 QImage render_card(const LiedplanCard &card, int width, int height, qreal time_seconds);

@@ -1,20 +1,13 @@
 /*
-Liedplan — Standalone OBS-Plugin (T7)
-Copyright (C) 2026 Johann
-
-This program is free software; you can redistribute it and/or modify
-it under the terms of the GNU General Public License as published by
-the Free Software Foundation; either version 2 of the License, or
-(at your option) any later version.
-
-This program is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-GNU General Public License for more details.
-
-You should have received a copy of the GNU General Public License along
-with this program. If not, see <https://www.gnu.org/licenses/>
-*/
+ * liedplan-html.hpp — HTML- und CSS-Generierung für OBS-Browserquellen (v3).
+ *
+ * Zweck:
+ *   - Erzeugt in sich geschlossene HTML-Dateien für jede Karte in <config>/cards/<card_id>.html.
+ *   - Löst Animations-Dateien (GIF/WEBM/MP4) sicher für CEF auf (Base64-Data-URI oder lokale file://-URLs).
+ *   - Berechnet CSS-Injektionen und pusht Einstellungen über obs_source_update.
+ *
+ * Hinweis: Wird auch in Standalone-Tests verwendet.
+ */
 
 #pragma once
 

@@ -2,16 +2,31 @@
  * @file obs-ws.js
  * Schlanker, robuster Client für das OBS WebSocket v5 Protokoll (OBS Studio 28+).
  * Bietet Authentifizierung (SHA-256 Salt/Challenge), Request-Response via Promises
- * und automatische Wiederverbindung bei Signalverlust.
+ * und Fehlerbehandlung.
+ *
+ * Gehört zu Version 2 (rewrite/dashboard/).
+ * Zusammenspiel:
+ *   - Implementiert das OBS WebSocket v5 Protokoll direkt auf Basis des nativen Browser-WebSockets.
+ *   - Berechnet Authentifizierungs-Token über Web Crypto API (SHA-256).
+ *   - Wird von obs-sync.js gekapselt für High-Level-Operationen (CSS-Injektion, Quellenabfrage).
  */
 
+import { LP_DEBUG } from './box-utils.js';
+
+/** Zeitlimit für den initialen Handshake (Hello/Identify) in Millisekunden. */
 const HANDSHAKE_TIMEOUT_MS = 10000;
+
+/** Zeitlimit für einzelne API-Anfragen an OBS Studio in Millisekunden. */
 const REQUEST_TIMEOUT_MS = 10000;
 
 /**
  * Erzeugt einen SHA-256 Hash als Base64-String.
  * Nutzt die Web Crypto API (`crypto.subtle`) – im lokalen Chromium-Browser
  * (File- und HTTP-Kontext) immer verfügbar, ein Fallback ist nicht nötig.
+ *
+ * @param {string} message - Der zu hashende Eingabestring.
+ * @returns {Promise<string>} Base64-kodierter SHA-256-Hashwert.
+ * @throws {Error} Wenn Web Crypto im Kontext nicht zur Verfügung steht.
  */
 async function sha256Base64(message) {
     const encoder = new TextEncoder();
@@ -30,6 +45,9 @@ async function sha256Base64(message) {
     return btoa(binary);
 }
 
+/**
+ * WebSocket-Client zur Ansteuerung von OBS Studio über das Protokoll v5.
+ */
 export class OBSWebSocketClient {
     constructor() {
         this.ws = null;
@@ -40,16 +58,30 @@ export class OBSWebSocketClient {
         this.onError = null;
     }
 
+    /**
+     * Gibt an, ob der WebSocket aktuell geöffnet und einsatzbereit ist.
+     * @type {boolean}
+     */
     get isConnected() {
         return this.ws !== null && this.ws.readyState === WebSocket.OPEN;
     }
 
+    /**
+     * Stellt eine Verbindung zum OBS WebSocket Server her und führt den v5 Handshake durch.
+     *
+     * @param {string} [password=''] - Das in den OBS WebSocket-Einstellungen konfigurierte Server-Passwort.
+     * @param {number} [port=4455] - Der WebSocket-Port (Standard in OBS v5: 4455).
+     * @param {string} [host='127.0.0.1'] - Die Host-Adresse von OBS Studio.
+     * @returns {Promise<boolean>} Löst mit true auf, sobald die Authentifizierung erfolgreich war.
+     */
     connect(password = '', port = 4455, host = '127.0.0.1') {
         return new Promise((resolve, reject) => {
             if (this.ws && (this.ws.readyState === WebSocket.OPEN || this.ws.readyState === WebSocket.CONNECTING)) {
                 reject(new Error('OBS-WebSocket-Verbindung ist bereits aktiv oder wird aufgebaut.'));
                 return;
             }
+
+            if (LP_DEBUG) console.debug('[liedplan] OBS WebSocket Verbindungsaufbau zu:', `ws://${host}:${port}`);
 
             let handshakeTimer = null;
             let settled = false;
@@ -90,6 +122,8 @@ export class OBSWebSocketClient {
                     const auth = msg.d?.authentication;
                     let authResponse;
 
+                    if (LP_DEBUG) console.debug('[liedplan] OBS WebSocket OpCode 0 (Hello) empfangen, Auth verlangt:', !!auth);
+
                     if (auth) {
                         if (!password) {
                             activeSocket.close();
@@ -109,6 +143,7 @@ export class OBSWebSocketClient {
                     }
 
                     // OpCode 1: Identify
+                    if (LP_DEBUG) console.debug('[liedplan] Sende OBS WebSocket OpCode 1 (Identify)');
                     activeSocket.send(JSON.stringify({
                         op: 1,
                         d: {
@@ -120,6 +155,7 @@ export class OBSWebSocketClient {
                 }
                 // OpCode 2: Identified (Authentifizierung erfolgreich)
                 else if (msg.op === 2) {
+                    if (LP_DEBUG) console.debug('[liedplan] OBS WebSocket OpCode 2 (Identified) - Verbindung steht!');
                     if (this.onConnect) this.onConnect();
                     finalize(resolve, true);
                 }
@@ -172,6 +208,13 @@ export class OBSWebSocketClient {
         });
     }
 
+    /**
+     * Sendet einen RequestType-Befehl (z. B. 'GetInputSettings' oder 'SetInputSettings') an OBS.
+     *
+     * @param {string} requestType - Name der OBS WebSocket v5 Anfrage.
+     * @param {object} [requestData={}] - Payload-Objekt für die Anfrage.
+     * @returns {Promise<any>} Antwortdaten des OBS-Servers.
+     */
     call(requestType, requestData = {}) {
         return new Promise((resolve, reject) => {
             if (!this.isConnected) {
@@ -180,6 +223,7 @@ export class OBSWebSocketClient {
             }
 
             const reqId = String(this.messageId++);
+            if (LP_DEBUG) console.debug('[liedplan] OBS WebSocket Request:', requestType, 'ID:', reqId);
             let timeoutId = null;
 
             const handle = {
@@ -218,14 +262,18 @@ export class OBSWebSocketClient {
         });
     }
 
+    /**
+     * Trennt die aktive WebSocket-Verbindung und weist alle offenen Anfragen ab.
+     */
     disconnect() {
+        if (LP_DEBUG) console.debug('[liedplan] OBS WebSocket trennen aufgerufen');
         if (this.ws) {
             const sock = this.ws;
             this.ws = null;
             try {
                 sock.close();
             } catch (e) {
-                // Ignore close error
+                // Fehler beim Schließen ignorieren
             }
         }
         for (const pending of this.pendingRequests.values()) {

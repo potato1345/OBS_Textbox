@@ -1,16 +1,26 @@
 /**
  * @file cards.js
  * Verwaltung, Rendering und Interaktion der Textbox-Karten im Dashboard.
+ *
+ * Gehört zu Version 2 (rewrite/dashboard/).
+ * Zusammenspiel:
+ *   - Erzeugt DOM-Elemente für Boxen und bindet Eingabe-Listener.
+ *   - Aktualisiert den Zustand über storage.js und synchronisiert bei Bedarf über obs-sync.js.
+ *   - Nutzt box-utils.js für Standard-Box-Strukturen und ID-Generierung.
+ *
  * Eingeklappt zeigen die Karten kompakt nur die drei Textzeilen und die Aktionsbuttons.
  */
 
+import { LP_DEBUG, createDefaultBox, uniqueBoxId } from './box-utils.js';
 import { getState, updateState } from './storage.js';
 import { pushStateToOBS } from './obs-sync.js';
 import { showToast } from './toast.js';
-import { createDefaultBox, uniqueBoxId } from './box-utils.js';
 
 let debounceTimer = null;
 
+/**
+ * Triggert debounced (140ms) die automatische Übertragung an OBS Studio, falls autoSend aktiv ist.
+ */
 function triggerAutoSend() {
     const state = getState();
     if (!state.autoSend) return;
@@ -22,9 +32,14 @@ function triggerAutoSend() {
 }
 
 /**
- * Erzeugt das HTML für eine einzelne Karte.
+ * Erzeugt das HTML für eine einzelne Karte und bindet Interaktionsevents an.
+ *
+ * @param {object} box - Zustandsobjekt der Box (id, zeile1..3, anim*, Farben).
+ * @param {number} index - Index der Box in der Liste.
+ * @returns {HTMLDivElement} Das DOM-Element der Karte.
  */
 export function createCardElement(box, index) {
+    if (LP_DEBUG) console.debug('[liedplan] Erzeuge Kartenelement für Box:', box.id);
     const card = document.createElement('div');
     card.className = 'card-outer';
     card.dataset.boxId = box.id;
@@ -152,6 +167,13 @@ export function createCardElement(box, index) {
     return card;
 }
 
+/**
+ * Bindet DOM-Events an Formularfelder und Aktionsschaltflächen einer Karte.
+ * Behandelt ID-Änderung (inkl. Duplikatsprüfung), Text-Inputs, Animations-Parameter,
+ * Farb- und Deckkraft-Regler sowie Senden-, Leeren- und Löschen-Aktionen.
+ *
+ * @param {HTMLElement} card - Das Karten-Container-Element.
+ */
 function bindCardEvents(card) {
     // ID Input (mit Kollisionsprüfung, F3)
     const idInput = card.querySelector('.card-id-input');
@@ -307,12 +329,25 @@ function bindCardEvents(card) {
     });
 }
 
+/**
+ * Begrenzt einen Deckkraftwert auf das Intervall [0, 255].
+ * Ungültige Eingaben (NaN) werden standardmäßig auf 255 (voll deckend) zurückgesetzt.
+ *
+ * @param {string|number} val - Eingabewert.
+ * @returns {number} Ganzzahliger Wert zwischen 0 und 255.
+ */
 function clampOpacity(val) {
     const num = Number(val);
     if (isNaN(num)) return 255;
     return Math.max(0, Math.min(255, Math.round(num)));
 }
 
+/**
+ * Maskiert HTML-Sonderzeichen für die sichere Verwendung in HTML-Attributen.
+ *
+ * @param {string} str - Unbereinigter Eingabestring.
+ * @returns {string} Attributsicherer HTML-String.
+ */
 function escapeAttr(str) {
     return String(str || '')
         .replace(/&/g, '&amp;')
@@ -347,6 +382,11 @@ export function renderDashboardCards(container) {
     });
 }
 
+/**
+ * Fügt eine neue Textbox mit Standardwerten zum Zustand und Dashboard hinzu.
+ *
+ * @param {string|null} preferredId - Optionale Wunsch-ID (z. B. beim Klonen oder Import).
+ */
 export function addNewBox(preferredId = null) {
     const state = getState();
     let id = preferredId;
@@ -357,6 +397,8 @@ export function addNewBox(preferredId = null) {
         }
         id = `box${counter}`;
     }
+
+    if (LP_DEBUG) console.debug('[liedplan] Füge neue Box hinzu:', id);
 
     // F4: Box-Factory zentral in box-utils.js
     const newBox = createDefaultBox(id);
@@ -377,7 +419,11 @@ export function addNewBox(preferredId = null) {
     showToast('info', `Neue Box "${id}" hinzugefügt`);
 }
 
+/**
+ * Leert die Textfelder (Zeile 1 bis 3) aller vorhandenen Boxen und aktualisiert OBS.
+ */
 export function clearAllCards() {
+    if (LP_DEBUG) console.debug('[liedplan] Leere alle Textbox-Zeilen');
     updateState(state => {
         state.boxes.forEach(b => {
             b.zeile1 = '';

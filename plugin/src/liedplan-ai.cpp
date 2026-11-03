@@ -1,20 +1,15 @@
 /*
-Liedplan — Standalone OBS-Plugin (T7)
-Copyright (C) 2026 Johann
-
-This program is free software; you can redistribute it and/or modify
-it under the terms of the GNU General Public License as published by
-the Free Software Foundation; either version 2 of the License, or
-(at your option) any later version.
-
-This program is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-GNU General Public License for more details.
-
-You should have received a copy of the GNU General Public License along
-with this program. If not, see <https://www.gnu.org/licenses/>
-*/
+ * liedplan-ai.cpp — Implementierung der KI- und Offline-Liedplan-Analyse (v3).
+ *
+ * Zweck:
+ *   - Ruft markitdown als Python-Subprozess auf, um Text aus PDF/Word/Bild-Dateien zu extrahieren.
+ *   - Fragt OpenRouter nach kostenlosen Modellen ab (:free) und steuert Abfrage-Wiederholungen.
+ *   - Säubert und parst JSON-Modellausgaben robust aus Markdown-Umgebungen.
+ *   - Bietet einen deterministischen Regex-Offline-Parser bei Ausfall der KI-Schnittstelle.
+ *   - Gleicht Liednummern mit lieder.md ab und ergänzt offizielle Gotteslob-Titel.
+ *
+ * Hinweis: Qt- und libobs-frei; wird auch in Standalone-Tests (test-liedplan-ai) verwendet.
+ */
 
 #ifndef _SILENCE_CXX20_U8PATH_DEPRECATION_WARNING
 #define _SILENCE_CXX20_U8PATH_DEPRECATION_WARNING

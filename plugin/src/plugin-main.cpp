@@ -1,24 +1,18 @@
 /*
-Liedplan — Standalone OBS-Plugin (T7)
-Copyright (C) 2026 Johann
-
-This program is free software; you can redistribute it and/or modify
-it under the terms of the GNU General Public License as published by
-the Free Software Foundation; either version 2 of the License, or
-(at your option) any later version.
-
-This program is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-GNU General Public License for more details.
-
-You should have received a copy of the GNU General Public License along
-with this program. If not, see <https://www.gnu.org/licenses/>
-*/
+ * plugin-main.cpp — Haupteinstiegspunkt für das Liedplan OBS Studio Plugin (v3).
+ *
+ * Zweck:
+ *   - Registriert das OBS-Modul (OBS_DECLARE_MODULE, obs_module_load, obs_module_unload).
+ *   - Registriert die native Liedplan-Kartenquelle (liedplan_card_source_info).
+ *   - Erzeugt und bindet das benutzerdefinierte QDockWidget (LiedplanDock) über die
+ *     OBS-Frontend-API ein.
+ *   - Unterstützt abgerundete Ecken im Floating-Fensterzustand via Event-Filter (LiedplanFloatRoundedHelper).
+ */
 
 #include <obs-module.h>
 #include <plugin-support.h>
 #include <util/bmem.h>
+#include "liedplan-log.hpp"
 
 #ifdef ENABLE_FRONTEND_API
 #include <obs-frontend-api.h>
@@ -95,9 +89,15 @@ struct LiedplanFloatRoundedHelper : public QObject
 #endif /* ENABLE_QT */
 #endif /* ENABLE_FRONTEND_API */
 
+/**
+ * Initialisiert das Plugin beim Laden durch OBS Studio.
+ * Registriert Quellen und Dock-Widgets.
+ *
+ * @returns true bei erfolgreicher Initialisierung.
+ */
 bool obs_module_load(void)
 {
-	obs_log(LOG_INFO, "plugin loaded successfully (version %s)", PLUGIN_VERSION);
+	blog(LOG_INFO, "[liedplan] Plugin erfolgreich geladen (Version %s)", PLUGIN_VERSION);
 #ifdef ENABLE_QT
 	obs_register_source(&liedplan_card_source_info);
 #endif
@@ -122,13 +122,16 @@ bool obs_module_load(void)
 			delete g_dock;
 			g_dock = nullptr;
 		}
-		obs_log(LOG_INFO, "Liedplan dock registered (ok=%d)", ok ? 1 : 0);
+		blog(LOG_INFO, "[liedplan] Liedplan-Dock registriert (Erfolg=%s)", ok ? "ja" : "nein");
 	}
 #endif
 #endif
 	return true;
 }
 
+/**
+ * Bereinigt Ressourcen beim Entladen des Plugins durch OBS Studio.
+ */
 void obs_module_unload(void)
 {
 #ifdef ENABLE_FRONTEND_API
@@ -153,5 +156,5 @@ void obs_module_unload(void)
 	analog zu image-source.c und obs-text.cpp durch obs_shutdown() freigegeben.
 	*/
 #endif
-	obs_log(LOG_INFO, "plugin unloaded");
+	blog(LOG_INFO, "[liedplan] Plugin entladen");
 }

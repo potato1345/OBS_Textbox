@@ -2,8 +2,18 @@
  * @file color-profiles.js
  * Verwaltung der Dashboard-Farbprofile, Konvertierung (Hex/RGBA)
  * und YAML-Import/Export für Farbpaletten.
+ *
+ * Gehört zu Version 2 (rewrite/dashboard/).
+ * Ermöglicht dynamische Themes für die Bedienoberfläche und Serialisierung
+ * als YAML für einfachen Austausch und Sicherung.
  */
 
+import { LP_DEBUG } from './box-utils.js';
+
+/**
+ * Standard-Themes des Dashboards (OBS Dark, OBS Light, Midnight Blue, etc.).
+ * @type {Array<{name: string, isDefault: boolean, colors: Object}>}
+ */
 export const DEFAULT_COLOR_PROFILES = [
     {
         name: 'OBS Dark',
@@ -97,6 +107,10 @@ export const DEFAULT_COLOR_PROFILES = [
     }
 ];
 
+/**
+ * Liste der konfigurierbaren Farb- und Deckkraft-Schlüssel eines Farbprofils.
+ * @type {string[]}
+ */
 export const COLOR_KEYS = [
     'bgPrimary', 'bgPrimaryOpacity',
     'bgSecondary', 'bgSecondaryOpacity',
@@ -111,6 +125,10 @@ export const COLOR_KEYS = [
 
 /**
  * Konvertiert Hex-Farbcode (#RGB oder #RRGGBB) und Opacity (0-255) in valides CSS rgb/rgba.
+ *
+ * @param {string} hex - Farbcode in Hexadezimaldarstellung (#FFF oder #FFFFFF).
+ * @param {number|string} [opacity255=255] - Deckkraft im Bereich 0 (transparent) bis 255 (deckend).
+ * @returns {string} CSS-Farbdefinition als rgb(...) oder rgba(...).
  */
 export function hexToRgba(hex, opacity255 = 255) {
     const raw = String(hex || '#000000').trim();
@@ -136,6 +154,9 @@ export function hexToRgba(hex, opacity255 = 255) {
 
 /**
  * Wandelt ein Profil-Objekt in einen sauberen YAML-String um.
+ *
+ * @param {object} profile - Profil-Objekt mit name und colors-Dictionary.
+ * @returns {string} Formatierter YAML-String.
  */
 export function colorProfileToYAML(profile) {
     let yaml = `# OBS Textbox Farbprofil\n`;
@@ -156,6 +177,9 @@ export function colorProfileToYAML(profile) {
 
 /**
  * Parst einen YAML-String in ein Farbprofil-Objekt.
+ *
+ * @param {string} yamlString - YAML-Text mit Profildefinition.
+ * @returns {{name: string, colors: Object}} Geparstes Profilobjekt.
  */
 export function yamlToColorProfile(yamlString) {
     const lines = yamlString.split('\n');
@@ -196,6 +220,9 @@ export function yamlToColorProfile(yamlString) {
 
 /**
  * Prüft ob ein Profilname zu den unveränderbaren Standard-Profilen gehört.
+ *
+ * @param {string} name - Name des zu prüfenden Profils.
+ * @returns {boolean} True, wenn es sich um ein Standardprofil handelt.
  */
 export function isDefaultColorProfile(name) {
     return DEFAULT_COLOR_PROFILES.some(p => p.name.toLowerCase() === (name || '').toLowerCase());
@@ -203,8 +230,11 @@ export function isDefaultColorProfile(name) {
 
 /**
  * Wendet ein Set von UI-Farben auf das :root-Element des Dashboards an.
+ *
+ * @param {object} [colors={}] - Dictionary mit Farbwerten für CSS-Variablen.
  */
 export function applyThemeVariables(colors = {}) {
+    if (LP_DEBUG) console.debug('[liedplan] Wende Theme-Variablen an');
     const root = document.documentElement;
     root.style.setProperty('--bg-primary', hexToRgba(colors.bgPrimary || '#1C1F26', colors.bgPrimaryOpacity ?? 255));
     root.style.setProperty('--bg-secondary', hexToRgba(colors.bgSecondary || '#323a44', colors.bgSecondaryOpacity ?? 255));

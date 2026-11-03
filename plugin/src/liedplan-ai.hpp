@@ -1,20 +1,14 @@
 /*
-Liedplan — Standalone OBS-Plugin (T7)
-Copyright (C) 2026 Johann
-
-This program is free software; you can redistribute it and/or modify
-it under the terms of the GNU General Public License as published by
-the Free Software Foundation; either version 2 of the License, or
-(at your option) any later version.
-
-This program is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-GNU General Public License for more details.
-
-You should have received a copy of the GNU General Public License along
-with this program. If not, see <https://www.gnu.org/licenses/>
-*/
+ * liedplan-ai.hpp — LLM-gestützte und deterministische Liedplan-Extraktion (v3).
+ *
+ * Zweck:
+ *   - Definiert AiPoint und AiResult zur Repräsentation strukturierter Liedplan-Daten.
+ *   - Deklariert Methoden für Dokument-Textextraktion (via markitdown Python-Subprozess).
+ *   - Deklariert OpenRouter-API-Kommunikation und kostenlose Modell-Erkennung (:free).
+ *   - Deklariert deterministischen Offline-Fallback-Parser und Gotteslob-Titel-Anreicherung (lieder.md).
+ *
+ * Hinweis: Qt- und libobs-frei; wird auch in Standalone-Tests (test-liedplan-ai) verwendet.
+ */
 
 #pragma once
 
@@ -27,6 +21,7 @@ with this program. If not, see <https://www.gnu.org/licenses/>
 
 namespace liedplan_ai {
 
+/** Ein einzelner erkannter Programmpunkt mit bis zu 3 Textzeilen. */
 struct AiPoint {
 	std::string zeile1;
 	std::string zeile2;

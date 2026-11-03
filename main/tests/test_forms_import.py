@@ -1,5 +1,17 @@
 # -*- coding: utf-8 -*-
-"""Unit-Tests für forms_import.py (ohne pytest). Start: .venv/Scripts/python.exe tests/test_forms_import.py"""
+"""
+test_forms_import.py — Unit-Tests für den Google-Forms-Parser (Version 1, main/).
+
+Zweck:
+  - Testet das Parsen verschiedener Exportformate (CSV mit Komma, Semikolon, BOM,
+    englischer Zeitstempel, XLSX-Sheets und ZIP-Archive).
+  - Prüft Fehlerbehandlung bei leeren Dateien, reinen Kopfzeilen, beschädigten Archiven
+    und unbekannten Formaten.
+  - Verifiziert das Mapping auf die 12 Programmpunkte der Gottesdienst-Struktur.
+
+Ausführung:
+  cwd main/ -> ..\\.venv\\Scripts\\python.exe tests/test_forms_import.py
+"""
 import io
 import os
 import sys
@@ -13,6 +25,7 @@ FAILURES = []
 
 
 def check(name, fn):
+    """Führt eine einzelne Testfunktion aus und erfasst Testergebnis und Fehler."""
     try:
         fn()
         print("PASS:", name)
@@ -25,6 +38,10 @@ def check(name, fn):
 
 
 def expect_common(rows, label):
+    """
+    Prüft die Standardwerte des Referenzdatensatzes (antwort_*.csv / antwort.xlsx):
+    Genau eine Zeile, Metadaten (Woche, Tag, Organist) sowie spezifische Programmpunkte.
+    """
     assert len(rows) == 1, "%s: erwartet 1 Zeile, got %d" % (label, len(rows))
     r = rows[0]
     assert r.get("woche") == "19.10. \u2013 25.10.2026", "woche: %r" % r.get("woche")
@@ -39,24 +56,28 @@ def expect_common(rows, label):
 
 
 def t_comma():
+    """Testet den Import einer CSV-Datei mit Komma-Trennung."""
     with open(os.path.join(SAMPLES, "antwort_comma.csv"), "rb") as f:
         rows = fi.parse_answers_csv(f.read())
     expect_common(rows, "comma")
 
 
 def t_semicolon():
+    """Testet den Import einer CSV-Datei mit Semikolon-Trennung (deutsche Excel-Exports)."""
     with open(os.path.join(SAMPLES, "antwort_semicolon.csv"), "rb") as f:
         rows = fi.parse_answers_csv(f.read())
     expect_common(rows, "semicolon")
 
 
 def t_bom():
+    """Testet den Import einer CSV-Datei mit UTF-8-BOM (Byte Order Mark)."""
     with open(os.path.join(SAMPLES, "antwort_bom.csv"), "rb") as f:
         rows = fi.parse_answers_csv(f.read())
     expect_common(rows, "bom")
 
 
 def t_timestamp_en():
+    """Testet den Import einer CSV-Datei mit englischem Header 'Timestamp'."""
     with open(os.path.join(SAMPLES, "antwort_timestamp_en.csv"), "rb") as f:
         rows = fi.parse_answers_csv(f.read())
     expect_common(rows, "timestamp_en")
@@ -64,12 +85,14 @@ def t_timestamp_en():
 
 
 def t_xlsx():
+    """Testet den Import eines XLSX-Spreadsheets mit Formular-Antworten."""
     with open(os.path.join(SAMPLES, "antwort.xlsx"), "rb") as f:
         rows = fi.parse_answers_xlsx(f.read())
     expect_common(rows, "xlsx")
 
 
 def t_zip():
+    """Testet den Import eines ZIP-Archivs, das eine Formular-CSV enthält."""
     src = os.path.join(SAMPLES, "antwort_comma.csv")
     with open(src, "rb") as f:
         csv_bytes = f.read()
@@ -81,6 +104,7 @@ def t_zip():
 
 
 def t_missing_columns():
+    """Testet den Umgang mit fehlenden Spalten (z. B. keine Verse) und Extra-Spalten."""
     # Ohne Verse-Spalten, mit unbekannter Extra-Spalte
     text = ("Zeitstempel,Woche,Organist,1. Er\u00f6ffnung \u2013 GL-Nummer,1. Er\u00f6ffnung \u2013 Liedtitel,Unbekannt\n"
             "x,26.10.2026,Priester,42,Lied,ignore_me\n")
@@ -92,6 +116,7 @@ def t_missing_columns():
 
 
 def t_unknown_format():
+    """Testet, dass bei einer CSV ohne Programmpunkt-Spalten ein ValueError ausgelöst wird."""
     try:
         fi.parse_answers_csv("Hallo,Welt\n1,2\n".encode("utf-8"))
         raise AssertionError("hätte ValueError werfen müssen")
@@ -100,6 +125,7 @@ def t_unknown_format():
 
 
 def t_empty_csv():
+    """Testet, dass bei einer leeren CSV-Datei ein ValueError ausgelöst wird."""
     try:
         fi.parse_answers_csv(b"")
         raise AssertionError("hätte ValueError werfen müssen")
@@ -108,6 +134,7 @@ def t_empty_csv():
 
 
 def t_header_only():
+    """Testet, dass bei einer CSV nur mit Kopfzeile ein ValueError ausgelöst wird."""
     try:
         fi.parse_answers_csv("Zeitstempel,Woche\n".encode("utf-8"))
         raise AssertionError("hätte ValueError werfen müssen")
@@ -116,6 +143,7 @@ def t_header_only():
 
 
 def t_bad_zip():
+    """Testet, dass bei einer beschädigten ZIP-Datei ein ValueError ausgelöst wird."""
     try:
         fi.parse_answers_zip(b"das ist kein zip")
         raise AssertionError("hätte ValueError werfen müssen")
@@ -124,6 +152,7 @@ def t_bad_zip():
 
 
 def t_to_gottesdienst_shape():
+    """Testet die Struktur des Ergebnisses von to_gottesdienst (genau 12 Punkte)."""
     rows = fi.parse_answers_csv(open(os.path.join(SAMPLES, "antwort_comma.csv"), "rb").read())
     d = fi.to_gottesdienst(rows[0])
     assert len(d["punkte"]) == 12, len(d["punkte"])
@@ -135,6 +164,7 @@ def t_to_gottesdienst_shape():
 
 
 def main():
+    """Hauptfunktion: Führt alle Tests aus und beendet mit Exit-Code 0 bei Erfolg."""
     tests = [
         ("CSV Komma", t_comma),
         ("CSV Semikolon", t_semicolon),

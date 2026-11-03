@@ -2,12 +2,20 @@
  * @file obs-sync.js
  * Synchronisiert den Dashboard-Zustand mit den Browser-Quellen in OBS Studio
  * über die OBS WebSocket v5 Schnittstelle.
+ *
+ * Gehört zu Version 2 (rewrite/dashboard/).
+ * Zusammenspiel:
+ *   - Verwendet OBSWebSocketClient zur bidirektionalen Kommunikation mit OBS Studio.
+ *   - Generiert CSS-Code via css-builder.js und injiziert diesen in erkannte Browserquellen.
+ *   - Erkennt Browserquellen anhand des Markers `--box-id: "..."` im benutzerdefinierten CSS.
+ *   - Behandelt automatische Reconnects bei Verbindungsunterbrechung.
  */
 
 import { OBSWebSocketClient } from './obs-ws.js';
 import { buildInjectedCss, applyInjectedCss } from './css-builder.js';
 import { getState, updateState } from './storage.js';
 import { showToast } from './toast.js';
+import { LP_DEBUG } from './box-utils.js';
 
 export const obs = new OBSWebSocketClient();
 
@@ -19,11 +27,22 @@ let isSyncing = false;
 // Event-Callbacks für UI
 const connectionListeners = new Set();
 
+/**
+ * Registriert einen Callback für Änderungen des OBS-Verbindungsstatus.
+ *
+ * @param {function(boolean): void} fn - Callback-Funktion, erhält true bei Verbindung, sonst false.
+ * @returns {function(): void} Funktion zum Entfernen des Listeners.
+ */
 export function onConnectionChange(fn) {
     connectionListeners.add(fn);
     return () => connectionListeners.delete(fn);
 }
 
+/**
+ * Benachrichtigt alle registrierten Listener über den aktuellen Verbindungsstatus.
+ *
+ * @param {boolean} connected - Verbindungsstatus.
+ */
 function notifyConnection(connected) {
     for (const listener of connectionListeners) {
         try {
@@ -35,6 +54,7 @@ function notifyConnection(connected) {
 }
 
 obs.onConnect = () => {
+    if (LP_DEBUG) console.debug('[liedplan] OBS WebSocket erfolgreich verbunden');
     if (reconnectTimer) {
         clearTimeout(reconnectTimer);
         reconnectTimer = null;
@@ -45,6 +65,7 @@ obs.onConnect = () => {
 };
 
 obs.onDisconnect = () => {
+    if (LP_DEBUG) console.debug('[liedplan] OBS WebSocket Verbindung getrennt');
     notifyConnection(false);
     if (!suppressReconnect) {
         scheduleReconnect();
@@ -56,6 +77,9 @@ obs.onError = (err) => {
     console.warn('[OBS Sync] Verbindungsfehler:', err.message);
 };
 
+/**
+ * Plant einen Wiederverbindungsversuch in 3,5 Sekunden, sofern ein Passwort konfiguriert ist.
+ */
 function scheduleReconnect() {
     if (reconnectTimer || suppressReconnect || obs.isConnected) return;
     const state = getState();
@@ -72,7 +96,13 @@ function scheduleReconnect() {
     }, 3500);
 }
 
+/**
+ * Baut die Verbindung zum lokalen OBS Studio WebSocket auf.
+ *
+ * @param {boolean} [showError=true] - Ob Verbindungsfehler per Toast angezeigt werden sollen.
+ */
 export async function connectOBS(showError = true) {
+    if (LP_DEBUG) console.debug('[liedplan] Verbinde mit OBS Studio WebSocket...');
     suppressReconnect = false;
     const state = getState();
     const pw = state.settings.obsPassword || '';
@@ -87,7 +117,11 @@ export async function connectOBS(showError = true) {
     }
 }
 
+/**
+ * Trennt die bestehende WebSocket-Verbindung zu OBS und deaktiviert den automatischen Reconnect.
+ */
 export function disconnectOBS() {
+    if (LP_DEBUG) console.debug('[liedplan] Trenne Verbindung zu OBS WebSocket manuell');
     suppressReconnect = true;
     if (reconnectTimer) {
         clearTimeout(reconnectTimer);
@@ -98,6 +132,9 @@ export function disconnectOBS() {
     showToast('info', 'OBS-Verbindung getrennt');
 }
 
+/**
+ * Schaltet den Verbindungsstatus um (Verbinden wenn getrennt, sonst Trennen).
+ */
 export function toggleConnection() {
     if (obs.isConnected) {
         disconnectOBS();
@@ -108,7 +145,9 @@ export function toggleConnection() {
 
 /**
  * Pusht die CSS-Variablen der konfigurierten Boxen in alle passenden Browser-Quellen von OBS.
- * @param {string|null} specificBoxId Falls gesetzt, wird nur diese Box aktualisiert.
+ *
+ * @param {string|null} [specificBoxId=null] - Falls gesetzt, wird nur die Box mit dieser ID aktualisiert.
+ * @returns {Promise<{updated: number, checked: number, connected: boolean, error?: Error}>}
  */
 export async function pushStateToOBS(specificBoxId = null) {
     if (!obs.isConnected) {
@@ -176,6 +215,7 @@ export async function pushStateToOBS(specificBoxId = null) {
             updated++;
         }
 
+        if (LP_DEBUG) console.debug('[liedplan] pushStateToOBS abgeschlossen:', { checked, updated, specificBoxId });
         return { updated, checked, connected: true };
     } catch (err) {
         console.error('[OBS Sync] Fehler bei pushStateToOBS:', err);

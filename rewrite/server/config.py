@@ -1,4 +1,16 @@
-"""Konfiguration: Defaults < config.json < Umgebungsvariablen < CLI-Argumente."""
+"""
+Konfigurationsverwaltung für Version 2 (rewrite/server/).
+
+Zweck:
+  - Lädt Konfigurationseinstellungen hierarchisch:
+      Standardwerte < config.json < Umgebungsvariablen < CLI-Argumente
+  - Stellt typisierte Konfigurationswerte (Host, Port, Token-Pfade, Upload-Limits)
+    über die Dataclass Config bereit.
+  - Ermöglicht das Auslesen des OpenRouter-API-Keys aus api.env (ohne Logging von Secrets).
+
+Zusammenspiel:
+  - Wird von __main__.py und http_app.py zur Laufzeit verwendet.
+"""
 
 from __future__ import annotations
 
@@ -15,6 +27,9 @@ DEFAULT_TOKEN_PATH = os.path.join("%LOCALAPPDATA%", "hermes", "google_token.json
 
 @dataclass
 class Config:
+    """
+    Zentrale Konfiguration für den v2 HTTP-Server und Importdienste.
+    """
     host: str = "0.0.0.0"
     port: int = 8080
     google_token_path: str = DEFAULT_TOKEN_PATH
@@ -24,10 +39,12 @@ class Config:
 
     @property
     def token_path(self) -> Path:
+        """Gibt den aufgelösten Pfad zur Google-OAuth-Token-Datei zurück."""
         return Path(os.path.expandvars(os.path.expanduser(self.google_token_path)))
 
     @property
     def max_upload_bytes(self) -> int:
+        """Gibt die maximale Upload-Größe in Bytes zurück."""
         return self.max_upload_mb * 1024 * 1024
 
 
@@ -41,6 +58,10 @@ _ENV_MAP = {
 
 
 def load_config(config_file: Path | None = None) -> Config:
+    """
+    Lädt die Server-Konfiguration aus config.json (falls vorhanden) und
+    überschreibt sie mit gesetzten Umgebungsvariablen.
+    """
     cfg = Config()
     path = config_file or (PROJECT_ROOT / "config.json")
     if path.is_file():

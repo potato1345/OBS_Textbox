@@ -2,15 +2,28 @@
  * @file css-builder.js
  * Generiert den CSS-Injektionsblock, der über OBS WebSocket in die Browser-Quellen
  * geschrieben wird. Unterstützt sichere String-Maskierung und Fallback für Regenbogeneffekte.
+ *
+ * Gehört zu Version 2 (rewrite/dashboard/).
+ * Zusammenspiel:
+ *   - Wird von obs-sync.js aufgerufen, um das Injektions-CSS für OBS-Browserquellen zu erzeugen.
+ *   - Verwendet Marker-Kommentare (INJECT_START_TAG / INJECT_END_TAG), um idempotente
+ *     Ersetzungen in bestehendem OBS-Quell-CSS durchzuführen.
  */
 
 import { hexToRgba } from './color-profiles.js';
 
+/** Start-Marker für den injizierten CSS-Block in OBS-Browserquellen. */
 export const INJECT_START_TAG = '/* OBS_TEXTBOX_INJECT_START */';
+
+/** End-Marker für den injizierten CSS-Block in OBS-Browserquellen. */
 export const INJECT_END_TAG = '/* OBS_TEXTBOX_INJECT_END */';
 
 /**
  * Maskiert Zeichen für die sichere Verwendung innerhalb von CSS-String-Literalen (z.B. content: "...").
+ * Entfernt Steuerzeichen und maskiert Backslashes sowie doppelte Anführungszeichen.
+ *
+ * @param {string|null|undefined} str - Eingabe-Zeichenkette.
+ * @returns {string} Bereinigte und CSS-sichere Zeichenkette.
  */
 export function escapeCssString(str) {
     if (str === null || str === undefined) return '';
@@ -23,6 +36,9 @@ export function escapeCssString(str) {
 /**
  * Erzeugt den vollständigen CSS-Block für eine Box.
  * Kompatibel sowohl mit dem neuen rewrite/textbox.html als auch mit dem originalen textbox.html.
+ *
+ * @param {object} box - Box-Zustandsobjekt (Texte, Farben, Animationen, Deckkraft).
+ * @returns {string} Kompletter CSS-Injektionsblock inklusive Start- und End-Tag.
  */
 export function buildInjectedCss(box) {
     const hasText = !!(
@@ -89,6 +105,10 @@ export function buildInjectedCss(box) {
 
 /**
  * Ersetzt den alten Injektionsblock in einem bestehenden CSS-String durch den neuen.
+ *
+ * @param {string} existingCss - Vorhandenes CSS aus den Einstellungen der OBS-Browserquelle.
+ * @param {string} newBlock - Neu generierter Injektionsblock.
+ * @returns {string} Aktualisiertes Gesamt-CSS.
  */
 export function applyInjectedCss(existingCss, newBlock) {
     const startPattern = INJECT_START_TAG.replace(/[*\\/]/g, '\\$&');

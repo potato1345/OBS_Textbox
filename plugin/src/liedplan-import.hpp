@@ -1,20 +1,13 @@
 /*
-Liedplan — Standalone OBS-Plugin (T7)
-Copyright (C) 2026 Johann
-
-This program is free software; you can redistribute it and/or modify
-it under the terms of the GNU General Public License as published by
-the Free Software Foundation; either version 2 of the License, or
-(at your option) any later version.
-
-This program is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-GNU General Public License for more details.
-
-You should have received a copy of the GNU General Public License along
-with this program. If not, see <https://www.gnu.org/licenses/>
-*/
+ * liedplan-import.hpp — Import-Funktionen für Google Forms, CSV, XLSX und ZIP (v3).
+ *
+ * Zweck:
+ *   - Definiert LiedplanPoint und LiedplanImportResult für 12 liturgische Programmpunkte.
+ *   - Deklariert Parser für Google Forms API JSON-Antworten und CSV-/Tabellenexporte.
+ *   - Implementiert OAuth-Token-Refresh und HTTP-Aufrufe via Windows WinINet.
+ *
+ * Hinweis: Qt- und libobs-frei; wird auch in Standalone-Tests (test-liedplan-import) verwendet.
+ */
 
 #pragma once
 
@@ -29,6 +22,7 @@ with this program. If not, see <https://www.gnu.org/licenses/>
 
 namespace liedplan_import {
 
+/** Die 12 standardmäßigen Programmpunkte des Liedplans in fester liturgischer Reihenfolge. */
 inline constexpr std::array<std::string_view, 12> PROGRAM_POINTS = {
 	"Eröffnung",      "Kyrie",  "Gloria",    "Zwischengesang", "Halleluja", "Credo",
 	"Gabenbereitung", "Heilig", "Agnus Dei", "Kommunion",      "Danklied",  "Schlusslied",

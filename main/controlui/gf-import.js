@@ -1,16 +1,23 @@
-/* =====================================================
- * GOOGLE FORM IMPORT
- * Importiert Antwort-Exports (CSV/XLSX/ZIP) des Formulars
- * „Liedplan – Gottesdienstprogramm" in die Dashboard-Karten —
- * deterministisch, ohne AI. Alternativ: neueste Antwort
- * direkt per Google API (GET /api/form-responses).
- * ===================================================== */
+/**
+ * @file gf-import.js
+ * Google Forms Import-Logik für das v1 Web-Dashboard (main/controlui/).
+ *
+ * Zweck:
+ *   - Ermöglicht den dateibasierten Import von Google-Forms-Antworten (CSV, XLSX, ZIP)
+ *     über den Server-Endpunkt POST /api/import/answers.
+ *   - Ermöglicht den direkten API-Abruf der neuesten Formularantwort über GET /api/form-responses.
+ *   - Transformiert die 12 Programmpunkte der Gottesdienst-Struktur in Dashboard-Karten.
+ *
+ * Zusammenspiel:
+ *   - Wird in main/controlui/control.html eingebunden.
+ *   - Kommuniziert mit main/server.py (bzw. forms_import.py) und ruft applyLLMResultToCards() in control.js auf.
+ */
 
 /**
  * Mappt den Gottesdienst-JSON des Servers auf die Kartenstruktur
  * (12 Karten: zeile1 = Programmpunkt, zeile2 = GL-Nummer + Verse, zeile3 = Liedtitel).
- * @param {Object} d { woche, tag, organist, zeitstempel, punkte: [{name, gl, verse, titel}] }
- * @returns {Array<{zeile1: string, zeile2: string, zeile3: string}>}
+ * @param {Object} d Gottesdienst-Objekt { woche, tag, organist, zeitstempel, punkte: [{name, gl, verse, titel}] }
+ * @returns {Array<{zeile1: string, zeile2: string, zeile3: string}>} Array für Dashboard-Karten
  */
 function gottesdienstToItems(d) {
     return (d && d.punkte ? d.punkte : []).map(p => {
@@ -23,6 +30,11 @@ function gottesdienstToItems(d) {
     });
 }
 
+/**
+ * Aktualisiert den Statustext im Google-Forms-Import-Modal.
+ * @param {string} text Anzuzeigende Nachricht
+ * @param {boolean} [isError=false] Ob es sich um eine Fehlermeldung handelt (rot statt grün)
+ */
 function gfSetStatus(text, isError) {
     const el = document.getElementById('gf-status');
     if (!el) return;
@@ -31,9 +43,9 @@ function gfSetStatus(text, isError) {
 }
 
 /**
- * Füllt die Karten aus einer Gottesdienst-Antwort.
- * @param {Object} dienst Gottesdienst-JSON
- * @param {string} quelle Kurzbezeichnung der Quelle für die Statusmeldung
+ * Füllt die Dashboard-Karten aus einer validierten Gottesdienst-Antwort.
+ * @param {Object} dienst Gottesdienst-JSON mit Metadaten und 12 Programmpunkten
+ * @param {string} quelle Kurzbezeichnung der Quelle für die Erfolgsmeldung
  */
 function applyGottesdienst(dienst, quelle) {
     const items = gottesdienstToItems(dienst);
@@ -49,6 +61,9 @@ function applyGottesdienst(dienst, quelle) {
     gfSetStatus('✔ Importiert (' + (quelle || 'unbekannt') + '): ' + info + ', ' + items.length + ' Karten gefüllt.');
 }
 
+/**
+ * Öffnet das Google-Forms-Import-Modal und setzt die Dateiauswahl zurück.
+ */
 function openGFImportModal() {
     const m = document.getElementById('gf-import-modal');
     if (!m) return;
@@ -58,13 +73,18 @@ function openGFImportModal() {
     m.hidden = false;
 }
 
+/**
+ * Schließt das Google-Forms-Import-Modal.
+ */
 function closeGFImportModal() {
     const m = document.getElementById('gf-import-modal');
     if (m) m.hidden = true;
 }
 
 /**
- * Importiert die gewählte Datei (CSV/XLSX/ZIP) per POST /api/import/answers.
+ * Liest die im Modal gewählte Datei ein und sendet sie an den Server (POST /api/import/answers).
+ * Unterstützt CSV, XLSX und ZIP.
+ * @returns {Promise<void>}
  */
 async function importFormFile() {
     const input = document.getElementById('gf-file-input');
@@ -93,7 +113,8 @@ async function importFormFile() {
 }
 
 /**
- * Holt die neueste Antwort direkt von Google (GET /api/form-responses).
+ * Holt die neueste Formular-Antwort direkt per Server-Endpunkt GET /api/form-responses von der Google API.
+ * @returns {Promise<void>}
  */
 async function fetchLatestFromGoogle() {
     gfSetStatus('Hole neueste Antwort von Google …');

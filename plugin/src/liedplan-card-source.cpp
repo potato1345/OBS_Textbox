@@ -1,24 +1,17 @@
 /*
-Liedplan — Standalone OBS-Plugin (T7)
-Copyright (C) 2026 Johann
-
-This program is free software; you can redistribute it and/or modify
-it under the terms of the GNU General Public License as published by
-the Free Software Foundation; either version 2 of the License, or
-(at your option) any later version.
-
-This program is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-GNU General Public License for more details.
-
-You should have received a copy of the GNU General Public License along
-with this program. If not, see <https://www.gnu.org/licenses/>
-*/
+ * liedplan-card-source.cpp — Native Videoquelle für Liedplan-Karten in OBS Studio (v3).
+ *
+ * Zweck:
+ *   - Implementiert obs_source_info für die Video-Quelle "liedplan_card".
+ *   - Konvertiert Einstellungen (obs_data_t) in LiedplanCard-Strukturen.
+ *   - Rendert die Karte per QPainter in eine Textur (render_card) und zeichnet
+ *     diese im OBS-Grafik-Thread (gs_draw_sprite).
+ */
 
 #include "liedplan-card-source.hpp"
 #include "liedplan-render.hpp"
 #include "liedplan-state.hpp"
+#include "liedplan-log.hpp"
 
 #include <graphics/graphics.h>
 
@@ -30,17 +23,24 @@ with this program. If not, see <https://www.gnu.org/licenses/>
 
 namespace {
 
-// Temporäre E2E-Debug-Logs (M2a-Verifikation), später entfernen.
+/**
+ * Ausführliche Diagnosezeilen für die Kartenquelle (nur bei gesetztem LIEDPLAN_DEBUG=1).
+ */
 void debug_log(const char *fmt, ...)
 {
+	if (!LiedplanDebugEnabled())
+		return;
 	char buf[512];
 	va_list args;
 	va_start(args, fmt);
 	vsnprintf(buf, sizeof(buf), fmt, args);
 	va_end(args);
-	blog(LOG_INFO, "[liedplan-debug] %s", buf);
+	blog(LOG_INFO, "[liedplan] %s", buf);
 }
 
+/**
+ * Interner Kontext der nativen Kartenquelle.
+ */
 struct LiedplanCardSource {
 	obs_source_t *source = nullptr;
 	gs_texture_t *texture = nullptr;
@@ -49,6 +49,9 @@ struct LiedplanCardSource {
 	int tick_calls = 0;
 };
 
+/**
+ * Liest die Karteneinstellungen aus dem OBS-Datenobjekt (obs_data_t) aus.
+ */
 LiedplanCard settings_to_card(obs_data_t *settings)
 {
 	LiedplanCard card;
@@ -80,6 +83,9 @@ LiedplanCard settings_to_card(obs_data_t *settings)
 	return card;
 }
 
+/**
+ * Rendert die Karte neu und aktualisiert die GPU-Textur (gs_texture_t).
+ */
 void rebuild_texture(LiedplanCardSource *ctx)
 {
 	if (!ctx)
@@ -135,6 +141,7 @@ void *liedplan_card_create(obs_data_t *settings, obs_source_t *source)
 	auto *ctx = new LiedplanCardSource();
 	ctx->source = source;
 	ctx->card = settings_to_card(settings);
+	blog(LOG_INFO, "[liedplan] Kartenquelle erstellt (ID='%s')", ctx->card.id.c_str());
 	rebuild_texture(ctx);
 	return ctx;
 }
@@ -144,6 +151,8 @@ void liedplan_card_destroy(void *data)
 	auto *ctx = static_cast<LiedplanCardSource *>(data);
 	if (!ctx)
 		return;
+
+	blog(LOG_INFO, "[liedplan] Kartenquelle freigegeben (ID='%s')", ctx->card.id.c_str());
 
 	if (ctx->texture) {
 		obs_enter_graphics();
@@ -162,6 +171,7 @@ void liedplan_card_update(void *data, obs_data_t *settings)
 		return;
 
 	ctx->card = settings_to_card(settings);
+	lp_log("Kartenquelle aktualisiert (ID='" + ctx->card.id + "')");
 	rebuild_texture(ctx);
 }
 

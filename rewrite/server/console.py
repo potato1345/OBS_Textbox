@@ -1,4 +1,11 @@
-"""Live-Statusanzeige im Terminal (Requests, Traffic, letzte Aktivitäten)."""
+"""
+Live-Statusanzeige und Statistik-Erfassung für Version 2 (rewrite/server/).
+
+Zweck:
+  - Überwacht HTTP-Anfragen, Status-Codes, Datenübertragung und verbundene Clients.
+  - Zeichnet ein flackerfreies Terminal-Dashboard im Alternate Screen Buffer (ANSI).
+  - Bietet Thread-sichere Metriken über die Dataclass RequestStats.
+"""
 
 from __future__ import annotations
 
@@ -40,6 +47,7 @@ def enable_ansi() -> None:
 
 
 def human_bytes(amount: float) -> str:
+    """Formatiert eine Bytezahl in lesbare Einheiten (B, KB, MB, GB, TB)."""
     for unit in ("B", "KB", "MB", "GB"):
         if amount < 1024:
             return f"{amount:.1f} {unit}" if unit != "B" else f"{int(amount)} B"
@@ -48,12 +56,17 @@ def human_bytes(amount: float) -> str:
 
 
 def human_duration(seconds: float) -> str:
+    """Formatiert Sekunden in HH:MM:SS."""
     seconds = int(seconds)
     return f"{seconds // 3600:02d}:{seconds % 3600 // 60:02d}:{seconds % 60:02d}"
 
 
 @dataclass
 class RequestStats:
+    """
+    Thread-sichere Erfassung von HTTP-Statistiken (Uptime, Status-Codes,
+    Traffic, aktive Clients und Historie der letzten Anfragen).
+    """
     started: float = field(default_factory=time.time)
     total: int = 0
     traffic: int = 0
@@ -65,6 +78,7 @@ class RequestStats:
     last_aging: float = field(default=0.0, repr=False)
 
     def record(self, method: str, path: str, status: int, size: int, client: str) -> None:
+        """Erfasst eine HTTP-Anfrage thread-sicher in den Statistiken."""
         if client == "::1":
             client = "127.0.0.1"
         now = time.time()
@@ -85,6 +99,7 @@ class RequestStats:
             self.recent.append((stamp, status, method, path, client))
 
     def snapshot(self) -> dict:
+        """Erstellt eine Thread-sichere Kopie der aktuellen Metriken für das Rendering."""
         with self.lock:
             return {
                 "uptime": time.time() - self.started,
@@ -98,6 +113,7 @@ class RequestStats:
 
 
 def _status_color(code: int) -> str:
+    """Wählt die passende ANSI-Farbe für einen HTTP-Statuscode aus."""
     if 200 <= code < 300:
         return GREEN
     if code == 304 or 300 <= code < 400:
@@ -106,7 +122,10 @@ def _status_color(code: int) -> str:
 
 
 class ConsoleDashboard(threading.Thread):
-    """Zeichnet einmal pro Sekunde eine feste Statusseite im Alternate-Screen."""
+    """
+    Rendert in einem Daemon-Thread sekündlich ein Terminal-Dashboard
+    im Alternate Screen Buffer.
+    """
 
     def __init__(self, stats: RequestStats, port: int, lan_ip: str, width: int = 76) -> None:
         super().__init__(daemon=True, name="console-dashboard")
@@ -114,9 +133,11 @@ class ConsoleDashboard(threading.Thread):
         self._stop = threading.Event()
 
     def stop(self) -> None:
+        """Signalisiert dem Dashboard-Thread, sich zu beenden."""
         self._stop.set()
 
     def run(self) -> None:
+        """Hauptschleife des Dashboards: rendert periodisch in sys.stdout."""
         sys.stdout.write("\033[?1049h\033[?25l\033[2J")
         try:
             while not self._stop.is_set():
@@ -128,6 +149,7 @@ class ConsoleDashboard(threading.Thread):
             sys.stdout.flush()
 
     def render(self) -> str:
+        """Erzeugt den formatieren ANSI-String des Dashboards für den aktuellen Zeitschritt."""
         snap = self.stats.snapshot()
         rule = f"{CYAN}{'─' * self.width}{RESET}"
         lines = [f"{WHITE}{row}{RESET}" for row in LOGO.splitlines()]

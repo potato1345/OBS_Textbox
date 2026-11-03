@@ -1,8 +1,22 @@
-"""HTTP-Schicht: statische Dateien + JSON-APIs für das Dashboard."""
+"""
+HTTP-Server und API-Routen für Version 2 (rewrite/server/).
+
+Zweck:
+  - Liefert statische Dateien (Dashboard unter rewrite/dashboard/, Overlay unter textbox.html) aus.
+  - Schützt interne Pfade (Server-Code, Tests, Secrets, Python-Dateien) vor Zugriff.
+  - Stellt REST-Endpunkte für Dokumenten-Konvertierung (/api/documents/convert)
+    und Google-Forms-Abfragen (/api/forms/*) bereit.
+  - Aktualisiert thread-sicher die Request-Statistiken für das Terminal-Dashboard.
+
+Zusammenspiel:
+  - Nutzt documents.py für MarkItDown und forms_import.py für Google-Forms.
+  - Wird von __main__.py instanziiert und gestartet.
+"""
 
 from __future__ import annotations
 
 import json
+import logging
 import mimetypes
 import posixpath
 import urllib.parse
@@ -14,6 +28,8 @@ from typing import Callable
 from . import documents, forms_import
 from .config import Config, read_openrouter_key
 from .console import RequestStats
+
+logger = logging.getLogger("liedplan")
 
 # Diese Pfade/Endungen werden nie ausgeliefert (Quellcode, Secrets, Tests).
 BLOCKED_SEGMENTS = {"server", "tests", "__pycache__", "node_modules", "venv"}
@@ -127,20 +143,25 @@ def make_handler(config: Config, stats: RequestStats | None = None) -> type[Simp
             super().end_headers()
 
         def dispatch(self, routes: dict[str, Callable[[], dict]]) -> bool:
+            """Routet den aktuellen Pfad auf die entsprechende API-Funktion und fängt Fehler ab."""
             action = routes.get(self.route)
             if action is None:
                 return False
             try:
                 self.send_json(HTTPStatus.OK, {"success": True, **action()})
             except ApiError as err:
+                logger.warning("API-Fehler bei %s: %d - %s", self.route, err.status, err.message)
                 self.send_json(err.status, {"success": False, "error": err.message})
             except Exception as err:  # letzte Verteidigungslinie
+                logger.exception("Unerwarteter Serverfehler bei %s: %s", self.route, err)
                 self.send_json(HTTPStatus.INTERNAL_SERVER_ERROR,
                                {"success": False, "error": f"Serverfehler: {err}"})
             return True
 
         # ------------------------------------------------------------ API
         def api_health(self) -> dict:
+            """Liefert Versions- und Feature-Verfügbarkeits-Status als JSON."""
+            logger.info("API /api/health aufgerufen")
             return {
                 "version": 2,
                 "features": {
@@ -151,15 +172,20 @@ def make_handler(config: Config, stats: RequestStats | None = None) -> type[Simp
             }
 
         def api_openrouter_key(self) -> dict:
+            """Gibt den lokal hinterlegten OpenRouter-API-Key nur an Loopback-Clients weiter."""
             if not self.is_loopback():
+                logger.warning("Zugriff auf /api/openrouter-key von Nicht-Loopback abgelehnt: %s", self.client_address[0])
                 raise ApiError(HTTPStatus.FORBIDDEN, "Nur lokal abrufbar.")
             key = read_openrouter_key(config.root)
+            logger.info("API /api/openrouter-key aufgerufen (Schlüssel vorhanden: %s)", bool(key))
             if not key:
                 raise ApiError(HTTPStatus.NOT_FOUND, "Kein Key in api.env hinterlegt.")
             return {"key": key}
 
         def api_convert_document(self) -> dict:
+            """Nimmt ein hochgeladenes Dokument entgegen und konvertiert es via MarkItDown."""
             data, filename = self.read_upload()
+            logger.info("API /api/documents/convert: Datei '%s' (%d Bytes) empfangen", filename, len(data))
             try:
                 markdown = documents.convert_to_markdown(data, filename)
             except documents.ConversionUnavailable as err:
@@ -173,9 +199,12 @@ def make_handler(config: Config, stats: RequestStats | None = None) -> type[Simp
             return {"markdown": markdown, "filename": filename}
 
         def api_forms_upload(self) -> dict:
+            """Parst eine hochgeladene Google-Forms-Datei (CSV/XLSX/ZIP) und liefert Gottesdienst-Objekte."""
             data, filename = self.read_upload()
+            logger.info("API /api/forms/upload: Datei '%s' (%d Bytes) empfangen", filename, len(data))
             try:
                 services, count = forms_import.all_services_from_file(data, filename)
+                logger.info("API /api/forms/upload erfolgreich: %d Antworten gefunden", count)
             except (forms_import.ImportFormatError, forms_import.NoResponsesError) as err:
                 raise ApiError(HTTPStatus.BAD_REQUEST, str(err)) from err
             return {
@@ -187,8 +216,11 @@ def make_handler(config: Config, stats: RequestStats | None = None) -> type[Simp
             }
 
         def api_forms_responses(self) -> dict:
+            """Fragt alle Antworten über die Google Forms API ab (chronologisch sortiert)."""
+            logger.info("API /api/forms/responses aufgerufen")
             try:
                 services = forms_import.fetch_all_services(config.token_path, config.google_form_id)
+                logger.info("API /api/forms/responses erfolgreich: %d Antworten", len(services))
             except forms_import.NoResponsesError as err:
                 raise ApiError(HTTPStatus.CONFLICT, str(err)) from err
             except (FileNotFoundError, RuntimeError) as err:
@@ -198,8 +230,11 @@ def make_handler(config: Config, stats: RequestStats | None = None) -> type[Simp
             return {"source": "google", "responses": len(services), "services": services}
 
         def api_forms_latest(self) -> dict:
+            """Fragt die neueste Antwort über die Google Forms API ab."""
+            logger.info("API /api/forms/latest aufgerufen")
             try:
                 service = forms_import.fetch_latest_service(config.token_path, config.google_form_id)
+                logger.info("API /api/forms/latest erfolgreich")
             except forms_import.NoResponsesError as err:
                 raise ApiError(HTTPStatus.CONFLICT, str(err)) from err
             except (FileNotFoundError, RuntimeError) as err:
@@ -210,6 +245,8 @@ def make_handler(config: Config, stats: RequestStats | None = None) -> type[Simp
 
         # ------------------------------------------------------------ verbs
         def do_GET(self) -> None:
+            """Verarbeitet GET-Anfragen: API-Routing, Legacy-Redirects oder statische Dateien."""
+            logger.info("Request: GET %s von %s", self.route, self.client_address[0])
             if self.dispatch({
                 "/api/health": self.api_health,
                 "/api/openrouter-key": self.api_openrouter_key,
@@ -218,6 +255,7 @@ def make_handler(config: Config, stats: RequestStats | None = None) -> type[Simp
             }):
                 return
             if self.route.startswith("/api/"):
+                logger.warning("Unbekannter API-GET-Endpunkt: %s", self.route)
                 return self.send_json(HTTPStatus.NOT_FOUND, {"success": False, "error": "Unbekannter Endpunkt."})
             target = LEGACY_REDIRECTS.get(self.route)
             if target:
@@ -227,19 +265,25 @@ def make_handler(config: Config, stats: RequestStats | None = None) -> type[Simp
                 self.end_headers()
                 return
             if is_blocked(self.route):
+                logger.warning("Zugriff auf blockierten Pfad abgewiesen: %s", self.route)
                 return self.send_error(HTTPStatus.NOT_FOUND)
             super().do_GET()
 
         def do_HEAD(self) -> None:
+            """Verarbeitet HEAD-Anfragen analog zu GET ohne Response-Body."""
+            logger.info("Request: HEAD %s von %s", self.route, self.client_address[0])
             if self.route.startswith("/api/") or is_blocked(self.route):
                 return self.send_error(HTTPStatus.NOT_FOUND)
             super().do_HEAD()
 
         def do_POST(self) -> None:
+            """Verarbeitet POST-Anfragen an die API-Endpunkte."""
+            logger.info("Request: POST %s von %s", self.route, self.client_address[0])
             if not self.dispatch({
                 "/api/documents/convert": self.api_convert_document,
                 "/api/forms/upload": self.api_forms_upload,
             }):
+                logger.warning("Unbekannter API-POST-Endpunkt: %s", self.route)
                 self.send_json(HTTPStatus.NOT_FOUND, {"success": False, "error": "Unbekannter Endpunkt."})
 
     return Handler

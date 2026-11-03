@@ -2,13 +2,21 @@
  * @file pdf-automation.js
  * Automatisiert den Import von Gottesdienstprogrammen aus PDF- und Word-Dateien (.docx).
  *
+ * Gehört zu Version 1 (main/controlui/).
+ * Zusammenspiel:
+ *   - Ermöglicht im v1 Web-Dashboard den Import von Liedplänen via Drag & Drop.
+ *   - Kommuniziert bei DOCX mit main/server.py (/api/parse-document) oder extrahiert
+ *     bei PDF den Text direkt im Browser via pdf.js.
+ *   - Ruft OpenRouter (LLM) oder den integrierten lokalen Regex-Fallback auf.
+ *   - Befüllt die Karten im Dashboard via applyLLMResultToCards() in control.js.
+ *
  * Ablauf:
  *  1. Text extrahieren:
- *     - PDF  -> client-seitig via pdf.js (zeilenorientiert; laeuft auch ohne Server)
+ *     - PDF  -> client-seitig via pdf.js (zeilenorientiert; läuft auch ohne Server)
  *     - DOCX -> server-seitig via /api/parse-document (MarkItDown)
- *  2. OpenRouter Free-Tier: verfuegbare kostenlose Modelle werden LIVE ermittelt,
+ *  2. OpenRouter Free-Tier: verfügbare kostenlose Modelle werden LIVE ermittelt,
  *     dann mit Timeouts, Backoff- und Modell-Fallback aufgerufen.
- *  3. Robustes JSON-Parsen + lokale Titel-Vervollstaendigung aus lieder.md.
+ *  3. Robustes JSON-Parsen + lokale Titel-Vervollständigung aus lieder.md.
  *  4. Fallback: Falls kein Free-Tier-Modell erreichbar ist, wird ein deterministischer
  *     lokaler Parser genutzt, damit der Import trotzdem funktioniert (offline).
  */

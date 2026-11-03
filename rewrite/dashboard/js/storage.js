@@ -1,14 +1,27 @@
 /**
  * @file storage.js
- * Verwaltet den State des Dashboards im localStorage inklusive
+ * Verwaltet den Zustand des Dashboards im localStorage inklusive
  * automatischer Daten-Migration aus älteren Versionen.
+ *
+ * Gehört zu Version 2 (rewrite/dashboard/).
+ * Zusammenspiel:
+ *   - Verwaltet den globalen Single Source of Truth (Boxen, Profile, Einstellungen).
+ *   - Benachrichtigt Subscriber über EventTarget bei Zustandsänderungen.
+ *   - Migriert Einstellungen und Boxen aus der v1-Installation automatisch nach v2.
  */
 
 import { DEFAULT_COLOR_PROFILES } from './color-profiles.js';
+import { LP_DEBUG } from './box-utils.js';
 
+/** Schlüssel für den v2-Zustand im localStorage des Browsers. */
 const STORAGE_KEY = 'obs_textbox_state_v2';
+
+/** Veralteter Schlüssel für den v1-Zustand zur Migration. */
 const LEGACY_STORAGE_KEY = 'obs_textbox_state';
 
+/**
+ * Standardzustand für neue Dashboard-Installationen.
+ */
 export const DEFAULT_STATE = {
     version: 2,
     autoSend: true,
@@ -68,17 +81,31 @@ export const DEFAULT_STATE = {
 let currentState = null;
 const eventTarget = new EventTarget();
 
+/**
+ * Registriert einen Listener für Zustandsänderungen (CustomEvent mit detail: { state, action }).
+ *
+ * @param {EventListener} listener - Callback-Funktion.
+ * @returns {function(): void} Funktion zum Abbestellen des Listeners.
+ */
 export function onStateChange(listener) {
     eventTarget.addEventListener('change', listener);
     return () => eventTarget.removeEventListener('change', listener);
 }
 
+/**
+ * Löst das change-Event auf dem internen EventTarget aus.
+ *
+ * @param {string} [action='update'] - Bezeichner der ausgeführten Mutation.
+ */
 function notifyChange(action = 'update') {
     eventTarget.dispatchEvent(new CustomEvent('change', { detail: { state: currentState, action } }));
 }
 
 /**
  * Überprüft und migriert ggf. vorhandene Daten aus v1 localStorage-Schlüsseln.
+ *
+ * @param {object} state - Zu aktualisierendes Zustandsobjekt.
+ * @returns {boolean} True, wenn mindestens ein Legacy-Wert übernommen wurde.
  */
 function migrateLegacyData(state) {
     let modified = false;
@@ -146,6 +173,9 @@ function migrateLegacyData(state) {
 
 /**
  * Bereinigt fehlerhafte Farbwerte (z.B. Opacity 0 aus alten Dashboard-Bugs).
+ *
+ * @param {object} colors - Zu prüfende Farbkonfiguration.
+ * @returns {object} Bereinigte Farben oder Standard-Theme-Farben bei Korruption.
  */
 function sanitizeColors(colors) {
     const defaultColors = DEFAULT_COLOR_PROFILES[0].colors;
@@ -164,7 +194,10 @@ function sanitizeColors(colors) {
 }
 
 /**
- * Lädt den State aus dem localStorage oder initialisiert ihn.
+ * Lädt den Zustand aus dem localStorage oder initialisiert ihn mit Standardwerten.
+ * Führt bei Bedarf eine Datenmigration aus Version 1 durch.
+ *
+ * @returns {object} Der geladene Gesamtzustand.
  */
 export function loadState() {
     try {
@@ -190,21 +223,28 @@ export function loadState() {
     }
 
     currentState.settings.uiColors = sanitizeColors(currentState.settings.uiColors);
+    if (LP_DEBUG) console.debug('[liedplan] Zustand geladen, Boxen:', currentState.boxes?.length);
     return currentState;
 }
 
 /**
- * Schreibt den aktuellen State in den localStorage.
+ * Schreibt den aktuellen Zustand persistent in den localStorage.
  */
 export function saveState() {
     if (!currentState) return;
     try {
         localStorage.setItem(STORAGE_KEY, JSON.stringify(currentState));
+        if (LP_DEBUG) console.debug('[liedplan] Zustand persistent gespeichert');
     } catch (err) {
         console.error('[Storage] Speichern fehlgeschlagen:', err);
     }
 }
 
+/**
+ * Gibt den aktuellen Zustand zurück; lädt ihn bei Bedarf, falls noch nicht initialisiert.
+ *
+ * @returns {object} Der aktuelle Gesamtzustand.
+ */
 export function getState() {
     if (!currentState) {
         loadState();
@@ -212,7 +252,14 @@ export function getState() {
     return currentState;
 }
 
+/**
+ * Mutiert den Zustand atomar über eine Mutator-Funktion, speichert ihn und benachrichtigt Listener.
+ *
+ * @param {function(object): void} mutator - Funktion, die Änderungen am Zustandsobjekt vornimmt.
+ * @param {string} [actionName='update'] - Name der Aktion für Debugging und Event-Details.
+ */
 export function updateState(mutator, actionName = 'update') {
+    if (LP_DEBUG) console.debug('[liedplan] updateState Aktion:', actionName);
     const state = getState();
     mutator(state);
     saveState();

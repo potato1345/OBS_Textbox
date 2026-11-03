@@ -1,24 +1,17 @@
 /*
-Liedplan — Standalone OBS-Plugin (T7)
-Copyright (C) 2026 Johann
-
-This program is free software; you can redistribute it and/or modify
-it under the terms of the GNU General Public License as published by
-the Free Software Foundation; either version 2 of the License, or
-(at your option) any later version.
-
-This program is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-GNU General Public License for more details.
-
-You should have received a copy of the GNU General Public License along
-with this program. If not, see <https://www.gnu.org/licenses/>
-*/
+ * liedplan-scene.cpp — OBS-Szenen-Integration für Liedplan-Karten (v3).
+ *
+ * Zweck:
+ *   - Verwaltet OBS-Browserquellen für Liedplan-Karten in aktuellen oder allen Szenen.
+ *   - Erzeugt die Quellen mit CEF-freundlichen Standardparametern (Breite, Höhe, FPS).
+ *   - Behandelt automatische Migration alter Quellentypen (z.B. liedplan_card -> browser_source).
+ *   - Aktualisiert Karten-Inhalte (HTML/CSS) oder blendet diese bei Leeren/Löschen aus.
+ */
 
 #include "liedplan-scene.hpp"
 #include "liedplan-html.hpp"
 #include "liedplan-render.hpp"
+#include "liedplan-log.hpp"
 
 #include <plugin-support.h>
 
@@ -105,7 +98,7 @@ void send_to_current_scene(const LiedplanCard &card, const LiedplanSettings &set
 #ifdef ENABLE_FRONTEND_API
 	obs_source_t *scene_src = obs_frontend_get_current_scene();
 	if (!scene_src) {
-		obs_log(LOG_WARNING, "Liedplan: keine aktuelle Szene verfügbar");
+		blog(LOG_WARNING, "[liedplan] Keine aktuelle Szene verfügbar");
 		return;
 	}
 
@@ -122,13 +115,13 @@ void send_to_current_scene(const LiedplanCard &card, const LiedplanSettings &set
 		if (is_browser_source(src)) {
 			std::string html_path;
 			if (liedplan_html::write_card(card, html_path, settings)) {
-				obs_log(LOG_INFO, "Liedplan: HTML geschrieben: %s", html_path.c_str());
+				lp_log("HTML geschrieben: " + html_path);
 			}
 			liedplan_html::push_update(src, card, false, settings,
 						 liedplan_html::cards_dir());
 		} else {
 			const char *old_id = src ? obs_source_get_id(src) : "";
-			obs_log(LOG_INFO, "Liedplan: migriere %s (alter Typ '%s' -> %s)",
+			blog(LOG_INFO, "[liedplan] Migriere %s (alter Typ '%s' -> %s)",
 				name.c_str(), old_id ? old_id : "", kBrowserSourceId);
 			obs_sceneitem_remove(item);
 			item = nullptr;
@@ -138,7 +131,7 @@ void send_to_current_scene(const LiedplanCard &card, const LiedplanSettings &set
 	if (!item) {
 		std::string html_path;
 		if (liedplan_html::write_card(card, html_path, settings)) {
-			obs_log(LOG_INFO, "Liedplan: HTML geschrieben: %s", html_path.c_str());
+			lp_log("HTML geschrieben: " + html_path);
 		}
 
 		obs_data_t *bs_settings = make_settings(card, html_path);
@@ -153,13 +146,13 @@ void send_to_current_scene(const LiedplanCard &card, const LiedplanSettings &set
 				obs_sceneitem_set_pos(item, &pos);
 			}
 			obs_source_release(src);
-			obs_log(LOG_INFO, "Liedplan: Browser-Source angelegt: %s (%s)",
+			blog(LOG_INFO, "[liedplan] Browser-Quelle angelegt: %s (%s)",
 				name.c_str(), html_path.c_str());
 		}
 	}
 
 	const char *scene_name = obs_source_get_name(obs_scene_get_source(scene));
-	obs_log(LOG_INFO, "Liedplan: %s -> Szene %s", name.c_str(), scene_name ? scene_name : "");
+	blog(LOG_INFO, "[liedplan] Sende Karte '%s' an Szene '%s'", name.c_str(), scene_name ? scene_name : "");
 
 	obs_source_release(scene_src);
 #else
@@ -179,7 +172,7 @@ void update_everywhere(const LiedplanCard &card, bool clear, const LiedplanSetti
 
 	std::string html_path;
 	if (liedplan_html::write_card(disk_card, html_path, settings)) {
-		obs_log(LOG_INFO, "Liedplan: HTML geschrieben: %s", html_path.c_str());
+		lp_log("HTML geschrieben: " + html_path);
 	}
 
 	const std::string name = source_name(card.id);
@@ -202,6 +195,7 @@ void update_everywhere(const LiedplanCard &card, bool clear, const LiedplanSetti
 void remove_everywhere(const std::string &card_id)
 {
 	const std::string name = source_name(card_id);
+	blog(LOG_INFO, "[liedplan] Entferne Quelle '%s' aus allen Szenen", name.c_str());
 	const std::vector<obs_scene_t *> scenes = collect_all_scenes();
 
 	for (obs_scene_t *scene : scenes) {

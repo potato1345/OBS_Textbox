@@ -4,7 +4,25 @@
  * Box-Factory, ID-Sanitizer mit Kollisionsbehandlung und HTML-Escaping.
  * Hier zentral gehalten, damit AI-Import, Forms-Import und Dashboard-Karten
  * dieselbe Logik verwenden (F4/F3, Review 2026-10-22).
+ *
+ * Gehört zu v2 (`rewrite/`, Web-Dashboard). Wird u. a. von cards.js,
+ * forms-importer.js und pdf-ai-importer.js importiert. Das Modul selbst
+ * importiert nichts – deshalb liegt hier auch das zentrale Debug-Flag
+ * `LP_DEBUG`, das andere Module ohne Gefahr zirkulärer Imports einbinden können.
  */
+
+/**
+ * Zentrales Debug-Flag für das v2-Dashboard: aktiv, wenn die Seite mit
+ * `?debug` in der URL geöffnet wird (z. B. `index.html?debug`).
+ * Module loggen nur hinter `if (LP_DEBUG)` per `console.debug(...)`.
+ *
+ * Entspricht im Browser exakt `new URLSearchParams(location.search).has("debug")`.
+ * Der `typeof location`-Guard ist nötig, weil tests/test_js_modules.js einige
+ * Dashboard-Module unter Node.js importiert, wo `location` nicht existiert –
+ * ein ungeschützter Zugriff auf Modulebene würfe dort einen ReferenceError.
+ * @type {boolean}
+ */
+export const LP_DEBUG = typeof location !== 'undefined' && new URLSearchParams(location.search).has('debug');
 
 /**
  * Erzeugt eine neue Box mit den Standardwerten.

@@ -2,6 +2,12 @@
  * @file modals.js
  * Verwaltung der nativen <dialog>-Modale für Einstellungen, Schnell-Profile,
  * AI-Import und Google-Forms-Import.
+ *
+ * Gehört zu Version 2 (rewrite/dashboard/).
+ * Zusammenspiel:
+ *   - Steuert Anzeige und Events aller Dialogfenster im Dashboard.
+ *   - Verwaltet Einstellungen (OBS WebSocket Passwort, UI-Farbthemen, Auto-Send).
+ *   - Behandelt den mehrstufigen Import-Workflow (AI-Extraktion, Dateiupload, Forms-API).
  */
 
 import { getState, updateState } from './storage.js';
@@ -17,9 +23,15 @@ import { connectOBS, disconnectOBS, toggleConnection, obs } from './obs-sync.js'
 import { showToast } from './toast.js';
 import { extractDocumentText, processWithLLM, parseLiedplanLocally, DEFAULT_SYSTEM_PROMPT } from './pdf-ai-importer.js';
 import { fetchAllFormsServices, uploadAnswersFile, serviceToItems, applyItemsToDashboard } from './forms-importer.js';
-import { escapeHtml } from './box-utils.js';
+import { LP_DEBUG, escapeHtml } from './box-utils.js';
 import { renderDashboardCards } from './cards.js';
 
+/**
+ * Aktiviert das Schließen des Dialogs bei Klick auf den Hintergrund (Backdrop-Klick).
+ * Bietet Fallback für Browser ohne Unterstützung des nativen closedby="any".
+ *
+ * @param {HTMLDialogElement|null} dialog - Das Dialog-Element.
+ */
 export function setupModalDismiss(dialog) {
     if (!dialog) return;
 
@@ -41,7 +53,13 @@ export function setupModalDismiss(dialog) {
     }
 }
 
+/**
+ * Öffnet einen modalen Dialog über dessen ID.
+ *
+ * @param {string} dialogId - HTML-ID des <dialog>-Elements.
+ */
 export function openDialog(dialogId) {
+    if (LP_DEBUG) console.debug('[liedplan] Öffne Dialog:', dialogId);
     const dialog = document.getElementById(dialogId);
     if (!dialog) return;
     if (typeof dialog.showModal === 'function') {
@@ -51,7 +69,13 @@ export function openDialog(dialogId) {
     }
 }
 
+/**
+ * Schließt einen modalen Dialog über dessen ID.
+ *
+ * @param {string} dialogId - HTML-ID des <dialog>-Elements.
+ */
 export function closeDialog(dialogId) {
+    if (LP_DEBUG) console.debug('[liedplan] Schließe Dialog:', dialogId);
     const dialog = document.getElementById(dialogId);
     if (!dialog) return;
     if (typeof dialog.close === 'function') {
@@ -65,6 +89,10 @@ export function closeDialog(dialogId) {
 // Einstellungen & Farbprofile
 // -------------------------------------------------------------
 
+/**
+ * Initialisiert das Einstellungs-Modal, inkl. Passwort-Umschaltung, Auto-Send-Option,
+ * OBS-Verbindungsbutton und Verwaltung von Farbprofilen (Speichern, Löschen, Export, Import).
+ */
 export function initSettingsModal() {
     const dialog = document.getElementById('settings-dialog');
     setupModalDismiss(dialog);
@@ -232,6 +260,9 @@ export function initSettingsModal() {
     bindThemeColorPickers();
 }
 
+/**
+ * Lädt die aktuellen Konfigurationswerte aus dem State in die Eingabefelder des Einstellungs-Modals.
+ */
 export function loadSettingsFields() {
     const state = getState();
     const pwInput = document.getElementById('ws-password');
@@ -251,6 +282,11 @@ export function loadSettingsFields() {
     updateConnectionStatusLabel(obs.isConnected);
 }
 
+/**
+ * Aktualisiert die Statusanzeige und Beschriftung des Verbindungsbuttons im Modal.
+ *
+ * @param {boolean} connected - Verbindungsstatus zu OBS WebSocket.
+ */
 export function updateConnectionStatusLabel(connected) {
     const lbl = document.getElementById('settings-connection-status');
     const btn = document.getElementById('btn-settings-connect');
@@ -263,6 +299,9 @@ export function updateConnectionStatusLabel(connected) {
     }
 }
 
+/**
+ * Registriert Event-Listener auf allen Theme-Farbwählern zur Live-Vorschau und Zustandsspeicherung.
+ */
 function bindThemeColorPickers() {
     for (const key of COLOR_KEYS) {
         const el = document.getElementById(`theme-${key}`);
@@ -287,6 +326,9 @@ function bindThemeColorPickers() {
     }
 }
 
+/**
+ * Baut das Dropdown-Menü für Farbprofile (Standard- und benutzerdefinierte Themes) neu auf.
+ */
 export function renderColorProfileSelect() {
     const select = document.getElementById('color-profile-select');
     if (!select) return;
@@ -333,6 +375,11 @@ export function renderColorProfileSelect() {
     updateDeleteButtonState();
 }
 
+/**
+ * Behandelt die Auswahl eines Farbprofils im Einstellungsmenü.
+ *
+ * @param {string} name - Name des gewählten Profils oder '__custom__'.
+ */
 function onProfileSelectChange(name) {
     if (name === '__custom__') {
         updateState(s => { s.settings.activeColorProfile = null; }, 'set_custom_profile');
@@ -355,6 +402,9 @@ function onProfileSelectChange(name) {
     showToast('info', `Profil "${name}" angewendet`);
 }
 
+/**
+ * Aktiviert oder deaktiviert den Profil-Löschen-Button abhängig vom Schutzstatus des gewählten Profils.
+ */
 function updateDeleteButtonState() {
     const select = document.getElementById('color-profile-select');
     const deleteBtn = document.getElementById('btn-delete-color-profile');
@@ -369,6 +419,9 @@ function updateDeleteButtonState() {
 // Schnell-Profile (Box-Zustand)
 // -------------------------------------------------------------
 
+/**
+ * Initialisiert das Dialogfenster zum Abspeichern des aktuellen Box-Zustands als Schnell-Profil.
+ */
 export function initSaveProfileModal() {
     const dialog = document.getElementById('save-profile-dialog');
     setupModalDismiss(dialog);
@@ -405,6 +458,9 @@ export function initSaveProfileModal() {
     });
 }
 
+/**
+ * Rendert die Leiste mit Schnellprofil-Chips in der oberen Navigationsleiste des Dashboards.
+ */
 export function renderQuickProfilesBar() {
     const container = document.getElementById('quick-profiles-list');
     if (!container) return;
@@ -459,6 +515,10 @@ const IMPORT_TABS = ['ai', 'file', 'google'];
 let importResponseList = []; // alle geladenen Einreichungen (für den Auswahl-Dropdown)
 let importPending = null;     // { items, sourceLabel, count }
 
+/**
+ * Initialisiert den mehrteiligen Import-Dialog (AI-Analyse, Dateiupload, Google Forms API).
+ * Bindet Tab-Umschaltung, Drag-and-Drop-Zonen, API-Schlüssel-Vorbelegung und Übernahme ins Dashboard.
+ */
 export function initImportModal() {
     const dialog = document.getElementById(IMPORT_DIALOG_ID);
     setupModalDismiss(dialog);
@@ -565,6 +625,11 @@ export function initImportModal() {
     });
 }
 
+/**
+ * Schaltet zwischen den Import-Reitern (AI, Datei, Google Forms) um.
+ *
+ * @param {string} tabId - ID des Reiters ('ai', 'file' oder 'google').
+ */
 function switchImportTab(tabId) {
     IMPORT_TABS.forEach(id => {
         document.getElementById(`import-tab-${id}`)?.classList.toggle('active', id === tabId);
@@ -573,6 +638,13 @@ function switchImportTab(tabId) {
     });
 }
 
+/**
+ * Bindet Klick- und Drag-and-Drop-Events an einen Upload-Bereich.
+ *
+ * @param {HTMLElement|null} dropzone - Der sichtbare Drop-Bereich.
+ * @param {HTMLInputElement|null} fileInput - Das versteckte <input type="file">-Element.
+ * @param {function(File): void} onFile - Callback bei Dateiauswahl.
+ */
 function bindDropzone(dropzone, fileInput, onFile) {
     dropzone?.addEventListener('click', () => fileInput?.click());
     fileInput?.addEventListener('change', () => {
@@ -593,6 +665,11 @@ function bindDropzone(dropzone, fileInput, onFile) {
     });
 }
 
+/**
+ * Verarbeitet eine per AI/OCR zu analysierende Liedplan-Datei (PDF, Bild, DOCX, etc.).
+ *
+ * @param {File} file - Die hochgeladene Liedplan-Datei.
+ */
 async function handleAiUpload(file) {
     const apiKey = document.getElementById('input-ai-api-key')?.value.trim();
     const systemPrompt = document.getElementById('input-ai-system-prompt')?.value.trim() || DEFAULT_SYSTEM_PROMPT;
@@ -692,6 +769,11 @@ async function handleAiUpload(file) {
 // Datei-Import (CSV/XLSX/ZIP) & gemeinsame Vorschau
 // -------------------------------------------------------------
 
+/**
+ * Verarbeitet eine hochgeladene Antwort-Exportdatei (CSV, XLSX oder ZIP).
+ *
+ * @param {File} file - Die Antwortdatei.
+ */
 async function handleFileImport(file) {
     try {
         const { services, count, filename } = await uploadAnswersFile(file);
@@ -705,6 +787,9 @@ async function handleFileImport(file) {
 /**
  * Lädt alle Einreichungen (neueste zuerst) in den Auswahl-Dropdown und
  * zeigt die erste (neueste) als Vorschau an.
+ *
+ * @param {Array<Object>} services - Liste geparster Gottesdienst-Objekte.
+ * @param {string} sourceLabel - Anzeigename der Quelle (Dateiname oder 'Google Forms').
  */
 async function loadServicesIntoImport(services, sourceLabel) {
     if (!Array.isArray(services) || services.length === 0) {
@@ -733,6 +818,12 @@ async function loadServicesIntoImport(services, sourceLabel) {
     showImportPreview(serviceToItems(services[0]), sourceLabel, services[0]);
 }
 
+/**
+ * Erzeugt eine lesbare Beschriftung für eine Formulareinreichung im Dropdown.
+ *
+ * @param {Object} service - Gottesdienst-Objekt.
+ * @returns {string} Formatierte Beschriftung.
+ */
 function formatResponseLabel(service) {
     const parts = [service.zeitstempel || 'Ohne Zeitstempel'];
     if (service.woche) parts.push(`Woche ${service.woche}`);
@@ -744,6 +835,10 @@ function formatResponseLabel(service) {
 /**
  * Gemeinsame Vorschau für alle Import-Quellen (F1: alle dynamischen Werte
  * werden maskiert, bevor sie per innerHTML eingefügt werden).
+ *
+ * @param {Array<{zeile1: string, zeile2: string, zeile3: string}>} items - Extrahierte Programmpunkte.
+ * @param {string} sourceLabel - Quellen-Kennzeichnung für den Header.
+ * @param {Object|null} [service=null] - Optionale Gottesdienst-Metadaten.
  */
 function showImportPreview(items, sourceLabel, service = null) {
     const container = document.getElementById('forms-preview-container');

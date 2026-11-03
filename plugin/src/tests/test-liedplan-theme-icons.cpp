@@ -1,20 +1,11 @@
 /*
-Liedplan — Standalone OBS-Plugin (T7) — Ui4-Icon-Test
-Copyright (C) 2026 Johann
-
-This program is free software; you can redistribute it and/or modify
-it under the terms of the GNU General Public License as published by
-the Free Software Foundation; either version 2 of the License, or
-(at your option) any later version.
-
-This program is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-GNU General Public License for more details.
-
-You should have received a copy of the GNU General Public License along
-with this program. If not, see <https://www.gnu.org/licenses/>
-*/
+ * test-liedplan-theme-icons.cpp — Unit-Tests für eingebettete OBS-Theme-Icons (v3).
+ *
+ * Zweck:
+ *   - Prüft das Ausliefern der SVG-Icons in ein Zielverzeichnis (write_icons).
+ *   - Prüft Idempotenz (No-Op bei übereinstimmender Version ohne Änderungen).
+ *   - Prüft erzwungenes Neuschreiben (force=true) und Fehlerbehandlung bei ungültigen Pfaden.
+ */
 
 #include "../liedplan-theme-icons.hpp"
 

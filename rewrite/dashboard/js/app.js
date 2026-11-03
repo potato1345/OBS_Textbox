@@ -1,8 +1,18 @@
 /**
  * @file app.js
- * Haupt-Einstiegspunkt für das OBS Textbox Dashboard (ES-Module).
+ * Haupt-Einstiegspunkt für das OBS Textbox Dashboard (Version 2, rewrite/).
+ *
+ * Zweck:
+ *   - Initialisiert den Anwendungszustand (State), Themes und DOM-Komponenten.
+ *   - Verdrahtet globale Toolbar-Aktionen, Tastaturkürzel und Dialoge.
+ *   - Startet die OBS WebSocket Verbindung (obs-sync.js) bei hinterlegtem Passwort.
+ *
+ * Zusammenspiel:
+ *   - Dient als Einstiegsmodul für index.html (<script type="module" src="js/app.js">).
+ *   - Koordiniert storage.js, cards.js, modals.js, color-profiles.js und obs-sync.js.
  */
 
+import { LP_DEBUG } from './box-utils.js';
 import { getState, loadState, updateState } from './storage.js';
 import { applyThemeVariables } from './color-profiles.js';
 import { renderDashboardCards, addNewBox, clearAllCards } from './cards.js';
@@ -19,6 +29,9 @@ import {
 import { connectOBS, toggleConnection, onConnectionChange, obs } from './obs-sync.js';
 import { showToast } from './toast.js';
 
+/**
+ * Exportiert die gesamte Dashboard-Konfiguration (Karten, Profile, Einstellungen) als JSON-Datei.
+ */
 function exportFullJson() {
     const state = getState();
     const json = JSON.stringify(state, null, 2);
@@ -29,9 +42,13 @@ function exportFullJson() {
     a.download = `obs_textbox_backup_${new Date().toISOString().slice(0, 10)}.json`;
     a.click();
     URL.revokeObjectURL(url);
+    if (LP_DEBUG) console.debug('[App] Konfigurations-Backup exportiert');
     showToast('success', 'Backup-JSON exportiert');
 }
 
+/**
+ * Importiert eine vollständige Konfigurations-JSON-Datei über einen Datei-Öffnen-Dialog.
+ */
 function importFullJson() {
     const input = document.createElement('input');
     input.type = 'file';
@@ -55,6 +72,7 @@ function importFullJson() {
             renderDashboardCards(document.getElementById('dashboard'));
             renderQuickProfilesBar();
             loadSettingsFields();
+            if (LP_DEBUG) console.debug('[App] Konfiguration erfolgreich importiert aus:', file.name);
             showToast('success', `Konfiguration aus ${file.name} geladen`);
         } catch (err) {
             showToast('error', `Import-Fehler: ${err.message}`);
@@ -63,6 +81,10 @@ function importFullJson() {
     input.click();
 }
 
+/**
+ * Aktualisiert die visuelle Verbindungsanzeige in Header und Statusleiste.
+ * @param {boolean} connected Ob die WebSocket-Verbindung aktiv ist
+ */
 function updateHeaderConnectionUi(connected) {
     const statusWrap = document.getElementById('header-obs-status');
     const statusLabel = document.getElementById('header-obs-label');
@@ -80,6 +102,9 @@ function updateHeaderConnectionUi(connected) {
     updateConnectionStatusLabel(connected);
 }
 
+/**
+ * Registriert Event-Listener für Header- und Toolbar-Schaltflächen.
+ */
 function initToolbar() {
     // Buttons im Header & Toolbar
     document.getElementById('btn-header-connect')?.addEventListener('click', () => toggleConnection());
@@ -110,6 +135,9 @@ function initToolbar() {
     }, { passive: false });
 }
 
+/**
+ * Registriert globale Tastaturkürzel (z. B. Escape zum Schließen offener Modale).
+ */
 function initKeyboardShortcuts() {
     document.addEventListener('keydown', (e) => {
         if (e.key === 'Escape') {
@@ -120,10 +148,15 @@ function initKeyboardShortcuts() {
     });
 }
 
+/**
+ * Hauptinitialisierung beim Start der Anwendung.
+ */
 async function start() {
+    if (LP_DEBUG) console.debug('[App] Starte OBS Textbox Dashboard v2 (Debug aktiv)...');
     console.log('[OBS Textbox v2] Starte Dashboard...');
 
     const state = loadState();
+    if (LP_DEBUG) console.debug('[App] Geladener State:', state.boxes.length, 'Boxen,', (state.profiles || []).length, 'Profile');
     applyThemeVariables(state.settings.uiColors);
 
     const dashboard = document.getElementById('dashboard');
@@ -142,6 +175,7 @@ async function start() {
 
     // Automatische Verbindung wenn Passwort vorhanden
     if (state.settings.obsPassword) {
+        if (LP_DEBUG) console.debug('[App] Gespeichertes OBS-Passwort vorhanden, starte Autoconnect...');
         connectOBS(false);
     }
 

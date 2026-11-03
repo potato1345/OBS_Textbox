@@ -1,20 +1,10 @@
 /*
-Liedplan — Standalone OBS-Plugin (T7)
-Copyright (C) 2026 Johann
-
-This program is free software; you can redistribute it and/or modify
-it under the terms of the GNU General Public License as published by
-the Free Software Foundation; either version 2 of the License, or
-(at your option) any later version.
-
-This program is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-GNU General Public License for more details.
-
-You should have received a copy of the GNU General Public License along
-with this program. If not, see <https://www.gnu.org/licenses/>
-*/
+ * test-liedplan-textfmt.cpp — Unit-Tests für Farb- und Textformatierungs-Helfer (v3).
+ *
+ * Zweck:
+ *   - Prüft parse_hex_color auf Parsing von 6-stelligen Hex-Werten (#RRGGBB, Groß/Klein, Fallbacks).
+ *   - Prüft card_has_text auf Vorhandensein von Zeilentexten (Leerzeichen/Tabs/Zeilenumbrüche).
+ */
 
 #include "../liedplan-textfmt.hpp"
 

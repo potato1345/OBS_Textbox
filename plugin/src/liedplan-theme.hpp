@@ -1,40 +1,12 @@
 /*
-Liedplan — Standalone OBS-Plugin (T7)
-Copyright (C) 2026 Johann
-
-This program is free software; you can redistribute it and/or modify
-it under the terms of the GNU General Public License as published by
-the Free Software Foundation; either version 2 of the License, or
-(at your option) any later version.
-
-This program is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-GNU General Public License for more details.
-
-You should have received a copy of the GNU General Public License along
-with this program. If not, see <https://www.gnu.org/licenses/>
-*/
-
-/*
-Ui3 (27.10): Natives OBS-Look statt Dashboard-Look (Ui1).
-Farbwerte = exakte OBS-Yami-Dark-Palette (obs-studio 32.2.2,
-frontend/data/themes/Yami.obt, CSS-Variablen aufgelöst):
-  grey1 #5B6273  grey3 #464B59  grey4 #3C404D  grey6 #272A33  grey7 #1D1F26
-  white1 #FFFFFF white4 #B4B4B4 white5 #969696
-  blue2 #476BD7  blue3 #284CB8  blue4 #213E97  blue1 #718CDC
-  red1 #E85E75   red3 #C01C37   yellow3 #B88A16
-Stil-Merkmale des nativen OBS:
-  - 4px-Radius (OBS --border_radius), kein 8px-Card-Look
-  - Font 'Open Sans' (OBS-Bundling) mit Fallback Segoe UI, 11pt (OBS-Default)
-  - Flache graue Buttons (#3C404D), Primary-Aktionen filled blue (#284CB8)
-  - QGroupBox mit bold weissem Titel (kein blauer Titel)
-  - OBS-Slider: weisser Pill-Handle, blaue sub-page (#476BD7)
-  - 12px-Scrollbars (grey6-Hintergrund, grey4-Handle)
-  - Dock-Titelbalken #3C404D, bold (wie alle OBS-Docks)
-  - Keine Letter-Spacing / keine Uppercase-Labels
-Alle Objekt-Namen (lp*) wie in Ui1/Ui2 — reine QSS-Ebene, null Verhalten.
-*/
+ * liedplan-theme.hpp — QSS-Styling des Liedplan-Docks im nativen OBS Studio Look (v3).
+ *
+ * Zweck:
+ *   - Definiert die Qt-Stylesheets (QSS) für LiedplanDock, Import-Dialog und Einstellungsfenster.
+ *   - Verwendet exakte Farbwerte des OBS-Yami-Dark-Themes (grey1..7, blue1..4, etc.).
+ *   - Passt Buttons, Slider, Scrollbars, Eingabefelder und Dialoge an das Erscheinungsbild von OBS Studio an.
+ *   - Ersetzt dynamisch Pfade zu ausgelieferten Theme-Icons (%1).
+ */
 
 #pragma once
 

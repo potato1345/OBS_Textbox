@@ -1,26 +1,14 @@
 /*
-Liedplan — eingebettete OBS-Theme-Icons (Ui4)
-Copyright (C) 2026 Johann
+ * liedplan-theme-icons.hpp — Eingebettete OBS-Theme-Icons für das Dock-Interface (v3).
+ *
+ * Zweck:
+ *   - Liefert SVG-Icons des OBS Studio Yami/Dark Themes direkt aus der DLL aus.
+ *   - Schreibt die Icons in den Konfigurationsordner (<config>/icons/), falls noch nicht vorhanden
+ *     oder veraltet (Version-Gating über icons-version.txt).
+ *
+ * Hinweis: Header-only, libobs-frei; wird in Standalone-Tests (test-theme-icons) verwendet.
+ */
 
-Diese SVG-Dateien stammen aus dem mitgelieferten Yami/Dark-Theme der
-OBS Studio 32.2.2 Distribution (MIT/GPL-2.0, obs-studio). Sie werden
-bei Modulstart in den Config-Pfad des Plugins uebernommen und im QSS
-per url() referenziert, damit Dock/Widgets echte OBS-Icons zeigen.
-Version: 1 — aendert sich bei Icon-Tausch; alte Sätze werden neu geschrieben.
-
-This program is free software; you can redistribute it and/or modify
-it under the terms of the GNU General Public License as published by
-the Free Software Foundation; either version 2 of the License, or
-(at your option) any later version.
-
-This program is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-GNU General Public License for more details.
-
-You should have received a copy of the GNU General Public License along
-with this program. If not, see <https://www.gnu.org/licenses/>
-*/
 #pragma once
 #include <filesystem>
 #include <fstream>

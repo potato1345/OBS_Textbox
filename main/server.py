@@ -1,3 +1,21 @@
+# -*- coding: utf-8 -*-
+"""
+server.py — Lokaler HTTP-Server und Dashboard für die OBS-Textbox (Version 1, main/).
+
+Zweck:
+  - Stellt die browserbasierte Steuerungs-Oberfläche (main/controlui/control.html) bereit.
+  - Liefert statische Ressourcen (HTML, JS, CSS, Templates) aus.
+  - Stellt API-Endpunkte für die Dokumentenkonvertierung (/api/parse-document via MarkItDown)
+    und den Google-Forms-Import (/api/import/answers und /api/form-responses via forms_import.py)
+    zur Verfügung.
+  - Zeichnet ein interaktives Terminal-Dashboard mit Status und Zugriffszahlen.
+
+Zusammenspiel:
+  - Wird als lokaler Hilfsserver für Version 1 betrieben.
+  - Kommuniziert mit main/forms_import.py für Google-Forms-Antworten.
+  - Dient als Backend für das Frontend unter main/controlui/.
+"""
+
 import os
 import sys
 import time
@@ -6,10 +24,14 @@ import threading
 import tempfile
 import json
 import urllib.parse
+import logging
 import forms_import
 from http.server import HTTPServer, SimpleHTTPRequestHandler
 from collections import defaultdict
 from datetime import datetime
+
+# Logger für Version 1 initialisieren
+logger = logging.getLogger("liedplan-v1")
 
 # ANSI Colors
 C_CYAN = '\033[96m'
@@ -51,6 +73,11 @@ stats = {
 stats_lock = threading.Lock()
 
 def get_lan_ip():
+    """
+    Ermittelt die primäre lokale IPv4-Adresse des Rechners über einen
+    Dummy-UDP-Socket (ohne tatsächlichen Netzwerk-Traffic).
+    Gibt bei fehlender Netzwerkverbindung '127.0.0.1' zurück.
+    """
     try:
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         s.connect(("8.8.8.8", 80))
@@ -61,13 +88,21 @@ def get_lan_ip():
         return "127.0.0.1"
 
 class StatsHandler(SimpleHTTPRequestHandler):
+    """
+    HTTP-Request-Handler für das v1-Backend.
+    Erfasst Request-Statistiken für das Terminal-Dashboard und routet
+    API-Endpunkte für MarkItDown und Google Forms Import.
+    """
     def log_message(self, format, *args):
-        pass # Suppress default terminal spam
+        # Standard-Terminal-Ausgabe unterdrücken, um Dashboard-Anzeige nicht zu stören
+        pass
         
     def log_error(self, format, *args):
-        pass # Suppress stderr errors (e.g. broken pipe)
+        # Stderr-Fehlermeldungen unterdrücken
+        pass
         
     def log_request(self, code='-', size='-'):
+        """Erfasst Metriken (Status, Traffic, IP) thread-sicher für das Dashboard."""
         with stats_lock:
             stats["total_requests"] += 1
             stats["last_request_time"] = time.time()
@@ -99,6 +134,8 @@ class StatsHandler(SimpleHTTPRequestHandler):
                 stats["recent_activity"].pop(0)
 
     def do_OPTIONS(self):
+        """Behandelt CORS-Preflight-Anfragen des Browser-Dashboards."""
+        logger.info("OPTIONS-Preflight: %s von %s", self.path, self.client_address[0])
         self.send_response(204)
         self.send_header('Access-Control-Allow-Origin', '*')
         self.send_header('Access-Control-Allow-Methods', 'POST, GET, OPTIONS')
@@ -106,10 +143,17 @@ class StatsHandler(SimpleHTTPRequestHandler):
         self.end_headers()
 
     def do_POST(self):
+        """
+        Behandelt Dokumenten- und Antwortendatei-Uploads:
+          - /api/parse-document: Konvertiert Dokumente (PDF/DOCX) via MarkItDown
+          - /api/import/answers: Importiert CSV/XLSX/ZIP-Antworten aus Google Forms
+        """
+        logger.info("POST-Anfrage empfangen: %s von %s", self.path, self.client_address[0])
         if self.path == '/api/parse-document':
             try:
                 content_length = int(self.headers.get('Content-Length', 0))
                 if content_length == 0:
+                    logger.warning("POST /api/parse-document: Keine Daten empfangen")
                     self._send_json(400, {'success': False, 'error': 'Keine Datei empfangen'})
                     return
                 
@@ -120,6 +164,7 @@ class StatsHandler(SimpleHTTPRequestHandler):
                     ext = '.pdf'
                 
                 file_bytes = self.rfile.read(content_length)
+                logger.info("Dokument-Upload: '%s' (%d Bytes)", filename, content_length)
                 
                 with tempfile.NamedTemporaryFile(delete=False, suffix=ext) as tmp:
                     tmp.write(file_bytes)
@@ -130,17 +175,20 @@ class StatsHandler(SimpleHTTPRequestHandler):
                     md = MarkItDown()
                     result = md.convert(tmp_path)
                     markdown_text = result.text_content
+                    logger.info("MarkItDown-Konvertierung erfolgreich: '%s'", filename)
                     self._send_json(200, {
                         'success': True,
                         'markdown': markdown_text,
                         'filename': filename
                     })
                 except ImportError:
+                    logger.error("MarkItDown ist nicht installiert")
                     self._send_json(500, {
                         'success': False,
                         'error': 'MarkItDown ist nicht installiert. Bitte `pip install "markitdown[all]"` ausführen.'
                     })
                 except Exception as conv_err:
+                    logger.error("Fehler bei MarkItDown-Konvertierung von '%s': %s", filename, conv_err)
                     self._send_json(500, {
                         'success': False,
                         'error': f'Fehler bei der Konvertierung: {str(conv_err)}'
@@ -152,6 +200,7 @@ class StatsHandler(SimpleHTTPRequestHandler):
                         except Exception:
                             pass
             except Exception as e:
+                logger.exception("Unerwarteter Serverfehler bei /api/parse-document: %s", e)
                 self._send_json(500, {'success': False, 'error': f'Serverfehler: {str(e)}'})
             return
 
@@ -159,6 +208,7 @@ class StatsHandler(SimpleHTTPRequestHandler):
             try:
                 content_length = int(self.headers.get('Content-Length', 0))
                 if content_length == 0:
+                    logger.warning("POST /api/import/answers: Keine Daten empfangen")
                     self._send_json(400, {'success': False, 'error': 'Keine Datei empfangen'})
                     return
 
@@ -166,6 +216,7 @@ class StatsHandler(SimpleHTTPRequestHandler):
                 filename = urllib.parse.unquote(raw_filename)
                 _, ext = os.path.splitext(filename)
                 if ext.lower() not in ('.csv', '.xlsx', '.zip'):
+                    logger.warning("Nicht unterstütztes Dateiformat hochgeladen: '%s'", ext)
                     self._send_json(400, {
                         'success': False,
                         'error': 'Nicht unterstütztes Format. Bitte CSV, XLSX oder ZIP des Google-Formulars hochladen.'
@@ -173,6 +224,7 @@ class StatsHandler(SimpleHTTPRequestHandler):
                     return
 
                 file_bytes = self.rfile.read(content_length)
+                logger.info("Antwortdatei-Upload: '%s' (%d Bytes)", filename, content_length)
                 with tempfile.NamedTemporaryFile(delete=False, suffix=ext.lower()) as tmp:
                     tmp.write(file_bytes)
                     tmp_path = tmp.name
@@ -181,9 +233,11 @@ class StatsHandler(SimpleHTTPRequestHandler):
                     from forms_import import parse_answers_file, to_gottesdienst
                     rows = parse_answers_file(tmp_path, filename)
                     if not rows:
+                        logger.warning("Keine Antworten in Datei '%s' gefunden", filename)
                         self._send_json(400, {'success': False, 'error': 'Keine Antworten in der Datei gefunden.'})
                         return
                     dienst = to_gottesdienst(rows[-1])
+                    logger.info("Import erfolgreich: '%s' (%d Antworten)", filename, len(rows))
                     self._send_json(200, {
                         'success': True,
                         'filename': filename,
@@ -191,8 +245,10 @@ class StatsHandler(SimpleHTTPRequestHandler):
                         'gottesdienst': dienst
                     })
                 except ValueError as ve:
+                    logger.warning("Validierungsfehler beim Import von '%s': %s", filename, ve)
                     self._send_json(400, {'success': False, 'error': str(ve)})
                 except Exception as imp_err:
+                    logger.error("Fehler beim Import von '%s': %s", filename, imp_err)
                     self._send_json(500, {'success': False, 'error': f'Fehler beim Import: {str(imp_err)}'})
                 finally:
                     if os.path.exists(tmp_path):
@@ -201,30 +257,43 @@ class StatsHandler(SimpleHTTPRequestHandler):
                         except Exception:
                             pass
             except Exception as e:
+                logger.exception("Unerwarteter Serverfehler bei /api/import/answers: %s", e)
                 self._send_json(500, {'success': False, 'error': f'Serverfehler: {str(e)}'})
             return
 
+        logger.warning("Unbekannter POST-Endpunkt aufgerufen: %s", self.path)
         self.send_error(404, 'Endpoint not found')
 
     def do_GET(self):
+        """
+        Behandelt GET-Anfragen:
+          - /api/form-responses: Holt aktuelle Antworten via Google Forms API
+          - Sonstige Pfade: Statische Dateien ausliefern
+        """
         if self.path == '/api/form-responses':
+            logger.info("GET /api/form-responses aufgerufen von %s", self.client_address[0])
             try:
                 dienst = forms_import.fetch_latest_response()
+                logger.info("Google Forms API-Abfrage erfolgreich abgeschlossen")
                 self._send_json(200, {
                     'success': True,
                     'quelle': 'google-api',
                     'gottesdienst': dienst
                 })
             except forms_import.FormEmptyError:
+                logger.warning("Google Forms API: Noch keine Antworten vorhanden")
                 self._send_json(409, {'success': False, 'error': 'Noch keine Antworten im Google-Formular.'})
             except FileNotFoundError as fe:
+                logger.error("Google Forms API Token-Datei fehlt: %s", fe)
                 self._send_json(500, {'success': False, 'error': str(fe)})
             except Exception as e:
+                logger.exception("Google Forms API-Abfrage fehlgeschlagen: %s", e)
                 self._send_json(500, {'success': False, 'error': f'Google-Abfrage fehlgeschlagen: {str(e)}'})
             return
         super().do_GET()
 
     def _send_json(self, status_code, data):
+        """Hilfsmethode zum Senden einer UTF-8-kodierten JSON-HTTP-Antwort mit CORS-Headern."""
         response_bytes = json.dumps(data, ensure_ascii=False).encode('utf-8')
         self.send_response(status_code)
         self.send_header('Content-Type', 'application/json; charset=utf-8')
@@ -234,6 +303,7 @@ class StatsHandler(SimpleHTTPRequestHandler):
         self.wfile.write(response_bytes)
 
 def format_bytes(b):
+    """Formatiert eine Bytezahl in lesbare Einheiten (B, KB, MB, GB, TB, PB)."""
     for unit in ['B', 'KB', 'MB', 'GB', 'TB']:
         if b < 1024.0:
             return f"{b:.2f} {unit}"
@@ -241,11 +311,16 @@ def format_bytes(b):
     return f"{b:.2f} PB"
 
 def format_uptime(seconds):
+    """Formatiert Sekunden in HH:MM:SS."""
     hours, rem = divmod(int(seconds), 3600)
     minutes, secs = divmod(rem, 60)
     return f"{hours:02d}:{minutes:02d}:{secs:02d}"
 
 def draw_dashboard(port, lan_ip):
+    """
+    Rendert in einer Endlosschleife ein farbiges Terminal-Dashboard im
+    Alternate Screen Buffer mit Status, Uptime und Anfragestatistiken.
+    """
     # Wechseln in den "Alternate Screen Buffer", damit die normale Terminal-Historie nicht zugespammt wird!
     sys.stdout.write('\033[?1049h\033[2J\033[H')
     sys.stdout.flush()
@@ -330,6 +405,16 @@ def draw_dashboard(port, lan_ip):
         time.sleep(1)
 
 def main():
+    """
+    Hauptprogramm: Konfiguriert Logging, bindet den HTTPServer an Port (Standard: 8080)
+    und startet den Hintergrund-Thread für das Terminal-Dashboard.
+    """
+    if not logging.getLogger().handlers:
+        logging.basicConfig(
+            level=logging.INFO,
+            format="%(asctime)s [%(levelname)s] [%(name)s] %(message)s"
+        )
+
     port = 8080
     if len(sys.argv) > 1:
         try:
@@ -342,7 +427,9 @@ def main():
     
     try:
         httpd = HTTPServer(server_address, StatsHandler)
+        logger.info("Server-Start auf Port %d (LAN-Adresse: %s)", port, lan_ip)
     except OSError as e:
+        logger.error("Fehler beim Starten des Servers auf Port %d: %s", port, e)
         print(f"Fehler beim Starten des Servers auf Port {port}: {e}")
         sys.exit(1)
         
@@ -355,6 +442,7 @@ def main():
     try:
         httpd.serve_forever()
     except KeyboardInterrupt:
+        logger.info("Server wird heruntergefahren (KeyboardInterrupt)")
         sys.stdout.write('\033[?1049l') # Switch back to normal screen buffer
         print("Server wurde beendet.")
         sys.stdout.flush()

@@ -1,23 +1,16 @@
 /*
-Liedplan — Standalone OBS-Plugin (T7)
-Copyright (C) 2026 Johann
-
-This program is free software; you can redistribute it and/or modify
-it under the terms of the GNU General Public License as published by
-the Free Software Foundation; either version 2 of the License, or
-(at your option) any later version.
-
-This program is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-GNU General Public License for more details.
-
-You should have received a copy of the GNU General Public License along
-with this program. If not, see <https://www.gnu.org/licenses/>
-*/
+ * liedplan-card-source.hpp — Deklaration der nativen OBS-Quellen-Definition für Liedplan-Karten (v3).
+ *
+ * Zweck:
+ *   - Deklariert die externe obs_source_info Struktur liedplan_card_source_info.
+ *   - Bindet die gerenderten Liedplan-Karten direkt in den OBS-Szenengraph ein.
+ */
 
 #pragma once
 
 #include <obs.h>
 
+/**
+ * Definition der nativen Liedplan-Kartenquelle für libobs (obs_register_source).
+ */
 extern struct obs_source_info liedplan_card_source_info;

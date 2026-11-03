@@ -2,8 +2,20 @@
  * @file pdf-ai-importer.js
  * Extrahiert Text aus PDF/Word-Dateien und verarbeitet diesen via OpenRouter (kostenlose Modelle)
  * oder über einen deterministischen Offline-Fallback-Parser zu strukturierten Programmpunkten.
+ *
+ * Gehört zu Version 2 (rewrite/dashboard/).
+ * Zusammenspiel:
+ *   - Verwendet clientseitiges PDF.js oder Backend-MarkItDown (/api/documents/convert).
+ *   - Fragt OpenRouter API mit freier Modell-Erkennung ab.
+ *   - Bietet deterministischen Regex-basierten Offline-Parser als Ausfallsicherung.
+ *   - Reichert Gotteslob-Titel aus lieder.md an.
  */
 
+import { LP_DEBUG } from './box-utils.js';
+
+/**
+ * Standard-System-Prompt für LLM-Anfragen zur Liedplan-Extraktion.
+ */
 export const DEFAULT_SYSTEM_PROMPT = `Du bist ein Parser für Gottesdienstprogramme (Liedpläne).
 Du erhältst den Text eines Liedplans und erzeugst daraus die Programmpunkte der Feier, in Dokumentreihenfolge.
 
@@ -24,9 +36,12 @@ let cachedSongReference = null;
 
 /**
  * Zerlegt die Gotteslob-Referenztabelle (Markdown) in ein Objekt
- * { Liednummer: { title, rubrik} }. Die Header-Zeile wird per erster Zelle
+ * { Liednummer: { title, rubrik } }. Die Header-Zeile wird per erster Zelle
  * ("Nr") erkannt und nicht per Zeilenindex referenziert, damit zusätzliche
  * Titel-/Kopfzeilen vor der Tabelle keinen Schaden anrichten.
+ *
+ * @param {string} markdownText - Rohinhalt der Referenzdatei (lieder.md).
+ * @returns {Object.<string, {title: string, rubrik: string}>} Indexierte Lieddaten.
  */
 export function parseSongReference(markdownText) {
     const songRef = {};
@@ -69,6 +84,8 @@ export function parseSongReference(markdownText) {
 
 /**
  * Lädt die Gotteslob-Referenztabelle (lieder.md) und indiziert sie nach Liednummer.
+ *
+ * @returns {Promise<Object.<string, {title: string, rubrik: string}>>} Gecachte Liedreferenzen.
  */
 export async function loadSongReference() {
     if (cachedSongReference) return cachedSongReference;
@@ -94,6 +111,10 @@ export async function loadSongReference() {
 
 /**
  * Extrahiert Text aus einer PDF via clientseitigem PDF.js.
+ *
+ * @param {File} file - PDF-Datei.
+ * @returns {Promise<string>} Extrahierter Rohtext.
+ * @throws {Error} Wenn PDF.js nicht im globalen Namensraum verfügbar ist.
  */
 export async function extractTextWithPdfJs(file) {
     if (typeof window.pdfjsLib === 'undefined') {
@@ -123,8 +144,13 @@ export async function extractTextWithPdfJs(file) {
 
 /**
  * Konvertiert ein Dokument (DOCX, PDF) über das lokale Server-Backend (MarkItDown).
+ *
+ * @param {File} file - Hochzuladende Dokumentdatei.
+ * @returns {Promise<string>} Vom Server konvertierter Markdown-Text.
+ * @throws {Error} Wenn der Server-Endpunkt /api/documents/convert einen Fehler meldet.
  */
 export async function convertDocumentViaServer(file) {
+    if (LP_DEBUG) console.debug('[liedplan] Konvertiere Dokument via Server-API (/api/documents/convert):', file.name);
     const res = await fetch('/api/documents/convert', {
         method: 'POST',
         headers: {
@@ -143,8 +169,13 @@ export async function convertDocumentViaServer(file) {
 
 /**
  * Extrahiert den Inhalt aus einem beliebigen Dokument (PDF, DOCX).
+ * Wählt bei DOCX automatisch den Server-Weg, bei PDF zunächst clientseitiges PDF.js.
+ *
+ * @param {File} file - PDF- oder Word-Dokument.
+ * @returns {Promise<string>} Extrahierter Textinhalt.
  */
 export async function extractDocumentText(file) {
+    if (LP_DEBUG) console.debug('[liedplan] Starte Textextraktion für Datei:', file.name, 'Größe:', file.size);
     const name = (file.name || '').toLowerCase();
     const isDocx = name.endsWith('.docx') || (file.type && file.type.includes('word'));
 
@@ -176,6 +207,14 @@ const MODEL_PRIORITIES = [
     'mistral', 'gemini', 'phi-4'
 ];
 
+/**
+ * Ruft die Liste aller Modelle von OpenRouter ab und filtert nach kostenlosen Modellen (:free).
+ * Priorisiert erprobte Modelle anhand von MODEL_PRIORITIES und Kontextfenstergröße.
+ *
+ * @param {string} apiKey - OpenRouter API-Schlüssel.
+ * @returns {Promise<string[]>} Sortierte Modell-IDs (höchste Priorität zuerst).
+ * @throws {Error} Wenn der HTTP-Abruf fehlschlägt.
+ */
 export async function discoverFreeOpenRouterModels(apiKey) {
     const res = await fetch('https://openrouter.ai/api/v1/models', {
         headers: { 'Authorization': `Bearer ${apiKey}` }
@@ -194,9 +233,21 @@ export async function discoverFreeOpenRouterModels(apiKey) {
     };
 
     free.sort((a, b) => score(b) - score(a) || ((b.context_length || 0) - (a.context_length || 0)));
+    if (LP_DEBUG) console.debug('[liedplan] Freie OpenRouter-Modelle gefunden:', free.length);
     return free.map(m => m.id);
 }
 
+/**
+ * Führt einen einzelnen Chat-Completion-Aufruf an ein bestimmtes OpenRouter-Modell aus.
+ *
+ * @param {string} apiKey - OpenRouter API-Schlüssel.
+ * @param {string} model - Modell-ID.
+ * @param {string} systemPrompt - Instruktionen für das Modell.
+ * @param {string} userText - Zu analysierender Liedplan-Text.
+ * @param {number} [timeoutMs=70000] - Zeitlimit in Millisekunden.
+ * @returns {Promise<{content: string, modelUsed: string}>} Antwortinhalt und tatsächliche Modellbezeichnung.
+ * @throws {Error} Bei HTTP-Fehlern, Timeout oder leerer Antwort.
+ */
 async function callOpenRouterModelOnce(apiKey, model, systemPrompt, userText, timeoutMs = 70000) {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeoutMs);
@@ -245,6 +296,14 @@ async function callOpenRouterModelOnce(apiKey, model, systemPrompt, userText, ti
     }
 }
 
+/**
+ * Bereinigt Modell-Rohausgaben von Markdown-Codeblöcken (```json ... ```) und extrahiert
+ * das umschließende JSON-Objekt.
+ *
+ * @param {string} raw - Unbereinigte Antwort des Sprachmodells.
+ * @returns {object} Geparstes JSON-Objekt.
+ * @throws {Error} Wenn kein valider JSON-Block gefunden oder geparst werden kann.
+ */
 export function parseJsonClean(raw) {
     let s = String(raw).trim();
     s = s.replace(/^```(json)?\s*/i, '').replace(/```\s*$/, '').trim();
@@ -256,6 +315,13 @@ export function parseJsonClean(raw) {
     return JSON.parse(s.slice(start, end + 1));
 }
 
+/**
+ * Ergänzt fehlende Liedtitel in Zeile 3 durch Nachschlagen der Gotteslob-Nummer in der Referenztabelle.
+ *
+ * @param {Array<{zeile1: string, zeile2: string, zeile3: string}>} items - Extrahierte Programmpunkte.
+ * @param {Object.<string, {title: string, rubrik: string}>} songRef - Indexierte Gotteslob-Referenztabelle.
+ * @returns {Array<{zeile1: string, zeile2: string, zeile3: string}>} Die angereicherten Programmpunkte.
+ */
 export function enrichTitlesFromReference(items, songRef) {
     if (!Array.isArray(items) || !songRef) return items;
 
@@ -279,6 +345,18 @@ export function enrichTitlesFromReference(items, songRef) {
     return items;
 }
 
+/**
+ * Verarbeitet extrahierten Liedplan-Text über kostenlose OpenRouter-Modelle.
+ * Testet bis zu 6 freie Modelle der Reihe nach (mit jeweils einem Retry) und reichert
+ * das Ergebnis mit Titeln aus der Gotteslob-Referenztabelle an.
+ *
+ * @param {string} apiKey - OpenRouter API-Schlüssel.
+ * @param {string} documentText - Extrahierter Rohtext des Liedplans.
+ * @param {string} [systemPrompt] - Optionaler System-Prompt (Fallback: DEFAULT_SYSTEM_PROMPT).
+ * @param {function(string): void} [onProgress] - Callback für Fortschrittsmeldungen.
+ * @returns {Promise<{parsed: {items: Array}, modelUsed: string}>} Strukturierte Programmpunkte.
+ * @throws {Error} Wenn alle AI-Modelle fehlschlagen.
+ */
 export async function processWithLLM(apiKey, documentText, systemPrompt, onProgress) {
     if (onProgress) onProgress('Ermittle verfügbare freie Modelle...');
     const freeModels = await discoverFreeOpenRouterModels(apiKey);
@@ -307,6 +385,7 @@ export async function processWithLLM(apiKey, documentText, systemPrompt, onProgr
 
                 const songRef = await loadSongReference();
                 enrichTitlesFromReference(parsed.items, songRef);
+                if (LP_DEBUG) console.debug('[liedplan] LLM-Analyse erfolgreich mit Modell:', modelUsed, 'Punkte:', parsed.items.length);
                 return { parsed, modelUsed };
             } catch (err) {
                 errors.push(`${model} [${attempt}]: ${err.message}`);
@@ -336,6 +415,12 @@ const PP_KEYWORDS = [
     'lesung', 'predigt', 'gebet', 'segen', 'danklied', 'schlusslied', 'auszug'
 ];
 
+/**
+ * Prüft ob eine Zeile eine reine Kopf- oder Metazeile ist (Ort, Liedplan-Titel, Datum, Wochentag, Organist).
+ *
+ * @param {string} line - Textzeile.
+ * @returns {boolean} True, wenn die Zeile ignoriert werden soll.
+ */
 function isHeader(line) {
     const l = line.toLowerCase().trim();
     if (!l) return true;
@@ -344,6 +429,13 @@ function isHeader(line) {
     return false;
 }
 
+/**
+ * Parst Liedplan-Text ohne externe AI-Verbindung (vollständig lokal und offline).
+ * Verwendet Heuristiken für Gotteslob-Nummern und liturgische Schlüsselwörter.
+ *
+ * @param {string} text - Rohtext des Dokuments.
+ * @returns {Array<{zeile1: string, zeile2: string, zeile3: string}>} Liste gefundener Programmpunkte.
+ */
 export function parseLiedplanLocally(text) {
     if (!text) return [];
     const lines = text.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
@@ -389,11 +481,14 @@ export function parseLiedplanLocally(text) {
         }
     }
 
-    return items
+    const result = items
         .map(it => ({
             zeile1: (it.zeile1 || '').trim(),
             zeile2: (it.zeile2 || '').trim(),
             zeile3: (it.zeile3 || '').trim()
         }))
         .filter(it => it.zeile1 || it.zeile2 || it.zeile3);
+
+    if (LP_DEBUG) console.debug('[liedplan] parseLiedplanLocally abgeschlossen, erkannte Punkte:', result.length);
+    return result;
 }

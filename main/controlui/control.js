@@ -1,3 +1,14 @@
+/**
+ * @file control.js
+ * Hauptskript für das Browser-Dashboard von Version 1 (main/controlui/control.html).
+ *
+ * Zweck:
+ *   - Verwaltet den clientseitigen Status (dashboardState) mit Textbox-Karten, Profilen und Farbthemen.
+ *   - Synchronisiert Textbox-Inhalte und benutzerdefiniertes CSS über OBSWebSocket (obs-ws.js) mit OBS Studio.
+ *   - Bietet UI-Interaktionen für Kartenverwaltung, Drag & Drop Reordering, Farbprofilauswahl und Einstellungen.
+ *   - Kommuniziert mit gf-import.js und pdf-automation.js für Liedplan-Importe.
+ */
+
 // =====================================================
 //  DEFAULT COLOR PROFILES (from color-profiles.yaml)
 // =====================================================
@@ -186,6 +197,9 @@ function scheduleReconnect() {
     }, 3000);
 }
 
+/**
+ * Schaltet das Passwort-Eingabefeld zwischen Klartext und verborgen um.
+ */
 function togglePasswordVisibility() {
     const passwordInput = document.getElementById('ws-password');
     const toggleButton = document.getElementById('btn-toggle-password');
@@ -199,6 +213,9 @@ function togglePasswordVisibility() {
     toggleButton.title = isPasswordHidden ? 'Passwort verbergen' : 'Passwort anzeigen';
 }
 
+/**
+ * Speichert das eingegebene OBS-Passwort lokal und initiiert den Verbindungsaufbau.
+ */
 function connectOBS() {
     const pwInput = document.getElementById('ws-password');
     if (pwInput) {
@@ -209,6 +226,9 @@ function connectOBS() {
     connectToOBSWebSocket();
 }
 
+/**
+ * Wechselt den Verbindungszustand zu OBS (Verbinden oder Trennen).
+ */
 function toggleOBSConnection() {
     if (isObsConnected) {
         disconnectOBS();
@@ -217,6 +237,10 @@ function toggleOBSConnection() {
     connectOBS();
 }
 
+/**
+ * Verbindet den OBSWebSocket-Client mit dem konfigurierten Port und Passwort.
+ * @param {boolean} [showError=true] Ob bei Fehlschlag ein Toast-Fehler angezeigt werden soll
+ */
 function connectToOBSWebSocket(showError = true) {
     suppressReconnect = false;
     console.log("[OBS Sync] Verbindungsversuch gestartet...");
@@ -230,6 +254,9 @@ function connectToOBSWebSocket(showError = true) {
     });
 }
 
+/**
+ * Trennt die Verbindung zu OBS WebSocket manuell und verhindert automatischen Reconnect.
+ */
 function disconnectOBS() {
     if (reconnectTimer) {
         clearTimeout(reconnectTimer);
@@ -244,8 +271,9 @@ function disconnectOBS() {
 }
 
 /**
- * Pushes the current dashboard state to OBS by modifying the Custom CSS of matching Browser Sources.
- * @param {string|null} specificBoxId - If provided, only updates the box with this ID.
+ * Maskiert Sonderzeichen in Strings für den sicheren Einsatz in CSS-Attributen/Content-Properties.
+ * @param {string} str Einzusetzender Text
+ * @returns {string} Sicher maskierter String
  */
 function escapeCssString(str) {
     // CSS String-Werte: Steuerzeichen entfernen und Backslash sowie Anführungszeichen maskieren,
@@ -256,6 +284,11 @@ function escapeCssString(str) {
         .replace(/"/g, '\\"');
 }
 
+/**
+ * Überträgt den aktuellen Zustand (Textzeilen, Farben, Animationen) an OBS Studio,
+ * indem das Custom CSS der passenden Browser-Quellen aktualisiert wird.
+ * @param {string|null} [specificBoxId=null] Falls angegeben, wird nur die Box mit dieser ID aktualisiert
+ */
 async function pushDashboardStateToOBS(specificBoxId = null) {
     if (!isObsConnected) {
         console.log("[OBS Sync] Abbruch: Nicht mit OBS verbunden.");
@@ -417,6 +450,9 @@ html, body { background-color: rgba(0, 0, 0, 0) !important; }
 //  LOCAL STORAGE & AUTO-SEND LOGIC
 // =====================================================
 
+/**
+ * Schaltet das automatische Senden von Änderungen an OBS (Auto-Send) ein oder aus.
+ */
 function toggleAutoSend() {
     const toggleEl = document.getElementById('auto-send-toggle');
     if (toggleEl) {
@@ -427,6 +463,9 @@ function toggleAutoSend() {
     }
 }
 
+/**
+ * Speichert den gesamten Dashboard-Zustand (Karten, Profile, Einstellungen) im localStorage des Browsers.
+ */
 function saveStateLocally() {
     try {
         localStorage.setItem('obs_textbox_state', JSON.stringify(dashboardState));
@@ -438,6 +477,10 @@ function saveStateLocally() {
 
 // Debounced handler for input changes
 let inputChangeTimeout = null;
+/**
+ * Event-Handler für Benutzereingaben: Speichert lokal und triggert bei aktivem
+ * Auto-Send debounced (150ms) die Synchronisation nach OBS.
+ */
 function handleDataChange() {
     saveStateLocally();
 
@@ -449,7 +492,10 @@ function handleDataChange() {
     }
 }
 
-// Update the connection status UI
+/**
+ * Aktualisiert die Verbindungsanzeige in der Statusleiste und im Einstellungs-Dialog.
+ * @param {boolean} connected Ob eine Verbindung zu OBS WebSocket besteht
+ */
 function updateConnectionUI(connected) {
     const connectionControlEl = document.getElementById('obs-connection-control');
     const statusEl = document.getElementById('storage-status');
@@ -474,6 +520,9 @@ function updateConnectionUI(connected) {
 // =====================================================
 //  MANUAL EXPORT / IMPORT
 // =====================================================
+/**
+ * Exportiert den aktuellen Zustand (Karten, Profile, Einstellungen) als JSON-Datei zum Download.
+ */
 function exportJSON() {
     syncDOMToState();
     const json = JSON.stringify(dashboardState, null, 2);
@@ -488,6 +537,9 @@ function exportJSON() {
     console.log("[Export] Daten erfolgreich exportiert.");
 }
 
+/**
+ * Importiert einen zuvor exportierten JSON-Zustand über einen Datei-Öffnen-Dialog.
+ */
 function importJSON() {
     const input = document.createElement('input');
     input.type = 'file';
@@ -513,6 +565,9 @@ function importJSON() {
     input.click();
 }
 
+/**
+ * Registriert Event-Listener für alle Einstellungen und UI-Farbwähler im Einstellungs-Modal.
+ */
 function registerSettingsInputListeners() {
     const pwInput = document.getElementById('ws-password');
     if (pwInput) {
@@ -567,6 +622,27 @@ function registerSettingsInputListeners() {
 const dashboard = document.getElementById('dashboard');
 const template = document.getElementById('card-template');
 
+/**
+ * Erzeugt eine neue Textbox-Karte im Dashboard aus dem HTML-Template mit den angegebenen Werten.
+ * @param {string} [id='neue_box'] Eindeutige Box-ID
+ * @param {string} [z1=''] Textzeile 1
+ * @param {string} [z2=''] Textzeile 2
+ * @param {string} [z3=''] Textzeile 3
+ * @param {string} [boxColor='#ffffff'] Hintergrundfarbe
+ * @param {number} [boxColorOpacity=255] Hintergrund-Deckkraft (0-255)
+ * @param {string} [cornerColorA='#fce647'] Eckenfarbe A
+ * @param {number} [cornerColorAOpacity=255] Deckkraft Eckenfarbe A
+ * @param {string} [cornerColorB='#fce647'] Eckenfarbe B
+ * @param {number} [cornerColorBOpacity=255] Deckkraft Eckenfarbe B
+ * @param {string} [textColor='#000000'] Textfarbe
+ * @param {number} [textColorOpacity=255] Text-Deckkraft
+ * @param {boolean} [rainbowCorners=false] Ob animierte Regenbogen-Ecken aktiv sind
+ * @param {string} [animFile=''] Dateiname der Lottie-Animation
+ * @param {boolean} [showAnim=false] Ob die Animation eingeblendet werden soll
+ * @param {number} [animScale=3] Skalierungsfaktor der Animation
+ * @param {number} [animX=0] X-Offset der Animation in Pixeln
+ * @param {number} [animY=0] Y-Offset der Animation in Pixeln
+ */
 function addNewCard(id = 'neue_box', z1 = '', z2 = '', z3 = '', boxColor = '#ffffff', boxColorOpacity = 255, cornerColorA = '#fce647', cornerColorAOpacity = 255, cornerColorB = '#fce647', cornerColorBOpacity = 255, textColor = '#000000', textColorOpacity = 255, rainbowCorners = false, animFile = '', showAnim = false, animScale = 3, animX = 0, animY = 0) {
     console.log(`[UI] Füge neue Karte hinzu (ID: ${id})...`);
     const clone = template.content.cloneNode(true);
@@ -636,6 +712,10 @@ function addNewCard(id = 'neue_box', z1 = '', z2 = '', z3 = '', boxColor = '#fff
     handleDataChange();
 }
 
+/**
+ * Löscht eine Textbox-Karte aus dem Dashboard und blendet sie in OBS aus.
+ * @param {HTMLElement} btn Der geklickte Löschen-Button
+ */
 function deleteCard(btn) {
     const cardWrapper = btn.closest('.card-outer');
     const id = cardWrapper.querySelector('.id-input').value;
@@ -669,6 +749,10 @@ function onRainbowToggle(checkbox) {
     handleDataChange();
 }
 
+/**
+ * Sendet den Zustand einer einzelnen Karte manuell per Klick an OBS.
+ * @param {HTMLElement} btn Der geklickte Senden-Button
+ */
 function sendCard(btn) {
     const cardWrapper = btn.closest('.card-outer');
     const targetId = cardWrapper.querySelector('.id-input').value.trim();
@@ -681,6 +765,10 @@ function sendCard(btn) {
     showToast('success', `Gesendet an "${targetId}"`);
 }
 
+/**
+ * Leert die Textzeilen einer Karte und synchronisiert das Ausblenden an OBS.
+ * @param {HTMLElement} btn Der geklickte Leeren-Button
+ */
 function clearCard(btn) {
     const cardWrapper = btn.closest('.card-outer');
     const targetId = cardWrapper.querySelector('.id-input').value.trim();
@@ -698,6 +786,9 @@ function clearCard(btn) {
     pushDashboardStateToOBS(targetId);
 }
 
+/**
+ * Sendet alle vorhandenen Textbox-Karten manuell an OBS.
+ */
 function sendAllCards() {
     console.log("[UI] Sende manuell alle Karten an OBS...");
     syncDOMToState();
@@ -710,6 +801,9 @@ function sendAllCards() {
     }
 }
 
+/**
+ * Leert die Textzeilen aller Textbox-Karten und synchronisiert das Ausblenden an OBS.
+ */
 function clearAllCards() {
     console.log("[UI] Leere alle Karten...");
     const cards = dashboard.querySelectorAll('.card');
@@ -732,6 +826,9 @@ function clearAllCards() {
 // =====================================================
 //  STATE SYNC (DOM <-> dashboardState)
 // =====================================================
+/**
+ * Liest alle Datenfelder der Karten aus dem DOM aus und aktualisiert dashboardState.boxes.
+ */
 function syncDOMToState() {
     const cardWrappers = dashboard.querySelectorAll('.card-outer');
     dashboardState.boxes = [];
@@ -778,6 +875,9 @@ function findCardByBoxId(boxId) {
     return null;
 }
 
+/**
+ * Erzeugt die Dashboard-Karten neu basierend auf dem aktuellen dashboardState.boxes.
+ */
 function renderCardsFromState() {
     console.log("[UI] Rendere Karten aus dem State...");
     dashboard.innerHTML = ''; // Clear existing cards
@@ -819,6 +919,10 @@ function renderCardsFromState() {
 //  PROFILES
 // =====================================================
 
+/**
+ * Lädt die Boxen-Definitionen eines Profils in das Dashboard.
+ * @param {Object} profile Profil-Objekt mit name und boxes-Array
+ */
 function applyProfileData(profile) {
     console.log(`[Profile] Lade Profil: "${profile.name}"`);
     dashboard.innerHTML = '';
@@ -852,6 +956,9 @@ function applyProfileData(profile) {
     showToast('info', `Profil "${profile.name}" geladen`);
 }
 
+/**
+ * Öffnet den Dialog zum Speichern des aktuellen Boxen-Zustands als neues Profil.
+ */
 function openSaveProfileModal() {
     syncDOMToState();
     document.getElementById('save-profile-modal').hidden = false;
@@ -860,20 +967,32 @@ function openSaveProfileModal() {
     nameInput.focus();
 }
 
+/**
+ * Schließt das Profil-Speichern-Modal.
+ */
 function closeSaveProfileModal() {
     document.getElementById('save-profile-modal').hidden = true;
 }
 
+/**
+ * Öffnet das Einstellungs-Modal und lädt die aktuellen Werte.
+ */
 function openSettingsModal() {
     document.getElementById('settings-modal').hidden = false;
     loadSettingsToModal();
 }
 
+/**
+ * Schließt das Einstellungs-Modal und übernimmt geänderte Werte.
+ */
 function closeSettingsModal() {
     updateSettingsFromModal();
     document.getElementById('settings-modal').hidden = true;
 }
 
+/**
+ * Überträgt die aktuellen Einstellungen (Farben, Deckkraft, OBS-Passwort) in die Eingabefelder des Modals.
+ */
 function loadSettingsToModal() {
     const settings = dashboardState.settings || {};
     const colors = settings.uiColors || {};
@@ -903,6 +1022,11 @@ function loadSettingsToModal() {
     renderColorProfileDropdown();
 }
 
+/**
+ * Liest einen Opacity-Wert (0-255) aus einem DOM-Element per ID aus.
+ * @param {string} id Element-ID
+ * @returns {number} Gültiger Wert im Bereich 0-255 (Standard: 255)
+ */
 function parseOpacityInput(id) {
     const raw = document.getElementById(id)?.value;
     if (raw === undefined || raw === null || String(raw).trim() === '') return 255;
@@ -911,6 +1035,11 @@ function parseOpacityInput(id) {
     return Math.max(0, Math.min(255, Math.round(value)));
 }
 
+/**
+ * Liest einen Opacity-Wert (0-255) direkt aus einem übergebenen DOM-Element aus.
+ * @param {HTMLElement} element Eingabeelement
+ * @returns {number} Gültiger Wert im Bereich 0-255 (Standard: 255)
+ */
 function parseOpacityInputFromElement(element) {
     if (!element) return 255;
     const raw = element.value;
@@ -920,6 +1049,12 @@ function parseOpacityInputFromElement(element) {
     return Math.max(0, Math.min(255, Math.round(value)));
 }
 
+/**
+ * Konvertiert einen HEX-Farbwert (#RGB oder #RRGGBB) und eine Deckkraft (0-255) in einen CSS rgb() bzw. rgba() String.
+ * @param {string} hex HEX-Farbcode
+ * @param {number} [opacity255=255] Deckkraft 0-255
+ * @returns {string} CSS rgb() oder rgba() Farbstring
+ */
 function hexToRgba(hex, opacity255 = 255) {
     const normalized = String(hex || '#000000').trim();
     // 3- und 6-stellige HEX-Werte (#abc, #aabbcc) — ohne #, mit oder ohne Präfix
@@ -943,6 +1078,10 @@ function hexToRgba(hex, opacity255 = 255) {
     return a >= 1 ? `rgb(${r}, ${g}, ${b})` : `rgba(${r}, ${g}, ${b}, ${a})`;
 }
 
+/**
+ * Überprüft die Theme-Farben auf Korruption (z. B. Deckkraft 0) und stellt
+ * bei fehlerhaften Werten die Standardfarben des aktiven Profils wieder her.
+ */
 function sanitizeThemeSettings() {
     const defaultColors = DEFAULT_COLOR_PROFILES[0].colors;
     dashboardState.settings = dashboardState.settings || {};
@@ -968,6 +1107,10 @@ function sanitizeThemeSettings() {
     }
 }
 
+/**
+ * Liest die Farbwähler und Eingaben aus dem Modal aus, aktualisiert die Settings
+ * und wendet das Theme direkt im DOM an.
+ */
 function updateSettingsFromModal() {
     dashboardState.settings = dashboardState.settings || {};
     const pwInput = document.getElementById('ws-password');
@@ -1008,6 +1151,9 @@ function updateSettingsFromModal() {
     updateColorProfileDropdownState();
 }
 
+/**
+ * Setzt die CSS Custom Properties (:root) der Seite anhand der aktuellen Farbekonfiguration.
+ */
 function applyThemeSettings() {
     const colors = dashboardState.settings?.uiColors || {};
     document.documentElement.style.setProperty('--bg-primary', hexToRgba(colors.bgPrimary || '#1C1F26', colors.bgPrimaryOpacity ?? 255));
@@ -1499,6 +1645,9 @@ function importColorProfileYAML() {
 }
 
 
+/**
+ * Speichert das aktuelle Boxen-Layout unter dem eingegebenen Namen als benutzerdefiniertes Profil.
+ */
 function saveCurrentAsProfile() {
     const name = document.getElementById('profile-name-input').value.trim();
     if (!name) {
@@ -1533,6 +1682,10 @@ function saveCurrentAsProfile() {
     showToast('success', `Profil "${name}" gespeichert`);
 }
 
+/**
+ * Löscht ein benutzerdefiniertes Boxen-Profil anhand seines Index aus dem State.
+ * @param {number} index Index in dashboardState.profiles
+ */
 function deleteCustomProfile(index) {
     const name = dashboardState.profiles[index].name;
     console.log(`[Profile] Lösche Profil: "${name}"`);
@@ -1544,6 +1697,9 @@ function deleteCustomProfile(index) {
     showToast('info', `Profil "${name}" gelöscht`);
 }
 
+/**
+ * Rendert die Chips für benutzerdefinierte Profile in der Schnellzugriffsleiste.
+ */
 function renderCustomProfiles() {
     document.querySelectorAll('.profile-chip.custom, .delete-profile.custom').forEach(el => el.remove());
 
@@ -1579,6 +1735,12 @@ function renderCustomProfiles() {
 // =====================================================
 //  TOAST NOTIFICATIONS & UTILS
 // =====================================================
+
+/**
+ * Zeigt eine flüchtige Toast-Meldung am unteren Bildschirmrand an.
+ * @param {'success'|'error'|'info'} type Art der Benachrichtigung
+ * @param {string} message Angezeigter Text
+ */
 function showToast(type, message) {
     const container = document.getElementById('toast-container');
     const toast = document.createElement('div');
@@ -1595,6 +1757,11 @@ function showToast(type, message) {
     }, 2500);
 }
 
+/**
+ * Maskiert Sonderzeichen in Texten für die sichere HTML-Ausgabe.
+ * @param {string} str Rohtext
+ * @returns {string} HTML-escaped Text
+ */
 function escapeHtml(str) {
     const div = document.createElement('div');
     div.textContent = str;
@@ -1642,6 +1809,11 @@ document.addEventListener('keydown', (e) => {
 // =====================================================
 //  INITIALIZATION
 // =====================================================
+
+/**
+ * Initialisiert das Dashboard beim Seitenstart:
+ * Stellt den State wieder her, initialisiert UI-Komponenten und verbindet mit OBS WebSocket.
+ */
 async function init() {
     console.log("[Init] Dashboard Initialisierung startet...");
     

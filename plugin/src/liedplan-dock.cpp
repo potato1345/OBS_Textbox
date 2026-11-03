@@ -1,20 +1,12 @@
 /*
-Liedplan — Standalone OBS-Plugin (T7)
-Copyright (C) 2026 Johann
-
-This program is free software; you can redistribute it and/or modify
-it under the terms of the GNU General Public License as published by
-the Free Software Foundation; either version 2 of the License, or
-(at your option) any later version.
-
-This program is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-GNU General Public License for more details.
-
-You should have received a copy of the GNU General Public License along
-with this program. If not, see <https://www.gnu.org/licenses/>
-*/
+ * liedplan-dock.cpp — Qt-basiertes Hauptbedienpanel für Liedplan in OBS Studio (v3).
+ *
+ * Zweck:
+ *   - Implementiert die Benutzeroberfläche LiedplanDock für das OBS Studio QDockWidget.
+ *   - Verwaltet die Karten-Eingabezeilen, Schnell-Profile, Farben und Deckkraft.
+ *   - Steuert Import-Workflows (Google Forms API, CSV/XLSX/ZIP-Upload, AI/LLM-Analyse).
+ *   - Synchronisiert Karteninhalte und Aktionen mit OBS-Szenen via liedplan_scene.
+ */
 
 #ifndef _SILENCE_CXX20_U8PATH_DEPRECATION_WARNING
 #define _SILENCE_CXX20_U8PATH_DEPRECATION_WARNING
@@ -25,6 +17,7 @@ with this program. If not, see <https://www.gnu.org/licenses/>
 #include "liedplan-scene.hpp"
 #include "liedplan-theme-icons.hpp"
 #include "liedplan-theme.hpp"
+#include "liedplan-log.hpp"
 
 #include <obs.h>
 
@@ -313,6 +306,7 @@ LiedplanDock::LiedplanDock(const std::string &state_path, QWidget *parent)
 	}
 
 	state_.load(state_path_);
+	blog(LOG_INFO, "[liedplan] Zustand geladen (%zu Karten, Datei: %s)", state_.cards.size(), state_path_.c_str());
 
 	if (!file_exists) {
 		for (int i = 0; i < kDefaultCardCount; ++i) {
@@ -1031,6 +1025,7 @@ void LiedplanDock::create_row_widget(const LiedplanCard &card)
 
 	connect(to_scene_btn, &QPushButton::clicked, this, [this, card_id]() {
 		if (LiedplanCard *c = find_card_mut(card_id)) {
+			blog(LOG_INFO, "[liedplan] Sende Karte '%s' an aktuelle Szene", card_id.c_str());
 			liedplan_scene::send_to_current_scene(*c, state_.settings);
 		}
 	});
@@ -1228,6 +1223,7 @@ void LiedplanDock::set_dock_status(const QString &msg, bool is_error)
 
 void LiedplanDock::apply_import_result(const liedplan_import::LiedplanImportResult &res)
 {
+	blog(LOG_INFO, "[liedplan] Import übernommen: %zu Programmpunkte", res.punkte.size());
 	while (state_.cards.size() < static_cast<std::size_t>(kDefaultCardCount)) {
 		state_.add_card();
 	}
@@ -1633,11 +1629,13 @@ void LiedplanDock::on_open_import_dialog()
 					}
 
 					if (!api_key.empty()) {
+						blog(LOG_INFO, "[liedplan] AI-Import: Verwende OpenRouter LLM");
 						try {
 							ai_res = liedplan_ai::process_with_llm(
 								api_key, text, sys_prompt,
 								lieder_path, post_progress);
 						} catch (const std::exception &llm_ex) {
+							blog(LOG_INFO, "[liedplan] AI-Import: Wechsle auf Offline-Fallback-Parser");
 							post_progress(
 								"Free-Tier nicht erreichbar – nutze lokalen Offline-Parser...");
 							auto local_items =
@@ -1650,6 +1648,7 @@ void LiedplanDock::on_open_import_dialog()
 							ai_res.model_label = "Offline-Fallback";
 						}
 					} else {
+						blog(LOG_INFO, "[liedplan] AI-Import: Verwende lokalen Offline-Parser");
 						post_progress(
 							"Kein API-Key – lokale Offline-Analyse");
 						auto local_items =
@@ -2520,6 +2519,8 @@ void LiedplanDock::on_open_settings_dialog()
 
 void LiedplanDock::save_state()
 {
-	if (!state_path_.empty())
+	if (!state_path_.empty()) {
 		state_.save(state_path_);
+		lp_log("Zustand gespeichert (" + std::to_string(state_.cards.size()) + " Karten)");
+	}
 }

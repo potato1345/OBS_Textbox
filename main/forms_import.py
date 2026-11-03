@@ -3,6 +3,13 @@
 forms_import.py — Deterministischer Parser für Google-Forms-Antwort-Exports
 des Formulars „Liedplan – Gottesdienstprogramm" (St. Johannes Hammelburg).
 
+Gehört zu Version 1 (main/).
+Zusammenspiel:
+  - Wird von main/server.py aufgerufen, um Uploads von Google-Forms-Dateien
+    oder direkte API-Abfragen zu verarbeiten.
+  - Liefert ein standardisiertes JSON-Dictionary mit 12 festen Programmpunkten,
+    das im v1-Dashboard (main/controlui/control.html) visualisiert wird.
+
 Unterstützte Export-Formate (Google Forms „Antworten" → Herunterladen):
   - CSV  („Antworten als .csv herunterladen", ggf. in .zip verpackt, UTF-8,
           Komma- oder Semikolon-Trennung, mit/ohne BOM)
@@ -19,6 +26,10 @@ import io
 import os
 import re
 import zipfile
+import logging
+
+# Logger für Version 1 (main/)
+logger = logging.getLogger("liedplan-v1")
 
 # ---------- Formularstruktur (fix, 12 Programmpunkte) ----------
 
@@ -34,11 +45,14 @@ FORM_ID = "1jreAuzd-jt1x48WDmjaP7v0OusdVO2lb55Kt4JrhEgY"
 
 
 class FormEmptyError(Exception):
-    """Im Formular liegen noch keine Antworten vor."""
+    """Ausnahme: Im Google-Formular liegen noch keine Antworten vor."""
 
 
 def _norm_title(title):
-    """Header normalisieren: Trim, En-Dash/Em-Dash -> Bindestrich, Whitespace kollabieren."""
+    """
+    Header normalisieren: Trim, En-Dash/Em-Dash -> Bindestrich, Whitespace kollabieren.
+    Ermöglicht toleranten Abgleich unterschiedlich formatierter Spaltenüberschriften.
+    """
     t = (title or "").strip()
     t = t.replace("\u2013", "-").replace("\u2014", "-")
     t = re.sub(r"\s+", " ", t)
@@ -46,9 +60,13 @@ def _norm_title(title):
 
 
 def _canonical_key(normalized_title):
-    """Normierten Header auf internen Schlüssel mappen. None wenn unbekannt.
+    """
+    Normierten Header auf internen Schlüssel mappen. None wenn unbekannt.
 
-    z.B. '1. Eröffnung - GL-Nummer' -> '1:GL-Nummer', 'Zeitstempel' -> 'zeitstempel'
+    Beispiele:
+      - '1. Eröffnung - GL-Nummer' -> '1:GL-Nummer'
+      - 'Zeitstempel' -> 'zeitstempel'
+      - 'Organist' -> 'organist'
     """
     if not normalized_title:
         return None
@@ -70,7 +88,11 @@ def _canonical_key(normalized_title):
 # ---------- CSV / XLSX / ZIP Parsing ----------
 
 def _rows_to_dicts(header_row, data_rows):
-    """Header-Zeile + Datenzeilen zu Liste von Dicts mit internen Schlüsseln."""
+    """
+    Kombiniert Header-Zeile und Datenzeilen zu einer Liste von Wörterbüchern
+    mit kanonischen Schlüsseln. Validiert, dass mindestens Spalten des ersten
+    Programmpunkts vorhanden sind.
+    """
     keys = {}
     for idx, h in enumerate(header_row):
         key = _canonical_key(_norm_title(h))
@@ -92,22 +114,34 @@ def _rows_to_dicts(header_row, data_rows):
 
 
 def parse_answers_csv(data):
-    """CSV-Bytes (UTF-8, BOM erlaubt, Komma oder Semikolon) -> Liste von Zeilen-Dicts."""
+    """
+    Parst rohe CSV-Bytes (UTF-8, optional mit BOM, automatischer Erkennung von Komma/Semikolon)
+    in eine Liste von Zeilen-Dictionaries.
+    """
+    logger.info("CSV-Parsing gestartet (%d Bytes)", len(data))
     text = data.decode("utf-8-sig", errors="replace")
     lines = [ln for ln in text.splitlines() if ln.strip() != ""]
     if not lines:
+        logger.warning("CSV-Parsing abgebrochen: Datei ist leer")
         raise ValueError("Die CSV-Datei ist leer.")
     first = lines[0]
     delimiter = ";" if first.count(";") > first.count(",") else ","
     reader = csv.reader(io.StringIO("\n".join(lines)), delimiter=delimiter)
     all_rows = list(reader)
     if len(all_rows) < 2:
+        logger.warning("CSV-Parsing abgebrochen: Nur Kopfzeile gefunden")
         raise ValueError("Keine Antworten in der CSV-Datei gefunden (nur Kopfzeile).")
-    return _rows_to_dicts(all_rows[0], all_rows[1:])
+    rows = _rows_to_dicts(all_rows[0], all_rows[1:])
+    logger.info("CSV-Parsing erfolgreich: %d Antworten extrahiert", len(rows))
+    return rows
 
 
 def parse_answers_xlsx(data):
-    """XLSX-Bytes (Antwort-Sheet) -> Liste von Zeilen-Dicts."""
+    """
+    Parst rohe XLSX-Bytes eines Google-Spreadsheet-Exports in eine Liste
+    von Zeilen-Dictionaries.
+    """
+    logger.info("XLSX-Parsing gestartet (%d Bytes)", len(data))
     from openpyxl import load_workbook
     wb = load_workbook(io.BytesIO(data), read_only=True)
     ws = wb.worksheets[0]
@@ -115,31 +149,45 @@ def parse_answers_xlsx(data):
     try:
         header_row = next(rows_iter)
     except StopIteration:
+        logger.warning("XLSX-Parsing abgebrochen: Datei ist leer")
         raise ValueError("Die XLSX-Datei ist leer.")
     data_rows = [r for r in rows_iter if any(c is not None and str(c).strip() != "" for c in r)]
     if not data_rows:
+        logger.warning("XLSX-Parsing abgebrochen: Keine Datenzeilen vorhanden")
         raise ValueError("Keine Antworten in der XLSX-Datei gefunden.")
-    return _rows_to_dicts([c if c is not None else "" for c in header_row],
+    rows = _rows_to_dicts([c if c is not None else "" for c in header_row],
                           [list(r) for r in data_rows])
+    logger.info("XLSX-Parsing erfolgreich: %d Antworten extrahiert", len(rows))
+    return rows
 
 
 def parse_answers_zip(data):
-    """ZIP-Bytes (Google-Forms-CSV-Download) -> Liste von Zeilen-Dicts."""
+    """
+    Extrahiert die CSV-Datei aus einem Google-Forms ZIP-Download und parst sie.
+    """
+    logger.info("ZIP-Parsing gestartet (%d Bytes)", len(data))
     try:
         zf = zipfile.ZipFile(io.BytesIO(data))
     except zipfile.BadZipFile:
+        logger.warning("ZIP-Parsing abgebrochen: Ungültiges Archiv")
         raise ValueError("Die ZIP-Datei ist beschädigt oder kein gültiges Archiv.")
     csv_names = sorted(n for n in zf.namelist()
                        if n.lower().endswith(".csv") and not n.endswith(".DS_Store"))
     if not csv_names:
+        logger.warning("ZIP-Parsing abgebrochen: Keine CSV-Datei im Archiv gefunden")
         raise ValueError("Keine CSV-Datei in der ZIP-Datei gefunden.")
+    logger.info("Extrahierte CSV '%s' aus ZIP-Archiv", csv_names[0])
     return parse_answers_csv(zf.read(csv_names[0]))
 
 
 def parse_answers_file(path, filename):
-    """Dispatch per Dateiname/Endung. Liest die Datei selbst."""
+    """
+    Wählt anhand der Dateiendung (.csv, .xlsx, .zip) den passenden Parser aus.
+    Liest den Dateiinhalt von der Festplatte.
+    """
     _, ext = os.path.splitext(filename or os.path.basename(path))
     ext = ext.lower()
+    logger.info("parse_answers_file für '%s' (Format: %s)", filename, ext)
     with open(path, "rb") as f:
         data = f.read()
     if ext == ".csv":
@@ -148,15 +196,17 @@ def parse_answers_file(path, filename):
         return parse_answers_xlsx(data)
     if ext == ".zip":
         return parse_answers_zip(data)
+    logger.warning("Nicht unterstütztes Dateiformat: %s", ext)
     raise ValueError("Nicht unterstütztes Format „%s“. Bitte CSV, XLSX oder ZIP." % ext)
 
 
 # ---------- Mappen auf Gottesdienst-Struktur ----------
 
 def to_gottesdienst(row):
-    """Eine Antwort-Zeile (interne Schlüssel) -> fixer Gottesdienst-JSON.
-
-    {woche, tag, organist, zeitstempel, punkte: [12 x {name, gl, verse, titel}]}
+    """
+    Transformiert ein Zeilen-Dictionary mit internen Schlüsseln in die standardisierte
+    Gottesdienst-JSON-Struktur mit genau 12 Programmpunkten:
+      {woche, tag, organist, zeitstempel, punkte: [12 x {name, gl, verse, titel}]}
     """
     punkte = []
     for i, name in enumerate(POINTS, 1):
@@ -178,8 +228,14 @@ def to_gottesdienst(row):
 # ---------- Direkte API-Abfrage (ohne Datei-Download) ----------
 
 def fetch_latest_response():
-    """Neueste Formular-Antwort direkt per Forms API holen -> Gottesdienst-JSON."""
+    """
+    Fragt die neueste Formular-Antwort direkt über die Google Forms API ab
+    und gibt die standardisierte Gottesdienst-Struktur zurück.
+    Benötigt ein gültiges OAuth-Token unter GOOGLE_TOKEN.
+    """
+    logger.info("Google Forms API-Abfrage gestartet für Formular %s", FORM_ID)
     if not os.path.exists(GOOGLE_TOKEN):
+        logger.error("Google-Token-Datei nicht gefunden: %s", GOOGLE_TOKEN)
         raise FileNotFoundError("Google-Token nicht gefunden: %s" % GOOGLE_TOKEN)
     from google.oauth2.credentials import Credentials
     from googleapiclient.discovery import build
@@ -199,11 +255,13 @@ def fetch_latest_response():
     rl = service.forms().responses().list(formId=FORM_ID).execute()
     responses = rl.get("responses", [])
     if not responses:
+        logger.warning("Keine Antworten im Google-Formular vorhanden")
         raise FormEmptyError("Noch keine Antworten")
 
     def _stamp(r):
         return (r.get("createTime") or r.get("create_time") or "")
     newest = max(responses, key=_stamp)
+    logger.info("Neueste Antwort ausgewählt (Erstellungszeit: %s)", _stamp(newest))
 
     row = {}
     for q in newest.get("questions", []):

@@ -1,20 +1,15 @@
 /*
-Liedplan — Standalone OBS-Plugin (T7)
-Copyright (C) 2026 Johann
-
-This program is free software; you can redistribute it and/or modify
-it under the terms of the GNU General Public License as published by
-the Free Software Foundation; either version 2 of the License, or
-(at your option) any later version.
-
-This program is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-GNU General Public License for more details.
-
-You should have received a copy of the GNU General Public License along
-with this program. If not, see <https://www.gnu.org/licenses/>
-*/
+ * liedplan-state.hpp — Datenmodelle und Zustandshaltung des Liedplan-Plugins (v3).
+ *
+ * Zweck:
+ *   - Definiert LiedplanCard (Zustand einer Textbox/Karte inkl. Texten, Farben, Animation).
+ *   - Definiert LiedplanSettings (Google Forms ID, Token-Pfad, OpenRouter-Key, Dateipfade).
+ *   - Definiert LiedplanQuickProfile (gespeichertes Set von Karten).
+ *   - Implementiert die LiedplanState-Klasse zur Serialisierung/Deserialisierung in JSON.
+ *   - Konvertierung von Farbprofilen in YAML und zurück.
+ *
+ * Hinweis: Qt- und libobs-frei; wird auch in Standalone-Tests (test-liedplan-state) verwendet.
+ */
 
 #pragma once
 
@@ -24,6 +19,9 @@ with this program. If not, see <https://www.gnu.org/licenses/>
 #include <string>
 #include <vector>
 
+/**
+ * Zustand einer einzelnen Liedplan-Karte bzw. Textbox.
+ */
 struct LiedplanCard {
 	std::string id; // z. B. "box1"
 	std::string zeile1; // GL-Nummer
