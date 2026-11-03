@@ -966,7 +966,13 @@ std::vector<AiPoint> parse_liedplan_locally(const std::string &text)
 			const std::string after = strip_leading_commas_spaces(
 				std::string_view(line).substr(idx + num.size()));
 
-			items.push_back(AiPoint{before, num, after});
+			if (before.empty() && !items.empty() && items.back().zeile2.empty()) {
+				items.back().zeile2 = num;
+				if (!after.empty())
+					items.back().zeile3 = after;
+			} else {
+				items.push_back(AiPoint{before, num, after});
+			}
 			continue;
 		}
 

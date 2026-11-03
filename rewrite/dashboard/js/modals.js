@@ -21,7 +21,14 @@ import {
 } from './color-profiles.js';
 import { connectOBS, disconnectOBS, toggleConnection, obs, pushStateToOBS } from './obs-sync.js';
 import { showToast } from './toast.js';
-import { extractDocumentText, processWithLLM, parseLiedplanLocally, DEFAULT_SYSTEM_PROMPT } from './pdf-ai-importer.js';
+import {
+    extractDocumentText,
+    processWithLLM,
+    parseLiedplanLocally,
+    loadSongReference,
+    enrichTitlesFromReference,
+    DEFAULT_SYSTEM_PROMPT
+} from './pdf-ai-importer.js';
 import { fetchAllFormsServices, uploadAnswersFile, serviceToItems, applyItemsToDashboard } from './forms-importer.js';
 import { LP_DEBUG, escapeHtml } from './box-utils.js';
 import { renderDashboardCards } from './cards.js';
@@ -726,6 +733,8 @@ async function handleAiUpload(file) {
                 if (liveLog) liveLog.textContent = 'Free-Tier nicht erreichbar – nutze lokalen Offline-Parser...';
                 const localItems = parseLiedplanLocally(text);
                 if (!localItems.length) throw llmErr;
+                const songRef = await loadSongReference();
+                enrichTitlesFromReference(localItems, songRef);
                 parsedResult = { items: localItems };
                 modelLabel = 'Offline-Fallback';
             }
@@ -735,6 +744,8 @@ async function handleAiUpload(file) {
             if (!localItems.length) {
                 throw new Error('Weder API-Key vorhanden noch konnte der lokale Parser Programmpunkte erkennen.');
             }
+            const songRef = await loadSongReference();
+            enrichTitlesFromReference(localItems, songRef);
             parsedResult = { items: localItems };
             modelLabel = 'Lokal (ohne API-Key)';
         }

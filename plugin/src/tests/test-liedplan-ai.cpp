@@ -213,6 +213,25 @@ Schlusslied 868, 1+6 Ave Maria klare
 		      "8. parse_liedplan_locally: leerer String und reine Kopfzeilen liefern leere Liste");
 	}
 
+	// 9. parse_liedplan_locally: mehrzeilig "Kyrie\n437, 1-4" und einzeilig "Eröffnung 144, 1+4+6 Nun jauchzt"
+	{
+		const std::vector<AiPoint> multi = parse_liedplan_locally("Kyrie\n437, 1-4");
+		const bool ok_multi = multi.size() == 1 && multi[0].zeile1 == "Kyrie" &&
+				      multi[0].zeile2 == "437, 1-4" && multi[0].zeile3.empty();
+		check(ok_multi,
+		      "9a. parse_liedplan_locally(\"Kyrie\\n437, 1-4\"): 1 Punkt zeile1=Kyrie, zeile2=437, 1-4",
+		      "size=" + std::to_string(multi.size()));
+
+		const std::vector<AiPoint> single =
+			parse_liedplan_locally("Eröffnung 144, 1+4+6 Nun jauchzt");
+		const bool ok_single = single.size() == 1 && single[0].zeile1 == "Eröffnung" &&
+				       single[0].zeile2 == "144, 1+4+6" &&
+				       single[0].zeile3 == "Nun jauchzt";
+		check(ok_single,
+		      "9b. parse_liedplan_locally(\"Eröffnung 144, 1+4+6 Nun jauchzt\"): zeile3=\"Nun jauchzt\"",
+		      "size=" + std::to_string(single.size()));
+	}
+
 	// 10. Sidecar extract_document_text
 	{
 #ifdef LIEDPLAN_REPO_ROOT

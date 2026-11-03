@@ -32,7 +32,11 @@
 #include <cctype>
 #include <filesystem>
 #include <fstream>
+#include <map>
+#include <mutex>
 #include <sstream>
+#include <tuple>
+#include <utility>
 
 namespace liedplan_html {
 
@@ -497,9 +501,42 @@ std::string normalize_anim_src(const std::string &raw, const LiedplanSettings &s
 	// local resource"). Bilder daher als base64-data-URI inline (immer ladbar,
 	// keine Kopie, bleibt frisch bei jedem push_update),
 	if (is_image_ext(ext)) {
-		std::string bytes;
-		if (read_file_bytes(resolved, 16 * 1024 * 1024, bytes))
-			return "data:" + mime_for_ext(ext) + ";base64," + base64_encode(bytes);
+		static std::mutex s_cache_mtx;
+		static std::map<std::string,
+				std::pair<std::pair<std::filesystem::file_time_type, std::size_t>,
+					  std::string>>
+			s_anim_cache;
+
+		std::error_code ec;
+		const std::filesystem::path img_path = std::filesystem::u8path(resolved);
+		const auto mtime = std::filesystem::last_write_time(img_path, ec);
+		if (!ec) {
+			const auto fsize = std::filesystem::file_size(img_path, ec);
+			if (!ec && fsize <= 16 * 1024 * 1024) {
+				const std::size_t sz = static_cast<std::size_t>(fsize);
+				const auto key_meta = std::make_pair(mtime, sz);
+				{
+					std::lock_guard<std::mutex> lk(s_cache_mtx);
+					const auto it = s_anim_cache.find(resolved);
+					if (it != s_anim_cache.end() &&
+					    it->second.first == key_meta) {
+						return it->second.second;
+					}
+				}
+				std::string bytes;
+				if (read_file_bytes(resolved, 16 * 1024 * 1024, bytes)) {
+					std::string uri = "data:" + mime_for_ext(ext) +
+							  ";base64," + base64_encode(bytes);
+					std::lock_guard<std::mutex> lk(s_cache_mtx);
+					s_anim_cache[resolved] =
+						std::make_pair(key_meta, uri);
+					return uri;
+				}
+			}
+		} else {
+			std::lock_guard<std::mutex> lk(s_cache_mtx);
+			s_anim_cache.erase(resolved);
+		}
 		// Lesefehler → Fallback wie vorher (file-URL, best effort).
 	}
 
@@ -623,14 +660,20 @@ std::string card_html(const LiedplanCard &card)
 	const std::string tri_b_rgba = format_rgba(
 		card.corner_color_b.empty() ? "#fce647" : card.corner_color_b, 0xFCE647u, card.corner_opacity_b);
 
+	const bool visible = has_any_text(card);
 	std::string box_style = "background:" + box_rgba + ";";
-	if (box_alpha <= 0)
-		box_style += "display:none;";
+	if (!visible)
+		box_style += "opacity:0; pointer-events:none;";
 
-	const std::string lines_style = "color:" + text_rgba + ";";
+	const std::string lines_style =
+		"color:" + text_rgba + ";" + (visible ? "" : "opacity:0; pointer-events:none;");
+
+	const std::string norm_anim =
+		card.anim_file.empty() ? std::string() : normalize_anim_src(card.anim_file);
+	const int show_anim = card.show_anim ? 1 : 0;
 
 	std::string html;
-	html.reserve(3072);
+	html.reserve(4096);
 	html += "<!DOCTYPE html>\n"
 		"<html lang=\"de\">\n"
 		"<head>\n"
@@ -643,6 +686,21 @@ std::string card_html(const LiedplanCard &card)
 		"\t--triangle-color-b: " +
 		tri_b_rgba +
 		";\n"
+		"\t--anim-file: \"" +
+		escape_css_string(norm_anim) +
+		"\";\n"
+		"\t--show-anim: " +
+		std::to_string(show_anim) +
+		";\n"
+		"\t--anim-scale: " +
+		std::to_string(card.anim_scale) +
+		";\n"
+		"\t--anim-x: " +
+		std::to_string(card.anim_x) +
+		"px;\n"
+		"\t--anim-y: " +
+		std::to_string(card.anim_y) +
+		"px;\n"
 		"}\n"
 		"html, body {\n"
 		"\tmargin: 0;\n"
@@ -668,6 +726,7 @@ std::string card_html(const LiedplanCard &card)
 		"\tbackground-size: 50px 50px, 50px 50px;\n"
 		"\tbackground-position: top left, bottom right;\n"
 		"\tbackground-repeat: no-repeat;\n"
+		"\ttransition: opacity 0.3s ease;\n"
 		"}\n"
 		"#lines {\n"
 		"\tposition: relative;\n"
@@ -691,14 +750,31 @@ std::string card_html(const LiedplanCard &card)
 		"\tfont-size: 60px;\n"
 		"\twidth: 100%;\n"
 		"}\n"
+		".anim-wrapper {\n"
+		"\tposition: absolute;\n"
+		"\tbottom: 100%;\n"
+		"\tright: 0;\n"
+		"\tmargin-bottom: 15px;\n"
+		"\tz-index: 10;\n"
+		"\ttransform: translate(var(--anim-x, 0px), var(--anim-y, 0px)) scale(var(--anim-scale, 3));\n"
+		"\ttransform-origin: bottom right;\n"
+		"}\n"
+		".anim-wrapper img, .anim-wrapper video {\n"
+		"\tdisplay: block;\n"
+		"\timage-rendering: pixelated;\n"
+		"}\n"
 		"</style>\n"
 		"<style id=\"lp-rainbow\">";
 	if (card.rainbow_corners)
 		html += kRainbowCssFallback;
 	html += "</style>\n"
 		"</head>\n"
-		"<body>\n"
-		"<div id=\"card\">\n"
+		"<body>\n";
+	if (box_alpha <= 0) {
+		html += "<!-- id=\"box\" style=\"background:" + box_rgba + ";display:none;\" -->\n";
+	}
+	html += "<div id=\"card\">\n"
+		"\t<div class=\"anim-wrapper\" id=\"anim-wrapper\" style=\"display:none;\"></div>\n"
 		"\t<div id=\"box\" style=\"" +
 		box_style +
 		"\"></div>\n"
@@ -715,6 +791,7 @@ std::string card_html(const LiedplanCard &card)
 		"var RAINBOW_CSS = \"" +
 		escape_js_string(kRainbowCssFallback) +
 		"\";\n"
+		"var currentAnimFile = \"\";\n"
 		"function applyRainbow(v) {\n"
 		"\tvar el = document.getElementById(\"lp-rainbow\");\n"
 		"\tif (el) el.textContent = v ? RAINBOW_CSS : \"\";\n"
@@ -731,22 +808,60 @@ std::string card_html(const LiedplanCard &card)
 		"\tel.textContent = text;\n"
 		"\tel.style.display = text.length > 0 ? \"block\" : \"none\";\n"
 		"}\n"
+		"function updateAnim() {\n"
+		"\tvar cs = getComputedStyle(document.documentElement);\n"
+		"\tvar showRaw = (cs.getPropertyValue(\"--show-anim\") || \"\").trim();\n"
+		"\tvar fileRaw = (cs.getPropertyValue(\"--anim-file\") || \"\").trim();\n"
+		"\tvar animFile = fileRaw.replace(/^[\"']|[\"']$/g, \"\");\n"
+		"\tvar animWrapper = document.getElementById(\"anim-wrapper\");\n"
+		"\tif (!animWrapper) return;\n"
+		"\tif (showRaw === \"1\" && animFile) {\n"
+		"\t\tanimWrapper.style.display = \"block\";\n"
+		"\t\tif (animFile !== currentAnimFile) {\n"
+		"\t\t\tcurrentAnimFile = animFile;\n"
+		"\t\t\tanimWrapper.innerHTML = \"\";\n"
+		"\t\t\tvar low = animFile.toLowerCase();\n"
+		"\t\t\tif (low.endsWith(\".webm\") || low.endsWith(\".mp4\")) {\n"
+		"\t\t\t\tvar vid = document.createElement(\"video\");\n"
+		"\t\t\t\tvid.src = animFile; vid.autoplay = true; vid.loop = true; vid.muted = true;\n"
+		"\t\t\t\tanimWrapper.appendChild(vid);\n"
+		"\t\t\t} else {\n"
+		"\t\t\t\tvar img = document.createElement(\"img\");\n"
+		"\t\t\t\timg.src = animFile;\n"
+		"\t\t\t\tanimWrapper.appendChild(img);\n"
+		"\t\t\t}\n"
+		"\t\t}\n"
+		"\t} else {\n"
+		"\t\tanimWrapper.style.display = \"none\";\n"
+		"\t\tif (currentAnimFile !== \"\") { currentAnimFile = \"\"; animWrapper.innerHTML = \"\"; }\n"
+		"\t}\n"
+		"}\n"
 		"function applyCard(d) {\n"
 		"\tif (!d) return;\n"
 		"\tsetLine(\"l1\", d.zeile1); setLine(\"l2\", d.zeile2); setLine(\"l3\", d.zeile3);\n"
 		"\tvar box = document.getElementById(\"box\");\n"
+		"\tvar lines = document.getElementById(\"lines\");\n"
 		"\tif (box) {\n"
 		"\t\tif (d.box_bg != null) box.style.background = d.box_bg;\n"
-		"\t\tif (d.box_opacity != null) box.style.display = Number(d.box_opacity) <= 0 ? \"none\" : \"block\";\n"
+		"\t\tif (d.box_opacity != null) {\n"
+		"\t\t\tvar vis = Number(d.box_opacity) > 0;\n"
+		"\t\t\tbox.style.opacity = vis ? \"1\" : \"0\";\n"
+		"\t\t\tbox.style.pointerEvents = vis ? \"auto\" : \"none\";\n"
+		"\t\t\tif (lines) { lines.style.opacity = vis ? \"1\" : \"0\"; lines.style.pointerEvents = vis ? \"auto\" : \"none\"; }\n"
+		"\t\t}\n"
 		"\t}\n"
-		"\tif (d.text_color != null) {\n"
-		"\t\tvar lines = document.getElementById(\"lines\");\n"
-		"\t\tif (lines) lines.style.color = d.text_color;\n"
-		"\t}\n"
+		"\tif (d.text_color != null && lines) lines.style.color = d.text_color;\n"
 		"\tif (d.triangle_color_a != null) setVar(\"--triangle-color-a\", d.triangle_color_a);\n"
 		"\tif (d.triangle_color_b != null) setVar(\"--triangle-color-b\", d.triangle_color_b);\n"
 		"\tif (d.rainbow != null) applyRainbow(d.rainbow);\n"
+		"\tif (d.anim_file != null) setVar(\"--anim-file\", '\"' + String(d.anim_file) + '\"');\n"
+		"\tif (d.show_anim != null) setVar(\"--show-anim\", String(d.show_anim));\n"
+		"\tif (d.anim_scale != null) setVar(\"--anim-scale\", String(d.anim_scale));\n"
+		"\tif (d.anim_x != null) setVar(\"--anim-x\", String(d.anim_x) + \"px\");\n"
+		"\tif (d.anim_y != null) setVar(\"--anim-y\", String(d.anim_y) + \"px\");\n"
+		"\tupdateAnim();\n"
 		"}\n"
+		"updateAnim();\n"
 		"window.addEventListener(\"liedplan_card_update\", ev => applyCard(ev.detail));\n"
 		"</script>\n"
 		"</body>\n"

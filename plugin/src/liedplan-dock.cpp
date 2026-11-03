@@ -13,6 +13,7 @@
 #endif
 
 #include "liedplan-dock.hpp"
+#include "liedplan-html.hpp"
 #include "liedplan-profiles.hpp"
 #include "liedplan-scene.hpp"
 #include "liedplan-theme-icons.hpp"
@@ -60,13 +61,87 @@
 #include <QVariant>
 
 #include <algorithm>
+#include <cstring>
 #include <filesystem>
+#include <fstream>
+#include <map>
 #include <memory>
+#include <sstream>
 #include <thread>
 
 namespace {
 
 constexpr int kDefaultCardCount = 12;
+
+struct DockSaveScheduler {
+	QPointer<QTimer> timer;
+	std::vector<std::string> dirty_cards;
+};
+
+std::map<const LiedplanDock *, DockSaveScheduler> g_dock_schedulers;
+
+void push_card_live(const LiedplanCard &card, const LiedplanSettings &settings)
+{
+	const std::string name = liedplan_scene::source_name(card.id);
+	std::vector<obs_scene_t *> scenes;
+	auto cb = [](void *param, obs_source_t *source) -> bool {
+		if (source && obs_source_is_scene(source)) {
+			auto *list = static_cast<std::vector<obs_scene_t *> *>(param);
+			if (obs_scene_t *sc = obs_scene_from_source(source))
+				list->push_back(sc);
+		}
+		return true;
+	};
+	obs_enum_sources(cb, &scenes);
+	if (scenes.empty())
+		obs_enum_scenes(cb, &scenes);
+
+	const std::string dir = liedplan_html::cards_dir();
+	for (obs_scene_t *scene : scenes) {
+		obs_sceneitem_t *item = obs_scene_find_source(scene, name.c_str());
+		if (!item)
+			continue;
+		obs_source_t *src = obs_sceneitem_get_source(item);
+		if (!src)
+			continue;
+		const char *id = obs_source_get_unversioned_id(src);
+		if (!id)
+			id = obs_source_get_id(src);
+		if (!id || std::strcmp(id, "browser_source") != 0)
+			continue;
+		liedplan_html::push_update(src, card, false, settings, dir);
+	}
+}
+
+void mark_card_dirty_and_schedule(const LiedplanDock *dock, const std::string &card_id)
+{
+	auto it = g_dock_schedulers.find(dock);
+	if (it == g_dock_schedulers.end() || !it->second.timer)
+		return;
+	if (!card_id.empty()) {
+		auto &vec = it->second.dirty_cards;
+		if (std::find(vec.begin(), vec.end(), card_id) == vec.end())
+			vec.push_back(card_id);
+	}
+	it->second.timer->start(150);
+}
+
+std::map<std::string, std::pair<std::string, std::string>>
+load_song_reference(const std::string &lieder_path)
+{
+	if (lieder_path.empty())
+		return {};
+	std::error_code ec;
+	const std::filesystem::path fsp = std::filesystem::u8path(lieder_path);
+	if (!std::filesystem::exists(fsp, ec) || ec)
+		return {};
+	std::ifstream in(fsp, std::ios::binary);
+	if (!in.is_open())
+		return {};
+	std::ostringstream ss;
+	ss << in.rdbuf();
+	return liedplan_ai::parse_song_reference(ss.str());
+}
 
 // Erzeugt eine Standardkarte für Index i (box1..boxN) mit Standardprofil "OBS Dark".
 LiedplanCard make_default_card(std::size_t i)
@@ -96,6 +171,16 @@ LiedplanDock::LiedplanDock(const std::string &state_path, QWidget *parent)
 {
 	setObjectName(QStringLiteral("liedplanDock"));
 	setAttribute(Qt::WA_StyledBackground, true);
+
+	auto *save_timer = new QTimer(this);
+	save_timer->setObjectName(QStringLiteral("lpSaveTimer"));
+	save_timer->setSingleShot(true);
+	save_timer->setInterval(150);
+	g_dock_schedulers[this].timer = save_timer;
+	connect(save_timer, &QTimer::timeout, this, &LiedplanDock::save_state);
+	connect(this, &QObject::destroyed, [this]() {
+		g_dock_schedulers.erase(this);
+	});
 
 	/*
 	Ui4: OBS-Theme-Icons ausliefern — in der DLL eingebettet, beim Dock-Build
@@ -786,28 +871,31 @@ void LiedplanDock::create_row_widget(const LiedplanCard &card)
 	inner_layout->addLayout(actions_layout);
 
 	const std::string card_id = card.id;
+	auto schedule_save = [this, card_id]() {
+		if (const LiedplanCard *c = find_card_mut(card_id)) {
+			push_card_live(*c, state_.settings);
+		}
+		mark_card_dirty_and_schedule(this, card_id);
+	};
 
-	connect(edit_zeile1, &QLineEdit::textChanged, this, [this, card_id](const QString &text) {
+	connect(edit_zeile1, &QLineEdit::textChanged, this, [this, card_id, schedule_save](const QString &text) {
 		if (LiedplanCard *c = find_card_mut(card_id)) {
 			c->zeile1 = text.toUtf8().toStdString();
-			save_state();
-			liedplan_scene::update_everywhere(*c, false, state_.settings);
+			schedule_save();
 		}
 	});
 
-	connect(edit_zeile2, &QLineEdit::textChanged, this, [this, card_id](const QString &text) {
+	connect(edit_zeile2, &QLineEdit::textChanged, this, [this, card_id, schedule_save](const QString &text) {
 		if (LiedplanCard *c = find_card_mut(card_id)) {
 			c->zeile2 = text.toUtf8().toStdString();
-			save_state();
-			liedplan_scene::update_everywhere(*c, false, state_.settings);
+			schedule_save();
 		}
 	});
 
-	connect(edit_zeile3, &QLineEdit::textChanged, this, [this, card_id](const QString &text) {
+	connect(edit_zeile3, &QLineEdit::textChanged, this, [this, card_id, schedule_save](const QString &text) {
 		if (LiedplanCard *c = find_card_mut(card_id)) {
 			c->zeile3 = text.toUtf8().toStdString();
-			save_state();
-			liedplan_scene::update_everywhere(*c, false, state_.settings);
+			schedule_save();
 		}
 		if (card_search_) {
 			const QSignalBlocker blocker(card_search_);
@@ -831,7 +919,7 @@ void LiedplanDock::create_row_widget(const LiedplanCard &card)
 	});
 
 	connect(profile_combo, &QComboBox::currentTextChanged, this,
-		[this, card_id, text_color_btn, box_color_btn](const QString &profile_text) {
+		[this, card_id, text_color_btn, box_color_btn, schedule_save](const QString &profile_text) {
 			if (LiedplanCard *c = find_card_mut(card_id)) {
 				c->profile = profile_text.toUtf8().toStdString();
 				if (const LiedplanProfile *prof =
@@ -845,8 +933,7 @@ void LiedplanDock::create_row_widget(const LiedplanCard &card)
 					(c->text_color.empty() ? "#000000" : c->text_color).c_str()).toUpper());
 				box_color_btn->setText(QString::fromUtf8(
 					(c->box_color.empty() ? "#ffffff" : c->box_color).c_str()).toUpper());
-				save_state();
-				liedplan_scene::update_everywhere(*c, false, state_.settings);
+				schedule_save();
 			}
 		});
 
@@ -890,7 +977,7 @@ void LiedplanDock::create_row_widget(const LiedplanCard &card)
 		set_dock_status(QStringLiteral("Farbprofil \"%1\" gespeichert").arg(qname), false);
 	});
 
-	connect(color_a_btn, &QPushButton::clicked, this, [this, card_id, color_a_btn]() {
+	connect(color_a_btn, &QPushButton::clicked, this, [this, card_id, color_a_btn, schedule_save]() {
 		if (LiedplanCard *c = find_card_mut(card_id)) {
 			const QString cur_hex = QString::fromUtf8(
 				(c->corner_color_a.empty() ? "#fce647" : c->corner_color_a).c_str());
@@ -900,13 +987,12 @@ void LiedplanDock::create_row_widget(const LiedplanCard &card)
 				const QString hex = chosen.name(QColor::HexRgb);
 				c->corner_color_a = hex.toUtf8().toStdString();
 				color_a_btn->setText(hex.toUpper());
-				save_state();
-				liedplan_scene::update_everywhere(*c, false, state_.settings);
+				schedule_save();
 			}
 		}
 	});
 
-	connect(color_b_btn, &QPushButton::clicked, this, [this, card_id, color_b_btn]() {
+	connect(color_b_btn, &QPushButton::clicked, this, [this, card_id, color_b_btn, schedule_save]() {
 		if (LiedplanCard *c = find_card_mut(card_id)) {
 			const QString cur_hex = QString::fromUtf8(
 				(c->corner_color_b.empty() ? "#fce647" : c->corner_color_b).c_str());
@@ -916,14 +1002,13 @@ void LiedplanDock::create_row_widget(const LiedplanCard &card)
 				const QString hex = chosen.name(QColor::HexRgb);
 				c->corner_color_b = hex.toUtf8().toStdString();
 				color_b_btn->setText(hex.toUpper());
-				save_state();
-				liedplan_scene::update_everywhere(*c, false, state_.settings);
+				schedule_save();
 			}
 		}
 	});
 
 	// M6-A8: Freie Text-/Box-Farbe (Color-Picker, Muster = ECKE A/B).
-	connect(text_color_btn, &QPushButton::clicked, this, [this, card_id, text_color_btn]() {
+	connect(text_color_btn, &QPushButton::clicked, this, [this, card_id, text_color_btn, schedule_save]() {
 		if (LiedplanCard *c = find_card_mut(card_id)) {
 			const QString cur_hex = QString::fromUtf8(
 				(c->text_color.empty() ? "#000000" : c->text_color).c_str());
@@ -933,13 +1018,12 @@ void LiedplanDock::create_row_widget(const LiedplanCard &card)
 				const QString hex = chosen.name(QColor::HexRgb);
 				c->text_color = hex.toUtf8().toStdString();
 				text_color_btn->setText(hex.toUpper());
-				save_state();
-				liedplan_scene::update_everywhere(*c, false, state_.settings);
+				schedule_save();
 			}
 		}
 	});
 
-	connect(box_color_btn, &QPushButton::clicked, this, [this, card_id, box_color_btn]() {
+	connect(box_color_btn, &QPushButton::clicked, this, [this, card_id, box_color_btn, schedule_save]() {
 		if (LiedplanCard *c = find_card_mut(card_id)) {
 			const QString cur_hex = QString::fromUtf8(
 				(c->box_color.empty() ? "#ffffff" : c->box_color).c_str());
@@ -949,60 +1033,53 @@ void LiedplanDock::create_row_widget(const LiedplanCard &card)
 				const QString hex = chosen.name(QColor::HexRgb);
 				c->box_color = hex.toUtf8().toStdString();
 				box_color_btn->setText(hex.toUpper());
-				save_state();
-				liedplan_scene::update_everywhere(*c, false, state_.settings);
+				schedule_save();
 			}
 		}
 	});
 
-	connect(opacity_a_slider, &QSlider::valueChanged, this, [this, card_id](int val) {
+	connect(opacity_a_slider, &QSlider::valueChanged, this, [this, card_id, schedule_save](int val) {
 		if (LiedplanCard *c = find_card_mut(card_id)) {
 			c->corner_opacity_a = std::clamp(val, 0, 255);
-			save_state();
-			liedplan_scene::update_everywhere(*c, false, state_.settings);
+			schedule_save();
 		}
 	});
 
-	connect(opacity_b_slider, &QSlider::valueChanged, this, [this, card_id](int val) {
+	connect(opacity_b_slider, &QSlider::valueChanged, this, [this, card_id, schedule_save](int val) {
 		if (LiedplanCard *c = find_card_mut(card_id)) {
 			c->corner_opacity_b = std::clamp(val, 0, 255);
-			save_state();
-			liedplan_scene::update_everywhere(*c, false, state_.settings);
+			schedule_save();
 		}
 	});
 
 	// M6-A7: Text-/Box-Deckkraft (0–255 → Alpha von --text-color/--box-bg;
 	// --box-opacity (Show/Hide, has_any_text) bleibt davon unberührt).
-	connect(text_opacity_slider, &QSlider::valueChanged, this, [this, card_id](int val) {
+	connect(text_opacity_slider, &QSlider::valueChanged, this, [this, card_id, schedule_save](int val) {
 		if (LiedplanCard *c = find_card_mut(card_id)) {
 			c->text_opacity = std::clamp(val, 0, 255);
-			save_state();
-			liedplan_scene::update_everywhere(*c, false, state_.settings);
+			schedule_save();
 		}
 	});
 
-	connect(box_opacity_slider, &QSlider::valueChanged, this, [this, card_id](int val) {
+	connect(box_opacity_slider, &QSlider::valueChanged, this, [this, card_id, schedule_save](int val) {
 		if (LiedplanCard *c = find_card_mut(card_id)) {
 			c->box_opacity = std::clamp(val, 0, 255);
-			save_state();
-			liedplan_scene::update_everywhere(*c, false, state_.settings);
+			schedule_save();
 		}
 	});
 
-	connect(rainbow_cb, &QCheckBox::toggled, this, [this, card_id](bool checked) {
+	connect(rainbow_cb, &QCheckBox::toggled, this, [this, card_id, schedule_save](bool checked) {
 		if (LiedplanCard *c = find_card_mut(card_id)) {
 			c->rainbow_corners = checked;
-			save_state();
-			liedplan_scene::update_everywhere(*c, false, state_.settings);
+			schedule_save();
 		}
 	});
 
 	connect(anim_file_edit, &QLineEdit::textChanged, this,
-		[this, card_id](const QString &text) {
+		[this, card_id, schedule_save](const QString &text) {
 			if (LiedplanCard *c = find_card_mut(card_id)) {
 				c->anim_file = text.toUtf8().toStdString();
-				save_state();
-				liedplan_scene::update_everywhere(*c, false, state_.settings);
+				schedule_save();
 			}
 		});
 
@@ -1019,42 +1096,38 @@ void LiedplanDock::create_row_widget(const LiedplanCard &card)
 	});
 
 	connect(anim_scale_combo, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
-		[this, card_id, anim_scale_combo](int idx) {
+		[this, card_id, anim_scale_combo, schedule_save](int idx) {
 			if (LiedplanCard *c = find_card_mut(card_id)) {
 				const int sc = anim_scale_combo->itemData(idx).toInt();
 				c->anim_scale = sc > 0 ? sc : 3;
-				save_state();
-				liedplan_scene::update_everywhere(*c, false, state_.settings);
+				schedule_save();
 			}
 		});
 
 	connect(anim_x_slider, &QSlider::valueChanged, this,
-		[this, card_id, anim_x_val](int val) {
+		[this, card_id, anim_x_val, schedule_save](int val) {
 			const int clamped = std::clamp(val, -1200, 1200);
 			anim_x_val->setText(QStringLiteral("%1px").arg(clamped));
 			if (LiedplanCard *c = find_card_mut(card_id)) {
 				c->anim_x = clamped;
-				save_state();
-				liedplan_scene::update_everywhere(*c, false, state_.settings);
+				schedule_save();
 			}
 		});
 
 	connect(anim_y_slider, &QSlider::valueChanged, this,
-		[this, card_id, anim_y_val](int val) {
+		[this, card_id, anim_y_val, schedule_save](int val) {
 			const int clamped = std::clamp(val, -1200, 1200);
 			anim_y_val->setText(QStringLiteral("%1px").arg(clamped));
 			if (LiedplanCard *c = find_card_mut(card_id)) {
 				c->anim_y = clamped;
-				save_state();
-				liedplan_scene::update_everywhere(*c, false, state_.settings);
+				schedule_save();
 			}
 		});
 
-	connect(anim_show_cb, &QCheckBox::toggled, this, [this, card_id](bool checked) {
+	connect(anim_show_cb, &QCheckBox::toggled, this, [this, card_id, schedule_save](bool checked) {
 		if (LiedplanCard *c = find_card_mut(card_id)) {
 			c->show_anim = checked;
-			save_state();
-			liedplan_scene::update_everywhere(*c, false, state_.settings);
+			schedule_save();
 		}
 	});
 
@@ -1266,10 +1339,21 @@ void LiedplanDock::apply_import_result(const liedplan_import::LiedplanImportResu
 	if (static_cast<int>(state_.cards.size()) + 1 > state_.next_id)
 		state_.next_id = static_cast<int>(state_.cards.size()) + 1;
 
+	std::vector<liedplan_ai::AiPoint> enriched;
+	enriched.reserve(total_items);
 	for (std::size_t i = 0; i < total_items; ++i) {
-		state_.cards[i].zeile1 = res.punkte[i].gl;
-		state_.cards[i].zeile2 = res.punkte[i].verse;
-		state_.cards[i].zeile3 = res.punkte[i].titel;
+		enriched.push_back(liedplan_ai::AiPoint{
+			res.punkte[i].gl, res.punkte[i].verse, res.punkte[i].titel});
+	}
+	const auto song_ref = load_song_reference(state_.settings.lieder_path);
+	if (!song_ref.empty()) {
+		liedplan_ai::enrich_titles_from_reference(enriched, song_ref);
+	}
+
+	for (std::size_t i = 0; i < total_items; ++i) {
+		state_.cards[i].zeile1 = enriched[i].zeile1;
+		state_.cards[i].zeile2 = enriched[i].zeile2;
+		state_.cards[i].zeile3 = enriched[i].zeile3;
 	}
 	// Überzählige Bestandskarten bereinigen, damit keine Lieder der Vorwoche stehen bleiben.
 	for (std::size_t i = total_items; i < state_.cards.size(); ++i) {
@@ -1326,15 +1410,15 @@ void LiedplanDock::on_open_import_dialog()
 		new QLineEdit(QString::fromUtf8(init_token_path.c_str()), google_group);
 	edit_token_path->setPlaceholderText(QString::fromUtf8(liedplan_import::kDefaultTokenPath));
 
-	connect(edit_form_id, &QLineEdit::textChanged, this, [this](const QString &t) {
-		state_.settings.google_form_id = t.trimmed().toUtf8().toStdString();
+	connect(edit_form_id, &QLineEdit::editingFinished, this, [this, edit_form_id]() {
+		state_.settings.google_form_id = edit_form_id->text().trimmed().toUtf8().toStdString();
 		if (state_.settings.google_form_id.empty())
 			state_.settings.google_form_id = liedplan_import::kDefaultFormId;
 		save_state();
 	});
 
-	connect(edit_token_path, &QLineEdit::textChanged, this, [this](const QString &t) {
-		state_.settings.token_path = t.trimmed().toUtf8().toStdString();
+	connect(edit_token_path, &QLineEdit::editingFinished, this, [this, edit_token_path]() {
+		state_.settings.token_path = edit_token_path->text().trimmed().toUtf8().toStdString();
 		if (state_.settings.token_path.empty())
 			state_.settings.token_path = liedplan_import::kDefaultTokenPath;
 		save_state();
@@ -1702,6 +1786,12 @@ void LiedplanDock::on_open_import_dialog()
 						}
 						ai_res.items = std::move(local_items);
 						ai_res.model_label = "Lokal (ohne API-Key)";
+					}
+
+					const auto song_ref = load_song_reference(lieder_path);
+					if (!song_ref.empty()) {
+						liedplan_ai::enrich_titles_from_reference(
+							ai_res.items, song_ref);
 					}
 
 					if (ai_res.items.empty()) {
@@ -2570,6 +2660,21 @@ void LiedplanDock::on_open_settings_dialog()
 
 void LiedplanDock::save_state()
 {
+	auto it = g_dock_schedulers.find(this);
+	if (it != g_dock_schedulers.end()) {
+		if (it->second.timer && it->second.timer->isActive())
+			it->second.timer->stop();
+		std::vector<std::string> ids;
+		ids.swap(it->second.dirty_cards);
+		for (const std::string &id : ids) {
+			if (const LiedplanCard *c = find_card_mut(id)) {
+				std::string html_path;
+				if (liedplan_html::write_card(*c, html_path, state_.settings)) {
+					lp_log("HTML geschrieben: " + html_path);
+				}
+			}
+		}
+	}
 	if (!state_path_.empty()) {
 		state_.save(state_path_);
 		lp_log("Zustand gespeichert (" + std::to_string(state_.cards.size()) + " Karten)");

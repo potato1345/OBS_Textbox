@@ -478,8 +478,8 @@ function localParseLiedplan(text) {
     let current = null;
     let lastWasNumberedPP = false;
 
-    const newPP = (z1, z2) => {
-        current = { zeile1: z1, zeile2: z2 || '', zeile3: '' };
+    const newPP = (z1, z2, z3) => {
+        current = { zeile1: z1, zeile2: z2 || '', zeile3: z3 || '' };
         items.push(current);
     };
 
@@ -490,12 +490,14 @@ function localParseLiedplan(text) {
         if (num) {
             const idx = rawLine.indexOf(num);
             const before = rawLine.slice(0, idx).replace(/[,\s]+$/, '').trim();
+            const after = rawLine.slice(idx + num.length).replace(/^[,\s]+/, '').trim();
             if (before) {
-                newPP(before, num);
+                newPP(before, num, after);
             } else if (current && !current.zeile2) {
                 current.zeile2 = num; // Nummer ohne Label: an vorherigen Punkt anhängen
+                if (after) current.zeile3 = after;
             } else {
-                newPP('', num);
+                newPP('', num, after);
             }
             lastWasNumberedPP = true;
             continue;
@@ -790,6 +792,7 @@ async function handleUploadedFile(file) {
             setLLMProgress('Free-Tier nicht erreichbar – lokal analysiere...');
             const localItems = localParseLiedplan(extractedText);
             if (localItems && localItems.length) {
+                completeTitlesLocally(localItems, songRef);
                 parsed = { items: localItems };
                 modelUsed = 'lokal (Offline-Fallback)';
                 usedLocal = true;

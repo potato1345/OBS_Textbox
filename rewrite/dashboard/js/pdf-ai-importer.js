@@ -452,12 +452,17 @@ export function parseLiedplanLocally(text) {
             const before = line.slice(0, idx).replace(/[,\s]+$/, '').trim();
             const after = line.slice(idx + num.length).replace(/^[,\s]+/, '').trim();
 
-            current = {
-                zeile1: before || '',
-                zeile2: num,
-                zeile3: after || ''
-            };
-            items.push(current);
+            if (!before && current && !current.zeile2) {
+                current.zeile2 = num;
+                if (after) current.zeile3 = after;
+            } else {
+                current = {
+                    zeile1: before || '',
+                    zeile2: num,
+                    zeile3: after || ''
+                };
+                items.push(current);
+            }
             continue;
         }
 
