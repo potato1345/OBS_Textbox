@@ -2,17 +2,27 @@
 
 OBS browser view text field that can be customized via the "Custom CSS" tab — with external live control through a web dashboard.
 
+## Ordner-Layout (drei Versionen, komplett separiert)
+
+| Ordner | Version | Inhalt |
+|--------|---------|--------|
+| `main/` | **v1** | Original: `server.py` (Port 8080), `controlui/` Dashboard, `textbox.html` Overlay, Liedplan-Quellen, Tests |
+| `rewrite/` | **v2** | Neuschreibung: `server/` (http_app, forms_import, documents), `dashboard/` (ES-Modules), `tests/` (Python + JS) |
+| `plugin/` | **v3** | Native OBS-Plugin (Qt6/CMake, M0–M7h, ctest 6/6) — eigenständiges obs-plugintemplate-Projekt |
+
+Root enthält nur Projekt-Doku (`README.md`, `FUNKTIONSVERGLEICH.md`, `CODE_TODO.md`) und das floorplan-Tooling. Secrets (`*.env`, api.env, tokens) sind überall durch `.gitignore` ausgeschlossen.
+
 ## Preview
 
-![OBS Textbox Preview](preview.png)
+![OBS Textbox Preview](main/preview.png)
 
 ## How It Works
 
 | File | Purpose |
 |------|---------|
-| `textbox.html` | The OBS Browser Source overlay — shows text from CSS variables |
-| `controlui/control.html` | A browser dashboard (OBS Custom Dock) to control multiple textboxes simultaneously |
-| `start_server.bat` / `.sh` | Lightweight local web server scripts to run the dashboard |
+| `main/textbox.html` | The OBS Browser Source overlay — shows text from CSS variables |
+| `main/controlui/control.html` | A browser dashboard (OBS Custom Dock) to control multiple textboxes simultaneously |
+| `main/start_server.bat` / `.sh` | Lightweight local web server scripts to run the dashboard |
 
 The dashboard talks to OBS over the **OBS WebSocket server** (built into OBS 28+). Each time you type in a card, the dashboard rewrites the *Custom CSS* of the matching browser source — text and colors update live. All state is saved in the browser's local storage and survives OBS restarts; if the connection drops, the dashboard reconnects automatically.
 
@@ -31,21 +41,21 @@ While the core text system works offline and serverless, using advanced features
 *To ensure all features (including the AI PDF Import) work without browser security errors, you should run the dashboard via the local web server.*
 
 1. Run the included start script for your OS (requires Python):
-   - **Windows:** Double-click `start_server.bat`
-   - **Mac/Linux:** Open terminal and run `./start_server.sh`
+   - **Windows:** Double-click `main/start_server.bat`
+   - **Mac/Linux:** Open terminal and run `./main/start_server.sh`
    *(This starts a local background server on port 8080. Leave the black console window open while streaming).*
 2. In OBS, go to **Docks** -> **Custom Browser Docks...**
 3. Name the dock (e.g., "Textbox Control").
-4. For the URL, enter exactly: `http://localhost:8080/controlui/control.html`
+4. For the URL, enter exactly: `http://localhost:8080/controlui/control.html` (vom Ordner `main/` aus gestartet)
 5. Apply and place the dock anywhere in your OBS UI.
 6. Open **Einstellungen** in the dashboard, enter the WebSocket password and click **Mit OBS verbinden** (auto-reconnect is on by default).
 
-> **Offline Mode (No AI PDF Import):** If you don't need the AI PDF features, you can skip starting the server and just enter the local file path directly as the URL (e.g. `file:///C:/Path/To/OBS_Textbox/controlui/control.html`).
+> **Offline Mode (No AI PDF Import):** If you don't need the AI PDF features, you can skip starting the server and just enter the local file path directly as the URL (e.g. `file:///C:/Path/To/OBS_Textbox/main/controlui/control.html`).
 
 ### 3. Add the Textbox to OBS
 
 1. Add a new **Browser Source** in OBS.
-2. Check the **"Local file"** box and select the `textbox.html` file from this folder.
+2. Check the **"Local file"** box and select the `main/textbox.html` file.
 3. Set the dimensions (e.g. Width: 800, Height: 300)
 3. Set the dimensions to at least **Width: 1200, Height: 600** (the overlay uses large padding to leave room for animations above the box — smaller values may push the textbox out of the visible area).
 4. Scroll down to the **"Custom CSS"** field.
