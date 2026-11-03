@@ -156,6 +156,9 @@ class StatsHandler(SimpleHTTPRequestHandler):
                     logger.warning("POST /api/parse-document: Keine Daten empfangen")
                     self._send_json(400, {'success': False, 'error': 'Keine Datei empfangen'})
                     return
+                if content_length > 25 * 1024 * 1024:
+                    self.send_error(413)
+                    return
                 
                 raw_filename = self.headers.get('X-Filename', 'document.pdf')
                 filename = urllib.parse.unquote(raw_filename)
@@ -210,6 +213,9 @@ class StatsHandler(SimpleHTTPRequestHandler):
                 if content_length == 0:
                     logger.warning("POST /api/import/answers: Keine Daten empfangen")
                     self._send_json(400, {'success': False, 'error': 'Keine Datei empfangen'})
+                    return
+                if content_length > 25 * 1024 * 1024:
+                    self.send_error(413)
                     return
 
                 raw_filename = self.headers.get('X-Filename', 'antwort.csv')

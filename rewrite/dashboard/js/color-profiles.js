@@ -160,7 +160,8 @@ export function hexToRgba(hex, opacity255 = 255) {
  */
 export function colorProfileToYAML(profile) {
     let yaml = `# OBS Textbox Farbprofil\n`;
-    yaml += `name: "${profile.name}"\n`;
+    const escapedName = String(profile.name ?? '').replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+    yaml += `name: "${escapedName}"\n`;
     yaml += `colors:\n`;
     const c = profile.colors || {};
 
@@ -192,7 +193,7 @@ export function yamlToColorProfile(yamlString) {
 
         if (line.startsWith('name:')) {
             const val = line.substring(5).trim();
-            profile.name = val.replace(/^["']|["']$/g, '');
+            profile.name = val.replace(/^["']|["']$/g, '').replace(/\\(["\\])/g, '$1');
             continue;
         }
 

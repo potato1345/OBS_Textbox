@@ -179,6 +179,10 @@ def parse_zip_bytes(data: bytes) -> list[dict[str, str]]:
             logger.warning("ZIP-Import fehlgeschlagen: Keine CSV im Archiv")
             raise ImportFormatError("Die ZIP-Datei enthält keine CSV-Datei.")
         logger.info("Extrahierte CSV '%s' aus ZIP-Archiv", names[0])
+        info = archive.getinfo(names[0])
+        # Zip-Bomb-Schutz: unkomprimierte Größe vor dem Entpacken auf 64 MB begrenzen
+        if info.file_size > 64 * 1024 * 1024:
+            raise ValueError("ZIP-Eintrag zu groß")
         return parse_csv_bytes(archive.read(names[0]))
 
 

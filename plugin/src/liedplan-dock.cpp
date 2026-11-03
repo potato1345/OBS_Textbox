@@ -68,6 +68,26 @@ namespace {
 
 constexpr int kDefaultCardCount = 12;
 
+// Erzeugt eine Standardkarte für Index i (box1..boxN) mit Standardprofil "OBS Dark".
+LiedplanCard make_default_card(std::size_t i)
+{
+	LiedplanCard c;
+	c.id = "box" + std::to_string(i + 1);
+	c.profile = "OBS Dark";
+	if (const LiedplanProfile *prof = profile_by_name(c.profile)) {
+		c.text_color = prof->text_color;
+		c.box_color = prof->box_color;
+	}
+	return c;
+}
+
+// Prüft, ob zeile1 der Karte i einem Standard-Programmpunkt entspricht.
+bool is_standard_card(const LiedplanCard &c, std::size_t i)
+{
+	return i < liedplan_import::PROGRAM_POINTS.size() &&
+	       c.zeile1 == liedplan_import::PROGRAM_POINTS[i];
+}
+
 } // namespace
 
 LiedplanDock::LiedplanDock(const std::string &state_path, QWidget *parent)
@@ -305,10 +325,25 @@ LiedplanDock::LiedplanDock(const std::string &state_path, QWidget *parent)
 		file_exists = std::filesystem::exists(std::filesystem::u8path(state_path_), ec);
 	}
 
-	state_.load(state_path_);
+	const std::string err = state_.load(state_path_);
 	blog(LOG_INFO, "[liedplan] Zustand geladen (%zu Karten, Datei: %s)", state_.cards.size(), state_path_.c_str());
 
-	if (!file_exists) {
+	if (!err.empty()) {
+		if (!state_path_.empty()) {
+			std::error_code ec;
+			std::filesystem::copy_file(
+				std::filesystem::u8path(state_path_),
+				std::filesystem::u8path(state_path_ + ".bak"),
+				std::filesystem::copy_options::overwrite_existing, ec);
+		}
+		for (int i = 0; i < kDefaultCardCount; ++i) {
+			state_.cards.push_back(make_default_card(static_cast<std::size_t>(i)));
+		}
+		state_.next_id = kDefaultCardCount + 1;
+		set_dock_status(
+			QStringLiteral("Warnung: liedplan-state.json war beschädigt (Backup .bak angelegt)"),
+			true);
+	} else if (!file_exists) {
 		for (int i = 0; i < kDefaultCardCount; ++i) {
 			state_.add_card();
 		}
@@ -1129,8 +1164,8 @@ void LiedplanDock::apply_quick_profile(const std::string &name)
 		save_state();
 		sync_all_cards_live(prev_ids);
 		rebuild_rows();
-		set_dock_status(QStringLiteral("Schnell-Profil übernommen: %1")
-					.arg(QString::fromUtf8(name.c_str())),
+		set_dock_status(QString("Profil \"%1\" geladen")
+					.arg(QString::fromStdString(name)),
 				false);
 	}
 }
@@ -1224,20 +1259,28 @@ void LiedplanDock::set_dock_status(const QString &msg, bool is_error)
 void LiedplanDock::apply_import_result(const liedplan_import::LiedplanImportResult &res)
 {
 	blog(LOG_INFO, "[liedplan] Import übernommen: %zu Programmpunkte", res.punkte.size());
-	while (state_.cards.size() < static_cast<std::size_t>(kDefaultCardCount)) {
-		state_.add_card();
+	const std::size_t total_items = res.punkte.size();
+	while (state_.cards.size() < total_items) {
+		state_.cards.push_back(make_default_card(state_.cards.size()));
 	}
+	if (static_cast<int>(state_.cards.size()) + 1 > state_.next_id)
+		state_.next_id = static_cast<int>(state_.cards.size()) + 1;
 
-	const std::size_t count =
-		std::min<std::size_t>(static_cast<std::size_t>(kDefaultCardCount), res.punkte.size());
-	for (std::size_t i = 0; i < count; ++i) {
+	for (std::size_t i = 0; i < total_items; ++i) {
 		state_.cards[i].zeile1 = res.punkte[i].gl;
 		state_.cards[i].zeile2 = res.punkte[i].verse;
 		state_.cards[i].zeile3 = res.punkte[i].titel;
 	}
+	// Überzählige Bestandskarten bereinigen, damit keine Lieder der Vorwoche stehen bleiben.
+	for (std::size_t i = total_items; i < state_.cards.size(); ++i) {
+		if (!is_standard_card(state_.cards[i], i))
+			state_.cards[i].zeile1.clear();
+		state_.cards[i].zeile2.clear();
+		state_.cards[i].zeile3.clear();
+	}
 
 	save_state();
-	for (std::size_t i = 0; i < count; ++i) {
+	for (std::size_t i = 0; i < state_.cards.size(); ++i) {
 		liedplan_scene::update_everywhere(state_.cards[i], false, state_.settings);
 	}
 	rebuild_rows();
@@ -1743,12 +1786,13 @@ void LiedplanDock::on_open_import_dialog()
 			if (pending_ai_res->items.empty())
 				return;
 
-			if (state_.cards.empty()) {
-				for (int i = 0; i < kDefaultCardCount; ++i)
-					state_.add_card();
-			}
-
 			const std::size_t total_items = pending_ai_res->items.size();
+			while (state_.cards.size() < total_items) {
+				state_.cards.push_back(make_default_card(state_.cards.size()));
+			}
+			if (static_cast<int>(state_.cards.size()) + 1 > state_.next_id)
+				state_.next_id = static_cast<int>(state_.cards.size()) + 1;
+
 			const std::size_t n = std::min(total_items, state_.cards.size());
 			const std::size_t ignored = (total_items > n) ? (total_items - n) : 0;
 
@@ -1757,9 +1801,16 @@ void LiedplanDock::on_open_import_dialog()
 				state_.cards[i].zeile2 = pending_ai_res->items[i].zeile2;
 				state_.cards[i].zeile3 = pending_ai_res->items[i].zeile3;
 			}
+			// Überzählige Bestandskarten bereinigen, damit keine Lieder der Vorwoche stehen bleiben.
+			for (std::size_t i = n; i < state_.cards.size(); ++i) {
+				if (!is_standard_card(state_.cards[i], i))
+					state_.cards[i].zeile1.clear();
+				state_.cards[i].zeile2.clear();
+				state_.cards[i].zeile3.clear();
+			}
 
 			save_state();
-			for (std::size_t i = 0; i < n; ++i) {
+			for (std::size_t i = 0; i < state_.cards.size(); ++i) {
 				liedplan_scene::update_everywhere(
 					state_.cards[i], false, state_.settings);
 			}

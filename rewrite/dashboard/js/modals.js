@@ -19,7 +19,7 @@ import {
     yamlToColorProfile,
     isDefaultColorProfile
 } from './color-profiles.js';
-import { connectOBS, disconnectOBS, toggleConnection, obs } from './obs-sync.js';
+import { connectOBS, disconnectOBS, toggleConnection, obs, pushStateToOBS } from './obs-sync.js';
 import { showToast } from './toast.js';
 import { extractDocumentText, processWithLLM, parseLiedplanLocally, DEFAULT_SYSTEM_PROMPT } from './pdf-ai-importer.js';
 import { fetchAllFormsServices, uploadAnswersFile, serviceToItems, applyItemsToDashboard } from './forms-importer.js';
@@ -475,13 +475,14 @@ export function renderQuickProfilesBar() {
         const btnLoad = document.createElement('button');
         btnLoad.type = 'button';
         btnLoad.className = 'chip-load-btn';
-        btnLoad.innerHTML = `<span class="chip-icon">📋</span> ${profile.name}`;
+        btnLoad.innerHTML = `<span class="chip-icon">📋</span> ${escapeHtml(profile.name)}`;
         btnLoad.addEventListener('click', () => {
             updateState(s => {
                 s.boxes = JSON.parse(JSON.stringify(profile.boxes));
             }, 'load_quick_profile');
             const dashboard = document.getElementById('dashboard');
             renderDashboardCards(dashboard);
+            if (getState().autoSend) pushStateToOBS();
             showToast('info', `Profil "${profile.name}" geladen`);
         });
 

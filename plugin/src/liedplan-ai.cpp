@@ -201,6 +201,33 @@ std::wstring utf8_to_wide(std::string_view sv)
 	return out;
 }
 
+// Maskiert ein Argument für Win32 CreateProcessW (Backslashes vor " und am Ende verdoppeln, " als \").
+std::wstring quote_win32_arg(const std::wstring &arg)
+{
+	std::wstring out;
+	out.push_back(L'"');
+	std::size_t bs_count = 0;
+	for (wchar_t ch : arg) {
+		if (ch == L'\\') {
+			++bs_count;
+		} else if (ch == L'"') {
+			out.append(bs_count * 2 + 1, L'\\');
+			out.push_back(L'"');
+			bs_count = 0;
+		} else {
+			if (bs_count > 0) {
+				out.append(bs_count, L'\\');
+				bs_count = 0;
+			}
+			out.push_back(ch);
+		}
+	}
+	if (bs_count > 0)
+		out.append(bs_count * 2, L'\\');
+	out.push_back(L'"');
+	return out;
+}
+
 struct HttpResp {
 	DWORD status = 0;
 	std::string body;
@@ -383,8 +410,9 @@ std::string extract_document_text(const std::string &file_path, const std::strin
 		SetHandleInformation(stderr_read, HANDLE_FLAG_INHERIT, 0);
 	}
 
-	std::wstring cmd = L"\"" + utf8_to_wide(python_exe) + L"\" -X utf8 -m markitdown \"" +
-			   utf8_to_wide(file_path) + L"\"";
+	std::wstring cmd = quote_win32_arg(utf8_to_wide(python_exe)) +
+			   L" -X utf8 -m markitdown " +
+			   quote_win32_arg(utf8_to_wide(file_path));
 	std::vector<wchar_t> cmd_buf(cmd.begin(), cmd.end());
 	cmd_buf.push_back(L'\0');
 

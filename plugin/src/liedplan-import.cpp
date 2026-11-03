@@ -23,6 +23,7 @@
 #include <cstdio>
 #include <fstream>
 #include <sstream>
+#include <unordered_map>
 #include <zlib.h>
 
 #ifdef _WIN32
@@ -754,10 +755,17 @@ bool parse_zip_directory(std::string_view data, std::vector<ZipMember> &out_memb
 	return true;
 }
 
-std::optional<std::string> inflate_data(std::string_view compressed,
-					std::size_t uncompressed_hint,
-					int window_bits)
+// Hartes Decompress-Cap (64 MB) gegen Zip-Bomben pro Eintrag und über das gesamte Archiv.
+constexpr size_t kMaxInflateBytes = 64 * 1024 * 1024;
+
+std::optional<std::string> inflate_data_impl(std::string_view compressed,
+					     std::size_t uncompressed_hint,
+					     int window_bits,
+					     bool *out_limit_exceeded)
 {
+	if (out_limit_exceeded)
+		*out_limit_exceeded = false;
+
 	z_stream zs{};
 	zs.next_in = reinterpret_cast<Bytef *>(const_cast<char *>(compressed.data()));
 	zs.avail_in = static_cast<uInt>(compressed.size());
@@ -766,7 +774,7 @@ std::optional<std::string> inflate_data(std::string_view compressed,
 		return std::nullopt;
 
 	std::string out;
-	if (uncompressed_hint > 0 && uncompressed_hint < (64ULL * 1024 * 1024))
+	if (uncompressed_hint > 0 && uncompressed_hint <= kMaxInflateBytes)
 		out.reserve(uncompressed_hint);
 
 	char buf[16384];
@@ -780,14 +788,36 @@ std::optional<std::string> inflate_data(std::string_view compressed,
 			return std::nullopt;
 		}
 		const std::size_t have = sizeof(buf) - zs.avail_out;
+		if (out.size() + have > kMaxInflateBytes) {
+			if (out_limit_exceeded)
+				*out_limit_exceeded = true;
+			inflateEnd(&zs);
+			return std::nullopt;
+		}
 		out.append(buf, have);
 	}
 	inflateEnd(&zs);
 	return out;
 }
 
-std::optional<std::string> extract_zip_member(std::string_view data, const ZipMember &m)
+} // namespace
+
+std::optional<std::string> inflate_data(std::string_view compressed,
+					std::size_t uncompressed_hint,
+					int window_bits)
 {
+	return inflate_data_impl(compressed, uncompressed_hint, window_bits, nullptr);
+}
+
+namespace {
+
+std::optional<std::string> extract_zip_member(std::string_view data,
+					      const ZipMember &m,
+					      bool *out_limit_exceeded = nullptr)
+{
+	if (out_limit_exceeded)
+		*out_limit_exceeded = false;
+
 	const std::uint64_t lhoff = m.local_header_offset;
 	if (lhoff + 30 > data.size())
 		return std::nullopt;
@@ -810,16 +840,62 @@ std::optional<std::string> extract_zip_member(std::string_view data, const ZipMe
 		data.substr(static_cast<std::size_t>(data_offset), m.compressed_size);
 
 	if (m.compression_method == 0) {
+		if (comp_slice.size() > kMaxInflateBytes) {
+			if (out_limit_exceeded)
+				*out_limit_exceeded = true;
+			return std::nullopt;
+		}
 		return std::string(comp_slice);
 	}
 	if (m.compression_method == 8) {
 		if (comp_slice.empty() && m.uncompressed_size == 0)
 			return std::string{};
-		if (auto res = inflate_data(comp_slice, m.uncompressed_size, -MAX_WBITS))
+		bool limit_raw = false;
+		if (auto res = inflate_data_impl(comp_slice, m.uncompressed_size, -MAX_WBITS,
+						 &limit_raw))
 			return res;
-		return inflate_data(comp_slice, m.uncompressed_size, MAX_WBITS);
+		if (limit_raw) {
+			if (out_limit_exceeded)
+				*out_limit_exceeded = true;
+			return std::nullopt;
+		}
+		return inflate_data_impl(comp_slice, m.uncompressed_size, MAX_WBITS,
+					 out_limit_exceeded);
 	}
 	return std::nullopt;
+}
+
+// Entpackt alle ZIP-Einträge unter Einhaltung eines gemeinsamen 64-MB-Gesamtbudgets.
+bool extract_zip_entries(std::string_view data,
+			 const std::vector<ZipMember> &members,
+			 std::unordered_map<std::string, std::string> &out_entries,
+			 std::string *out_error)
+{
+	out_entries.clear();
+	std::size_t total_uncompressed = 0;
+	for (const auto &m : members) {
+		if (m.uncompressed_size > kMaxInflateBytes ||
+		    total_uncompressed + m.uncompressed_size > kMaxInflateBytes) {
+			if (out_error)
+				*out_error = "ZIP-Archiv zu groß (Zip-Bomb-Schutz)";
+			return false;
+		}
+		bool limit_exceeded = false;
+		auto extracted = extract_zip_member(data, m, &limit_exceeded);
+		if (!extracted) {
+			if (limit_exceeded && out_error)
+				*out_error = "ZIP-Archiv zu groß (Zip-Bomb-Schutz)";
+			return false;
+		}
+		if (total_uncompressed + extracted->size() > kMaxInflateBytes) {
+			if (out_error)
+				*out_error = "ZIP-Archiv zu groß (Zip-Bomb-Schutz)";
+			return false;
+		}
+		total_uncompressed += extracted->size();
+		out_entries[m.name] = std::move(*extracted);
+	}
+	return true;
 }
 
 std::string normalize_zip_entry_name(std::string_view name)
@@ -836,6 +912,10 @@ std::string normalize_zip_entry_name(std::string_view name)
 
 void append_utf8_codepoint(std::string &out, std::uint32_t cp)
 {
+	// UTF-16-Surrogate-Codepoints (U+D800..U+DFFF) sind in UTF-8 ungültig -> U+FFFD (EF BF BD)
+	if (cp >= 0xD800 && cp <= 0xDFFF) {
+		cp = 0xFFFD;
+	}
 	if (cp <= 0x7F) {
 		out.push_back(static_cast<char>(cp));
 	} else if (cp <= 0x7FF) {
@@ -1184,25 +1264,36 @@ ImportError parse_xlsx_bytes(std::string_view data,
 		return ImportError::Format;
 	}
 
+	std::unordered_map<std::string, std::string> extracted_entries;
+	std::string zip_err;
+	if (!extract_zip_entries(data, members, extracted_entries, &zip_err)) {
+		if (out_error) {
+			*out_error = !zip_err.empty()
+					     ? zip_err
+					     : "Die XLSX-Datei konnte nicht entpackt werden.";
+		}
+		return ImportError::Format;
+	}
+
 	std::vector<std::string> shared_strings;
 	if (sst_member) {
-		auto sst_xml = extract_zip_member(data, *sst_member);
-		if (!sst_xml) {
+		auto sst_it = extracted_entries.find(sst_member->name);
+		if (sst_it == extracted_entries.end()) {
 			if (out_error)
 				*out_error = "sharedStrings.xml in der XLSX-Datei konnte nicht entpackt werden.";
 			return ImportError::Format;
 		}
-		shared_strings = parse_shared_strings_xml(*sst_xml);
+		shared_strings = parse_shared_strings_xml(sst_it->second);
 	}
 
-	auto sheet_xml = extract_zip_member(data, *sheet_member);
-	if (!sheet_xml) {
+	auto sheet_it = extracted_entries.find(sheet_member->name);
+	if (sheet_it == extracted_entries.end()) {
 		if (out_error)
 			*out_error = "sheet1.xml in der XLSX-Datei konnte nicht entpackt werden.";
 		return ImportError::Format;
 	}
 
-	const auto rows = parse_sheet_xml(*sheet_xml, shared_strings);
+	const auto rows = parse_sheet_xml(sheet_it->second, shared_strings);
 	if (rows.empty()) {
 		if (out_error)
 			*out_error = "Die XLSX-Datei ist leer.";
@@ -1297,14 +1388,25 @@ ImportError parse_zip_bytes(std::string_view data,
 		return ImportError::Format;
 	}
 
-	auto csv_bytes = extract_zip_member(data, *chosen_member);
-	if (!csv_bytes) {
+	std::unordered_map<std::string, std::string> extracted_entries;
+	std::string zip_err;
+	if (!extract_zip_entries(data, members, extracted_entries, &zip_err)) {
+		if (out_error) {
+			*out_error = !zip_err.empty()
+					     ? zip_err
+					     : "Die CSV-Datei im ZIP-Archiv konnte nicht entpackt werden.";
+		}
+		return ImportError::Format;
+	}
+
+	auto csv_it = extracted_entries.find(chosen_member->name);
+	if (csv_it == extracted_entries.end()) {
 		if (out_error)
 			*out_error = "Die CSV-Datei im ZIP-Archiv konnte nicht entpackt werden.";
 		return ImportError::Format;
 	}
 
-	return parse_csv_string(*csv_bytes, out_result, out_count, out_error);
+	return parse_csv_string(csv_it->second, out_result, out_count, out_error);
 }
 
 ImportError parse_zip_file(const std::filesystem::path &path,

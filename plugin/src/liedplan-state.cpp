@@ -277,6 +277,24 @@ std::string strip_quotes(const std::string &s)
 	return res;
 }
 
+// Entfernt äußere Anführungszeichen und demaskiert \" sowie \\ im Profilnamen.
+std::string unquote(const std::string &s)
+{
+	const std::string res = strip_quotes(s);
+	std::string out;
+	out.reserve(res.size());
+	for (std::size_t i = 0; i < res.size(); ++i) {
+		if (res[i] == '\\' && i + 1 < res.size() &&
+		    (res[i + 1] == '"' || res[i + 1] == '\\')) {
+			out.push_back(res[i + 1]);
+			++i;
+		} else {
+			out.push_back(res[i]);
+		}
+	}
+	return out;
+}
+
 bool is_valid_hex_color(const std::string &s)
 {
 	if (s.size() != 4 && s.size() != 7)
@@ -365,15 +383,31 @@ std::string LiedplanState::save(const std::string &path) const
 			return "Failed to create directory: " + ec.message();
 	}
 
+	// Atomares Speichern: erst in temporäre Datei schreiben, danach per rename ersetzen.
+	const std::filesystem::path tmp = to_fs_path(path + ".tmp");
 	const std::string serialized = serialize_json();
-	std::ofstream file(fs_path, std::ios::binary | std::ios::trunc);
-	if (!file.is_open())
-		return "Failed to open state file for writing: " + path;
+	{
+		std::ofstream file(tmp, std::ios::binary | std::ios::trunc);
+		if (!file.is_open())
+			return "Failed to open state file for writing: " + path;
 
-	file.write(serialized.data(), static_cast<std::streamsize>(serialized.size()));
-	file.flush();
-	if (!file.good())
-		return "Failed to write state file: " + path;
+		file.write(serialized.data(), static_cast<std::streamsize>(serialized.size()));
+		file.flush();
+		if (!file.good()) {
+			file.close();
+			std::error_code rm_ec;
+			std::filesystem::remove(tmp, rm_ec);
+			return "Failed to write state file: " + path;
+		}
+	}
+
+	std::error_code ec;
+	std::filesystem::rename(tmp, fs_path, ec);
+	if (ec) {
+		std::error_code rm_ec;
+		std::filesystem::remove(tmp, rm_ec);
+		return "Failed to rename state file: " + ec.message();
+	}
 
 	return "";
 }
@@ -485,8 +519,16 @@ std::string liedplan_profile_to_yaml(const LiedplanProfile &p)
 {
 	const std::string tc = p.text_color.empty() ? "#000000" : p.text_color;
 	const std::string bc = p.box_color.empty() ? "#ffffff" : p.box_color;
+	// Backslashes und Anführungszeichen im Profilnamen maskieren.
+	std::string escaped_name;
+	escaped_name.reserve(p.name.size());
+	for (char ch : p.name) {
+		if (ch == '\\' || ch == '"')
+			escaped_name.push_back('\\');
+		escaped_name.push_back(ch);
+	}
 	std::string yaml = "# Liedplan Farbprofil\n";
-	yaml += "name: \"" + p.name + "\"\n";
+	yaml += "name: \"" + escaped_name + "\"\n";
 	yaml += "colors:\n";
 	yaml += "  textColor: \"" + tc + "\"\n";
 	yaml += "  cardOuterBg: \"" + bc + "\"\n";
@@ -511,12 +553,12 @@ bool liedplan_yaml_to_profile(const std::string &text, LiedplanProfile &out, std
 
 		if (line.rfind("name:", 0) == 0) {
 			const std::string val = trim_ws(line.substr(5));
-			parsed_name = trim_ws(strip_quotes(val));
+			parsed_name = trim_ws(unquote(val));
 			continue;
 		}
 		if (line.rfind("- name:", 0) == 0) {
 			const std::string val = trim_ws(line.substr(7));
-			parsed_name = trim_ws(strip_quotes(val));
+			parsed_name = trim_ws(unquote(val));
 			continue;
 		}
 

@@ -26,10 +26,6 @@ stille (fehlende Exporte).
 */
 OBS_DECLARE_MODULE()
 
-#ifdef ENABLE_QT
-#include "liedplan-card-source.hpp"
-#endif
-
 #ifdef ENABLE_FRONTEND_API
 #ifdef ENABLE_QT
 #include "liedplan-dock.hpp"
@@ -98,9 +94,6 @@ struct LiedplanFloatRoundedHelper : public QObject
 bool obs_module_load(void)
 {
 	blog(LOG_INFO, "[liedplan] Plugin erfolgreich geladen (Version %s)", PLUGIN_VERSION);
-#ifdef ENABLE_QT
-	obs_register_source(&liedplan_card_source_info);
-#endif
 #ifdef ENABLE_FRONTEND_API
 #ifdef ENABLE_QT
 	if (obs_frontend_get_main_window() && !g_dock) {

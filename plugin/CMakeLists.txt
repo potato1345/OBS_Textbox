@@ -48,8 +48,6 @@ if(ENABLE_QT)
       src/liedplan-theme.hpp
       src/liedplan-render.hpp
       src/liedplan-render.cpp
-      src/liedplan-card-source.hpp
-      src/liedplan-card-source.cpp
   )
 endif()
 

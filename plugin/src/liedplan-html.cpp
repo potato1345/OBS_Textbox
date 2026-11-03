@@ -449,11 +449,20 @@ std::string normalize_anim_src(const std::string &raw, const LiedplanSettings &s
 	std::string resolved;
 	if (is_abs_win_path(raw)) {
 		resolved = std::filesystem::u8path(raw).generic_u8string();
-	} else if (!settings.animation_dir.empty()) {
+	} else {
+		const std::string base_dir_str =
+			!settings.animation_dir.empty()
+				? settings.animation_dir
+				: (std::filesystem::u8path(kRepoTextboxPath).parent_path() / "animation")
+					  .u8string();
 		std::error_code ec;
-		const std::filesystem::path anim_dir = std::filesystem::u8path(settings.animation_dir);
+		const std::filesystem::path anim_dir = std::filesystem::u8path(base_dir_str);
 		const std::filesystem::path candidate = anim_dir / std::filesystem::u8path(raw);
-		if (std::filesystem::exists(candidate, ec) && !ec) {
+		const bool cand_inside = path_inside_dir(candidate.u8string(), anim_dir.u8string());
+		bool parent_inside = false;
+
+		if (cand_inside && !settings.animation_dir.empty() &&
+		    std::filesystem::exists(candidate, ec) && !ec) {
 			const std::filesystem::path abs_cand =
 				std::filesystem::absolute(candidate, ec);
 			resolved = (!ec && !abs_cand.empty()) ? abs_cand.generic_u8string()
@@ -463,14 +472,20 @@ std::string normalize_anim_src(const std::string &raw, const LiedplanSettings &s
 		if (resolved.empty() && anim_dir.has_parent_path()) {
 			const std::filesystem::path parent_cand =
 				anim_dir.parent_path() / std::filesystem::u8path(raw);
+			parent_inside =
+				path_inside_dir(parent_cand.u8string(), anim_dir.u8string());
 			ec.clear();
-			if (std::filesystem::exists(parent_cand, ec) && !ec) {
+			if (parent_inside && !settings.animation_dir.empty() &&
+			    std::filesystem::exists(parent_cand, ec) && !ec) {
 				const std::filesystem::path abs_cand =
 					std::filesystem::absolute(parent_cand, ec);
 				resolved = (!ec && !abs_cand.empty()) ? abs_cand.generic_u8string()
 				                                     : parent_cand.generic_u8string();
 			}
 		}
+		// Pfad-Guard: relative Pfade müssen nach weakly_canonical im Animation-Base-Ordner bleiben.
+		if (!cand_inside && !parent_inside)
+			return "";
 	}
 	if (resolved.empty())
 		return raw;

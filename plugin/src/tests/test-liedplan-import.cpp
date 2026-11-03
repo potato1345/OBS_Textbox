@@ -18,6 +18,13 @@
 #include <iostream>
 #include <sstream>
 #include <string>
+#include <zlib.h>
+
+namespace liedplan_import {
+std::optional<std::string> inflate_data(std::string_view compressed,
+					std::size_t uncompressed_hint = 0,
+					int window_bits = MAX_WBITS);
+} // namespace liedplan_import
 
 namespace {
 
@@ -420,6 +427,22 @@ int main()
 		      err_msg);
 	}
 
+	// 20. Zip-Bomb-Cap (#2): ~100 MB Null-Bytes mit compress2 komprimieren -> inflate_data liefert std::nullopt
+	{
+		constexpr std::size_t kBombSize = 100ULL * 1024 * 1024;
+		std::string raw_zeros(kBombSize, '\0');
+		uLongf comp_len = compressBound(static_cast<uLong>(kBombSize));
+		std::string compressed(static_cast<std::size_t>(comp_len), '\0');
+		const int zrc = compress2(reinterpret_cast<Bytef *>(compressed.data()), &comp_len,
+					  reinterpret_cast<const Bytef *>(raw_zeros.data()),
+					  static_cast<uLong>(kBombSize), Z_BEST_COMPRESSION);
+		compressed.resize(static_cast<std::size_t>(comp_len));
+		std::optional<std::string> inflated =
+			inflate_data(compressed, kBombSize, MAX_WBITS);
+		const bool ok = (zrc == Z_OK) && !inflated.has_value();
+		check(ok, "20. Zip-Bomb-Cap: ~100 MB Null-Bytes via compress2 -> inflate_data == std::nullopt");
+	}
+
 	{
 		std::error_code ec;
 		std::filesystem::remove_all(temp_dir, ec);
@@ -429,6 +452,6 @@ int main()
 		std::cerr << g_failures << " test(s) failed.\n";
 		return 1;
 	}
-	std::cout << "All 19 checks passed.\n";
+	std::cout << "All 20 checks passed.\n";
 	return 0;
 }
