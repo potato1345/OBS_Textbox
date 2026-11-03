@@ -75,6 +75,14 @@ namespace {
 
 constexpr int kDefaultCardCount = 12;
 
+// RAII-Wächter zum Zählen laufender Hintergrund-Threads für den sauberen Modul-Shutdown.
+struct ActiveJobGuard {
+	ActiveJobGuard() { ++g_active_jobs; }
+	~ActiveJobGuard() { --g_active_jobs; }
+	ActiveJobGuard(const ActiveJobGuard &) = delete;
+	ActiveJobGuard &operator=(const ActiveJobGuard &) = delete;
+};
+
 struct DockSaveScheduler {
 	QPointer<QTimer> timer;
 	QPointer<QPushButton> undo_btn;
@@ -504,6 +512,19 @@ LiedplanDock::LiedplanDock(const std::string &state_path, QWidget *parent)
 
 	rebuild_rows();
 	setMinimumSize(360, 240);
+}
+
+LiedplanDock::~LiedplanDock()
+{
+	// Kooperatives Abbruch-Flag vor sämtlichen weiteren Aufräumarbeiten setzen.
+	if (cancel_)
+		cancel_->store(true);
+	auto it = g_dock_schedulers.find(this);
+	if (it != g_dock_schedulers.end()) {
+		if (it->second.timer && it->second.timer->isActive())
+			it->second.timer->stop();
+		g_dock_schedulers.erase(it);
+	}
 }
 
 LiedplanCard *LiedplanDock::find_card_mut(const std::string &id)
@@ -1379,6 +1400,8 @@ void LiedplanDock::on_clear_all()
 	save_state();
 
 	for (const auto &id : ids) {
+		if (cancel_ && *cancel_)
+			return;
 		liedplan_scene::remove_everywhere(id);
 	}
 }
@@ -1386,11 +1409,15 @@ void LiedplanDock::on_clear_all()
 void LiedplanDock::sync_all_cards_live(const std::vector<std::string> &previous_ids)
 {
 	for (const auto &old_id : previous_ids) {
+		if (cancel_ && *cancel_)
+			return;
 		if (!state_.find(old_id)) {
 			liedplan_scene::remove_everywhere(old_id);
 		}
 	}
 	for (const auto &card : state_.cards) {
+		if (cancel_ && *cancel_)
+			return;
 		liedplan_scene::update_everywhere(card, false, state_.settings);
 	}
 }
@@ -1444,6 +1471,8 @@ void LiedplanDock::apply_import_result(const liedplan_import::LiedplanImportResu
 
 	save_state();
 	for (std::size_t i = 0; i < state_.cards.size(); ++i) {
+		if (cancel_ && *cancel_)
+			return;
 		liedplan_scene::update_everywhere(state_.cards[i], false, state_.settings);
 	}
 	rebuild_rows();
@@ -1789,11 +1818,19 @@ void LiedplanDock::on_open_import_dialog()
 		}
 	});
 
-	auto handle_success = [this, kopf_group, service_combo, lbl_service_preview,
+	QPointer<QDialog> dlg_ptr(&dlg);
+	QPointer<LiedplanDock> self_ptr(this);
+	const auto cancel = cancel_;
+
+	auto handle_success = [cancel, self_ptr, kopf_group, service_combo, lbl_service_preview,
 			       loaded_services, update_kopf_labels, status_lbl, error_lbl](
 				      const liedplan_import::LiedplanImportResult &res,
 				      const QString &source_name = QString()) {
-		apply_import_result(res);
+		if (*cancel || !self_ptr)
+			return;
+		self_ptr->apply_import_result(res);
+		if (*cancel || !self_ptr)
+			return;
 
 		loaded_services->clear();
 		if (!res.services.empty()) {
@@ -1852,23 +1889,22 @@ void LiedplanDock::on_open_import_dialog()
 					  .arg(res.punkte.size())
 					  .arg(source_name);
 		status_lbl->setText(msg);
-		set_dock_status(msg, false);
+		self_ptr->set_dock_status(msg, false);
 	};
 
-	auto handle_error = [this, status_lbl, error_lbl](const std::string &err_msg) {
+	auto handle_error = [cancel, self_ptr, status_lbl, error_lbl](const std::string &err_msg) {
+		if (*cancel || !self_ptr)
+			return;
 		const QString qerr = QString::fromUtf8(err_msg.c_str());
 		error_lbl->setText(qerr);
 		error_lbl->setVisible(true);
 		status_lbl->setText(qerr);
-		set_dock_status(qerr, true);
+		self_ptr->set_dock_status(qerr, true);
 	};
 
-	QPointer<QDialog> dlg_ptr(&dlg);
-	QPointer<LiedplanDock> self_ptr(this);
-
 	connect(ai_start_btn, &QPushButton::clicked, &dlg,
-		[this, &dlg, dlg_ptr, self_ptr, api_btn, csv_btn, ai_start_btn, ai_file_edit,
-		 ai_key_edit, ai_prompt_edit, ai_status_lbl, status_lbl, error_lbl,
+		[this, &dlg, cancel, dlg_ptr, self_ptr, api_btn, csv_btn, ai_start_btn,
+		 ai_file_edit, ai_key_edit, ai_prompt_edit, ai_status_lbl, status_lbl, error_lbl,
 		 ai_preview_group, ai_source_lbl, ai_table, pending_ai_res]() {
 			QString doc_file = ai_file_edit->text().trimmed();
 			if (doc_file.isEmpty()) {
@@ -1905,20 +1941,25 @@ void LiedplanDock::on_open_import_dialog()
 			ai_status_lbl->setText(QStringLiteral("Text aus Dokument extrahieren..."));
 			status_lbl->setText(QStringLiteral("Text aus Dokument extrahieren..."));
 
-			std::thread([self_ptr, dlg_ptr, api_btn, csv_btn, ai_start_btn,
+			// Hintergrund-Thread erfasst nur die Kopie von cancel_ (kein this).
+			std::thread([cancel, self_ptr, dlg_ptr, api_btn, csv_btn, ai_start_btn,
 				     ai_status_lbl, status_lbl, error_lbl, ai_preview_group,
 				     ai_source_lbl, ai_table, pending_ai_res, file_utf8, api_key,
 				     sys_prompt, python_exe, lieder_path]() {
-				auto post_progress = [self_ptr, dlg_ptr, ai_status_lbl,
+				ActiveJobGuard job_guard;
+				if (*cancel)
+					return;
+
+				auto post_progress = [cancel, self_ptr, dlg_ptr, ai_status_lbl,
 						      status_lbl](const std::string &msg) {
-					if (!self_ptr)
+					if (*cancel || !self_ptr)
 						return;
 					const QString qmsg = QString::fromUtf8(msg.c_str());
 					QMetaObject::invokeMethod(
 						self_ptr.data(),
-						[self_ptr, dlg_ptr, ai_status_lbl, status_lbl,
-						 qmsg]() {
-							if (!self_ptr || !dlg_ptr)
+						[cancel, self_ptr, dlg_ptr, ai_status_lbl,
+						 status_lbl, qmsg]() {
+							if (*cancel || !self_ptr || !dlg_ptr)
 								return;
 							ai_status_lbl->setText(qmsg);
 							status_lbl->setText(qmsg);
@@ -1933,7 +1974,9 @@ void LiedplanDock::on_open_import_dialog()
 					std::string ext_err;
 					const std::string text =
 						liedplan_ai::extract_document_text(
-							file_utf8, python_exe, ext_err);
+							file_utf8, python_exe, ext_err, cancel);
+					if (*cancel)
+						return;
 					if (text.empty()) {
 						throw std::runtime_error(
 							ext_err.empty()
@@ -1946,8 +1989,12 @@ void LiedplanDock::on_open_import_dialog()
 						try {
 							ai_res = liedplan_ai::process_with_llm(
 								api_key, text, sys_prompt,
-								lieder_path, post_progress);
+								lieder_path, post_progress, cancel);
+							if (*cancel)
+								return;
 						} catch (const std::exception &llm_ex) {
+							if (*cancel)
+								return;
 							blog(LOG_INFO, "[liedplan] AI-Import: Wechsle auf Offline-Fallback-Parser");
 							post_progress(
 								"Free-Tier nicht erreichbar – nutze lokalen Offline-Parser...");
@@ -1974,7 +2021,12 @@ void LiedplanDock::on_open_import_dialog()
 						ai_res.model_label = "Lokal (ohne API-Key)";
 					}
 
+					if (*cancel)
+						return;
+
 					const auto song_ref = load_song_reference(lieder_path);
+					if (*cancel)
+						return;
 					if (!song_ref.empty()) {
 						liedplan_ai::enrich_titles_from_reference(
 							ai_res.items, song_ref);
@@ -1988,17 +2040,17 @@ void LiedplanDock::on_open_import_dialog()
 					fatal_err = ex.what();
 				}
 
-				if (!self_ptr)
+				if (*cancel || !self_ptr)
 					return;
 
 				QMetaObject::invokeMethod(
 					self_ptr.data(),
-					[self_ptr, dlg_ptr, api_btn, csv_btn, ai_start_btn,
+					[cancel, self_ptr, dlg_ptr, api_btn, csv_btn, ai_start_btn,
 					 ai_status_lbl, status_lbl, error_lbl, ai_preview_group,
 					 ai_source_lbl, ai_table, pending_ai_res,
 					 ai_res = std::move(ai_res),
 					 fatal_err = std::move(fatal_err)]() mutable {
-						if (!self_ptr || !dlg_ptr)
+						if (*cancel || !self_ptr || !dlg_ptr)
 							return;
 						api_btn->setEnabled(true);
 						csv_btn->setEnabled(true);
@@ -2089,6 +2141,8 @@ void LiedplanDock::on_open_import_dialog()
 
 			save_state();
 			for (std::size_t i = 0; i < state_.cards.size(); ++i) {
+				if (cancel_ && *cancel_)
+					return;
 				liedplan_scene::update_everywhere(
 					state_.cards[i], false, state_.settings);
 			}
@@ -2110,8 +2164,8 @@ void LiedplanDock::on_open_import_dialog()
 		});
 
 	connect(api_btn, &QPushButton::clicked, &dlg,
-		[this, dlg_ptr, self_ptr, api_btn, csv_btn, status_lbl, error_lbl, handle_success,
-		 handle_error]() {
+		[this, cancel, dlg_ptr, self_ptr, api_btn, csv_btn, status_lbl, error_lbl,
+		 handle_success, handle_error]() {
 			api_btn->setEnabled(false);
 			csv_btn->setEnabled(false);
 			error_lbl->clear();
@@ -2134,21 +2188,26 @@ void LiedplanDock::on_open_import_dialog()
 					? liedplan_import::kDefaultTokenPath
 					: state_.settings.token_path);
 
-			std::thread([self_ptr, dlg_ptr, api_btn, csv_btn, cache_path, token_path,
-				     form_id, handle_success, handle_error]() {
+			// Hintergrund-Thread erfasst nur die Kopie von cancel_ (kein this).
+			std::thread([cancel, self_ptr, dlg_ptr, api_btn, csv_btn, cache_path,
+				     token_path, form_id, handle_success, handle_error]() {
+				ActiveJobGuard job_guard;
+				if (*cancel)
+					return;
+
 				std::string err_msg;
 				auto res = liedplan_import::import_from_api(
 					&err_msg, cache_path, token_path, form_id);
 
-				if (!self_ptr)
+				if (*cancel || !self_ptr)
 					return;
 
 				QMetaObject::invokeMethod(
 					self_ptr.data(),
-					[self_ptr, dlg_ptr, api_btn, csv_btn, res = std::move(res),
-					 err_msg = std::move(err_msg), handle_success,
-					 handle_error]() {
-						if (!self_ptr || !dlg_ptr)
+					[cancel, self_ptr, dlg_ptr, api_btn, csv_btn,
+					 res = std::move(res), err_msg = std::move(err_msg),
+					 handle_success, handle_error]() {
+						if (*cancel || !self_ptr || !dlg_ptr)
 							return;
 						api_btn->setEnabled(true);
 						csv_btn->setEnabled(true);
@@ -2163,8 +2222,8 @@ void LiedplanDock::on_open_import_dialog()
 		});
 
 	connect(csv_btn, &QPushButton::clicked, &dlg,
-		[&dlg, dlg_ptr, self_ptr, api_btn, csv_btn, status_lbl, error_lbl, handle_success,
-		 handle_error]() {
+		[&dlg, cancel, dlg_ptr, self_ptr, api_btn, csv_btn, status_lbl, error_lbl,
+		 handle_success, handle_error]() {
 			const QString file_name = QFileDialog::getOpenFileName(
 				&dlg, QStringLiteral("Liedplan-Datei importieren"), QString(),
 				QStringLiteral(
@@ -2183,22 +2242,27 @@ void LiedplanDock::on_open_import_dialog()
 			const QString source_basename =
 				QString::fromUtf8(path.filename().u8string().c_str());
 
-			std::thread([self_ptr, dlg_ptr, api_btn, csv_btn, path, source_basename,
-				     handle_success, handle_error]() {
+			// Hintergrund-Thread erfasst nur die Kopie von cancel_ (kein this).
+			std::thread([cancel, self_ptr, dlg_ptr, api_btn, csv_btn, path,
+				     source_basename, handle_success, handle_error]() {
+				ActiveJobGuard job_guard;
+				if (*cancel)
+					return;
+
 				liedplan_import::LiedplanImportResult res;
 				std::string err_msg;
 				const auto err = liedplan_import::parse_answers_file(
 					path, res, nullptr, &err_msg);
 
-				if (!self_ptr)
+				if (*cancel || !self_ptr)
 					return;
 
 				QMetaObject::invokeMethod(
 					self_ptr.data(),
-					[self_ptr, dlg_ptr, api_btn, csv_btn, err,
+					[cancel, self_ptr, dlg_ptr, api_btn, csv_btn, err,
 					 res = std::move(res), err_msg = std::move(err_msg),
 					 source_basename, handle_success, handle_error]() {
-						if (!self_ptr || !dlg_ptr)
+						if (*cancel || !self_ptr || !dlg_ptr)
 							return;
 						api_btn->setEnabled(true);
 						csv_btn->setEnabled(true);
@@ -2365,16 +2429,21 @@ void LiedplanDock::on_backup_state()
 
 	const std::string out_path = file_name.toUtf8().toStdString();
 	const LiedplanState snap = state_;
+	const auto cancel = cancel_;
 	QPointer<LiedplanDock> self_ptr(this);
 
-	std::thread([self_ptr, snap, out_path, file_name]() {
+	// Hintergrund-Thread erfasst nur die Kopie von cancel_ (kein this).
+	std::thread([cancel, self_ptr, snap, out_path, file_name]() {
+		ActiveJobGuard job_guard;
+		if (*cancel)
+			return;
 		const std::string err = snap.save(out_path);
-		if (!self_ptr)
+		if (*cancel || !self_ptr)
 			return;
 		QMetaObject::invokeMethod(
 			self_ptr.data(),
-			[self_ptr, err, file_name]() {
-				if (!self_ptr)
+			[cancel, self_ptr, err, file_name]() {
+				if (*cancel || !self_ptr)
 					return;
 				if (err.empty()) {
 					self_ptr->set_dock_status(
@@ -2400,17 +2469,22 @@ void LiedplanDock::on_restore_state()
 		return;
 
 	const std::string in_path = file_name.toUtf8().toStdString();
+	const auto cancel = cancel_;
 	QPointer<LiedplanDock> self_ptr(this);
 
-	std::thread([self_ptr, in_path, file_name]() {
+	// Hintergrund-Thread erfasst nur die Kopie von cancel_ (kein this).
+	std::thread([cancel, self_ptr, in_path, file_name]() {
+		ActiveJobGuard job_guard;
+		if (*cancel)
+			return;
 		LiedplanState restored;
 		const std::string err = restored.restore_backup(in_path);
-		if (!self_ptr)
+		if (*cancel || !self_ptr)
 			return;
 		QMetaObject::invokeMethod(
 			self_ptr.data(),
-			[self_ptr, err, restored = std::move(restored), file_name]() mutable {
-				if (!self_ptr)
+			[cancel, self_ptr, err, restored = std::move(restored), file_name]() mutable {
+				if (*cancel || !self_ptr)
 					return;
 				if (!err.empty()) {
 					self_ptr->set_dock_status(
@@ -2435,6 +2509,8 @@ void LiedplanDock::on_restore_state()
 				}
 				self_ptr->save_state();
 				self_ptr->sync_all_cards_live(prev_ids);
+				if (*cancel)
+					return;
 				self_ptr->rebuild_rows();
 				self_ptr->set_dock_status(
 					QStringLiteral("Restore erfolgreich: %1").arg(file_name),
@@ -2862,6 +2938,8 @@ void LiedplanDock::save_state()
 		std::vector<std::string> ids;
 		ids.swap(it->second.dirty_cards);
 		for (const std::string &id : ids) {
+			if (cancel_ && *cancel_)
+				return;
 			if (const LiedplanCard *c = find_card_mut(id)) {
 				std::string html_path;
 				if (liedplan_html::write_card(*c, html_path, state_.settings)) {

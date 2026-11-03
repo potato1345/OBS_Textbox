@@ -18,12 +18,14 @@
 #include "liedplan-ai.hpp"
 
 #include <algorithm>
+#include <atomic>
 #include <cctype>
 #include <chrono>
 #include <cstdint>
 #include <cstring>
 #include <filesystem>
 #include <fstream>
+#include <memory>
 #include <regex>
 #include <sstream>
 #include <stdexcept>
@@ -374,9 +376,13 @@ std::string read_env_key(const std::string &env_file_path, std::string &err)
 }
 
 std::string extract_document_text(const std::string &file_path, const std::string &python_exe,
-				  std::string &err)
+				  std::string &err,
+				  std::shared_ptr<std::atomic<bool>> cancel)
 {
 	err.clear();
+	if (cancel && cancel->load())
+		return "";
+
 	std::error_code ec;
 	const std::filesystem::path py_path = std::filesystem::u8path(python_exe);
 	if (python_exe.empty() || !std::filesystem::exists(py_path, ec) || ec) {
@@ -467,8 +473,23 @@ std::string extract_document_text(const std::string &file_path, const std::strin
 		}
 	});
 
-	const DWORD wait_res = WaitForSingleObject(pi.hProcess, 120000);
-	if (wait_res == WAIT_TIMEOUT) {
+	// Auf markitdown-Kindprozess in 200-ms-Schritten bis zur 120-s-Deadline warten.
+	DWORD wait_res = WAIT_TIMEOUT;
+	bool cancelled = false;
+	for (DWORD elapsed_ms = 0; elapsed_ms < 120000; elapsed_ms += 200) {
+		if (cancel && cancel->load()) {
+			cancelled = true;
+			break;
+		}
+		wait_res = WaitForSingleObject(pi.hProcess, 200);
+		if (cancel && cancel->load()) {
+			cancelled = true;
+			break;
+		}
+		if (wait_res != WAIT_TIMEOUT)
+			break;
+	}
+	if (cancelled || wait_res == WAIT_TIMEOUT) {
 		TerminateProcess(pi.hProcess, 1);
 	}
 
@@ -485,6 +506,9 @@ std::string extract_document_text(const std::string &file_path, const std::strin
 	CloseHandle(pi.hProcess);
 	if (job)
 		CloseHandle(job);
+
+	if (cancelled)
+		return "";
 
 	if (wait_res == WAIT_TIMEOUT) {
 		err = "Dokument-Extraktion fehlgeschlagen (Timeout)";
@@ -504,9 +528,16 @@ std::string extract_document_text(const std::string &file_path, const std::strin
 
 	return cleaned;
 #else
+	(void)cancel;
 	err = "Dokument-Extraktion auf dieser Plattform nicht unterstützt.";
 	return "";
 #endif
+}
+
+std::string extract_document_text(const std::string &file_path, const std::string &python_exe,
+				  std::string &err)
+{
+	return extract_document_text(file_path, python_exe, err, nullptr);
 }
 
 nlohmann::json parse_json_clean(const std::string &raw)
@@ -718,7 +749,8 @@ void enrich_titles_from_reference(
 
 AiResult process_with_llm(const std::string &api_key, const std::string &document_text,
 			  const std::string &system_prompt, const std::string &lieder_path,
-			  std::function<void(const std::string &)> on_progress)
+			  std::function<void(const std::string &)> on_progress,
+			  std::shared_ptr<std::atomic<bool>> cancel)
 {
 #ifndef _WIN32
 	(void)api_key;
@@ -726,14 +758,20 @@ AiResult process_with_llm(const std::string &api_key, const std::string &documen
 	(void)system_prompt;
 	(void)lieder_path;
 	(void)on_progress;
+	(void)cancel;
 	throw std::runtime_error("WinHTTP ist nur unter Windows verfügbar.");
 #else
+	if (cancel && cancel->load())
+		return {};
+
 	if (on_progress)
 		on_progress("Ermittle verfügbare freie Modelle...");
 
 	const std::wstring auth_hdr = L"Authorization: Bearer " + utf8_to_wide(api_key) + L"\r\n";
 	const HttpResp models_resp = winhttp_call(
 		"GET", "https://openrouter.ai/api/v1/models", auth_hdr, "", 30000);
+	if (cancel && cancel->load())
+		return {};
 	if (!models_resp.net_err.empty()) {
 		throw std::runtime_error("Konnte Modellliste nicht abrufen (" + models_resp.net_err +
 					 ")");
@@ -763,6 +801,10 @@ AiResult process_with_llm(const std::string &api_key, const std::string &documen
 
 	for (const std::string &model : free_models) {
 		for (int attempt = 1; attempt <= 2; ++attempt) {
+			// Vor jedem Versuch/Retry auf kooperatives Abbruchsignal prüfen.
+			if (cancel && cancel->load())
+				return {};
+
 			if (on_progress) {
 				on_progress("Modell " + model + " (Versuch " +
 					    std::to_string(attempt) + "/2)...");
@@ -786,6 +828,8 @@ AiResult process_with_llm(const std::string &api_key, const std::string &documen
 				const HttpResp resp = winhttp_call(
 					"POST", "https://openrouter.ai/api/v1/chat/completions",
 					post_hdrs, req_json.dump(), 70000);
+				if (cancel && cancel->load())
+					return {};
 
 				if (!resp.net_err.empty()) {
 					retryable = true;
@@ -886,9 +930,17 @@ AiResult process_with_llm(const std::string &api_key, const std::string &documen
 				break;
 
 			if (attempt == 1) {
+				if (cancel && cancel->load())
+					return {};
 				if (on_progress)
 					on_progress("Warte 3s vor neuem Versuch...");
-				std::this_thread::sleep_for(std::chrono::seconds(3));
+				// Wartezeit vor Retry in kurzen Intervallen mit Abbruchprüfung überbrücken.
+				for (int w = 0; w < 30; ++w) {
+					if (cancel && cancel->load())
+						return {};
+					std::this_thread::sleep_for(
+						std::chrono::milliseconds(100));
+				}
 			}
 		}
 	}
@@ -902,6 +954,14 @@ AiResult process_with_llm(const std::string &api_key, const std::string &documen
 	}
 	throw std::runtime_error("Alle AI-Modelle fehlgeschlagen:\n" + tail);
 #endif
+}
+
+AiResult process_with_llm(const std::string &api_key, const std::string &document_text,
+			  const std::string &system_prompt, const std::string &lieder_path,
+			  std::function<void(const std::string &)> on_progress)
+{
+	return process_with_llm(api_key, document_text, system_prompt, lieder_path,
+				std::move(on_progress), nullptr);
 }
 
 namespace {

@@ -14,6 +14,13 @@
 #include <util/bmem.h>
 #include "liedplan-log.hpp"
 
+#include <atomic>
+#include <chrono>
+#include <thread>
+
+// Zähler für aktuell laufende Hintergrund-Threads im Plugin.
+std::atomic<int> g_active_jobs = 0;
+
 #ifdef ENABLE_FRONTEND_API
 #include <obs-frontend-api.h>
 #endif
@@ -142,6 +149,10 @@ void obs_module_unload(void)
 	}
 #endif
 #endif
+	// Bis zu 5 Sekunden (in 100-ms-Schritten) warten, bis alle aktiven Hintergrund-Jobs beendet sind.
+	for (int i = 0; i < 50 && g_active_jobs.load() > 0; ++i) {
+		std::this_thread::sleep_for(std::chrono::milliseconds(100));
+	}
 #ifdef ENABLE_QT
 	/*
 	libobs (32.2.2, in .deps/include/obs-source.h und obs.h verifiziert)

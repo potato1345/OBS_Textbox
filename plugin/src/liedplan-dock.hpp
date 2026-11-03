@@ -15,8 +15,26 @@
 
 #include <QIcon>
 #include <QWidget>
+#include <atomic>
+#include <memory>
 #include <string>
 #include <vector>
+
+// Globaler Zähler aktiver Hintergrund-Jobs zur Synchronisation beim Entladen des Plugins.
+extern std::atomic<int> g_active_jobs;
+
+namespace liedplan_ai {
+// Überladung mit kooperativem Abbruch-Flag für den markitdown-Subprozess.
+std::string extract_document_text(const std::string &file_path, const std::string &python_exe,
+				  std::string &err,
+				  std::shared_ptr<std::atomic<bool>> cancel);
+
+// Überladung mit kooperativem Abbruch-Flag für OpenRouter-Anfragen und Retries.
+AiResult process_with_llm(const std::string &api_key, const std::string &document_text,
+			  const std::string &system_prompt, const std::string &lieder_path,
+			  std::function<void(const std::string &)> on_progress,
+			  std::shared_ptr<std::atomic<bool>> cancel);
+} // namespace liedplan_ai
 
 class QComboBox;
 class QLabel;
@@ -33,7 +51,7 @@ class LiedplanDock : public QWidget {
 
 public:
 	explicit LiedplanDock(const std::string &state_path, QWidget *parent = nullptr);
-	~LiedplanDock() override = default;
+	~LiedplanDock() override;
 
 private:
 	LiedplanCard *find_card_mut(const std::string &id);
@@ -68,4 +86,6 @@ private:
 	QVBoxLayout *cards_layout_ = nullptr;
 	QLabel *dock_status_lbl_ = nullptr;
 	std::vector<QWidget *> row_widgets_;
+	// Kooperatives Abbruch-Flag für laufende Hintergrund-Threads beim Schließen des Docks.
+	std::shared_ptr<std::atomic<bool>> cancel_ = std::make_shared<std::atomic<bool>>(false);
 };
