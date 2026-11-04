@@ -83,6 +83,8 @@ LiedplanCard card_from_json(const nlohmann::json &item)
 		c.anim_x = item["anim_x"].get<int>();
 	if (item.contains("anim_y") && item["anim_y"].is_number_integer())
 		c.anim_y = item["anim_y"].get<int>();
+	if (item.contains("template_id") && item["template_id"].is_string())
+		c.template_id = item["template_id"].get<std::string>();
 	return c;
 }
 
@@ -108,6 +110,7 @@ nlohmann::json card_to_json(const LiedplanCard &c)
 		{"anim_scale", c.anim_scale},
 		{"anim_x", c.anim_x},
 		{"anim_y", c.anim_y},
+		{"template_id", c.template_id},
 	};
 }
 

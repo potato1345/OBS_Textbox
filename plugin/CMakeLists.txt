@@ -177,6 +177,29 @@ if(ENABLE_QT)
   target_link_libraries(test-liedplan-html PRIVATE Qt6::Core nlohmann_json::nlohmann_json)
   add_test(NAME test-liedplan-html COMMAND test-liedplan-html)
 
+  add_executable(
+    test-liedplan-templates
+    src/tests/test-liedplan-templates.cpp
+    src/liedplan-html.cpp
+    src/liedplan-html.hpp
+    src/liedplan-state.cpp
+    src/liedplan-state.hpp
+    src/liedplan-profiles.hpp
+    src/liedplan-textfmt.hpp
+  )
+  target_compile_definitions(
+    test-liedplan-templates
+    PRIVATE
+      LIEDPLAN_TEST_NO_OBS
+      LIEDPLAN_REPO_ROOT="${CMAKE_CURRENT_SOURCE_DIR}/.."
+  )
+  target_include_directories(
+    test-liedplan-templates
+    PRIVATE $<TARGET_PROPERTY:OBS::libobs,INTERFACE_INCLUDE_DIRECTORIES>
+  )
+  target_link_libraries(test-liedplan-templates PRIVATE Qt6::Core nlohmann_json::nlohmann_json)
+  add_test(NAME test-liedplan-templates COMMAND test-liedplan-templates)
+
   if(WIN32)
     add_custom_command(
       TARGET liedplan-render-tests
@@ -202,6 +225,15 @@ if(ENABLE_QT)
         "${CMAKE_COMMAND}" -E copy_if_different
         $<TARGET_RUNTIME_DLLS:test-liedplan-html>
         "$<TARGET_FILE_DIR:test-liedplan-html>"
+      COMMAND_EXPAND_LISTS
+    )
+    add_custom_command(
+      TARGET test-liedplan-templates
+      POST_BUILD
+      COMMAND
+        "${CMAKE_COMMAND}" -E copy_if_different
+        $<TARGET_RUNTIME_DLLS:test-liedplan-templates>
+        "$<TARGET_FILE_DIR:test-liedplan-templates>"
       COMMAND_EXPAND_LISTS
     )
   endif()

@@ -775,6 +775,38 @@ colors:
 		      "27. F1 Migration active_profile \"Sunset Warm\" -> Karte Sonne", err);
 	}
 
+	// 28. (F2a) template_id Round-trip + Alt-State-Migration (fehlendes template_id -> "")
+	{
+		LiedplanState s1;
+		LiedplanCard &c = s1.add_card();
+		c.zeile1 = "Eröffnung";
+		c.template_id = "rounded";
+		s1.save_quick_profile("Template-Quick");
+
+		const std::string json_str = s1.serialize_json();
+		LiedplanState s2;
+		const std::string err = s2.deserialize_json(json_str);
+
+		LiedplanCard c_diff = c;
+		c_diff.template_id = "frame";
+		const bool roundtrip_ok = err.empty() && (s1 == s2) && s2.cards.size() == 1 &&
+					  s2.cards[0].template_id == "rounded" &&
+					  s2.quick_profiles.size() == 1 &&
+					  s2.quick_profiles[0].cards[0].template_id == "rounded" &&
+					  !(c == c_diff);
+
+		// Alt-State ohne template_id -> "" (classic)
+		LiedplanState s_legacy;
+		const std::string leg_err =
+			s_legacy.load((temp_dir / "legacy_m4_no_anim.json").u8string());
+		const bool legacy_ok = leg_err.empty() && s_legacy.cards.size() == 1 &&
+				       s_legacy.cards[0].template_id.empty();
+
+		check(roundtrip_ok && legacy_ok,
+		      "28. F2a template_id Round-trip (Cards + QuickProfile + operator==) und Alt-State-Migration -> \"\"",
+		      err + " " + leg_err);
+	}
+
 	std::error_code ec;
 	std::filesystem::remove_all(temp_dir, ec);
 
@@ -782,6 +814,6 @@ colors:
 		std::cerr << g_failures << " test(s) failed.\n";
 		return 1;
 	}
-	std::cout << "All 27 checks passed.\n";
+	std::cout << "All 28 checks passed.\n";
 	return 0;
 }

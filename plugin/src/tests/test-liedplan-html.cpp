@@ -256,6 +256,19 @@ int main()
 		liedplan_html::push_update(nullptr, c, false);
 		check(liedplan_html::last_push_update_json() == json_clear,
 		      "4c. push_update(nullptr): sicherer No-Op");
+
+		// 4d. F2a: template_id im Push-JSON (15 Keys insgesamt; bleibt auch bei clear=true erhalten)
+		c.template_id = "rounded";
+		liedplan_html::push_update(dummy_src, c, false);
+		const nlohmann::json jt1 =
+			nlohmann::json::parse(liedplan_html::last_push_update_json(), nullptr, false);
+		liedplan_html::push_update(dummy_src, c, true);
+		const nlohmann::json jt2 =
+			nlohmann::json::parse(liedplan_html::last_push_update_json(), nullptr, false);
+		check(jt1.is_object() && jt1.size() == 15 &&
+			      jt1.value("template_id", "") == "rounded" && jt2.is_object() &&
+			      jt2.size() == 15 && jt2.value("template_id", "") == "rounded",
+		      "4d. push_update (F2a): JSON hat 15 Schlüssel inkl. template_id (auch bei clear=true)");
 	}
 
 	// 5. normalize_anim_src: Data-URI, relativ + Traversal-Guard, http/https, portable Absolutpfade

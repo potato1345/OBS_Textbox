@@ -42,6 +42,7 @@ struct LiedplanCard {
 	int anim_scale = 3; // 1,2,3,4,6,8,10,12 (v2-Optionen); Default 3
 	int anim_x = 0; // -1200..1200 px
 	int anim_y = 0; // -1200..1200 px
+	std::string template_id = ""; // "" = classic (CSS-Injektion in textbox.html)
 
 	bool operator==(const LiedplanCard &other) const
 	{
@@ -56,7 +57,7 @@ struct LiedplanCard {
 		       rainbow_corners == other.rainbow_corners &&
 		       anim_file == other.anim_file && show_anim == other.show_anim &&
 		       anim_scale == other.anim_scale && anim_x == other.anim_x &&
-		       anim_y == other.anim_y;
+		       anim_y == other.anim_y && template_id == other.template_id;
 	}
 };
 

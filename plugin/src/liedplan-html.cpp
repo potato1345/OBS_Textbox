@@ -688,6 +688,117 @@ std::string cards_dir()
 	return out;
 }
 
+std::string templates_dir()
+{
+#ifdef LIEDPLAN_TEST_NO_OBS
+	const std::filesystem::path dir =
+		std::filesystem::temp_directory_path() / "liedplan_templates_test";
+#else
+	char *cfg_path = obs_module_config_path("liedplan-state.json");
+	const std::string base = cfg_path ? cfg_path : "";
+	bfree(cfg_path);
+	if (base.empty())
+		return "";
+
+	const std::filesystem::path dir = std::filesystem::u8path(base).parent_path() / "templates";
+#endif
+	std::error_code ec;
+	std::filesystem::create_directories(dir, ec);
+	if (ec)
+		return "";
+
+	std::string out = dir.generic_u8string();
+	while (!out.empty() && (out.back() == '/' || out.back() == '\\'))
+		out.pop_back();
+	return out;
+}
+
+std::string substitute_tokens(const LiedplanCard &card, const std::string &template_html,
+			      bool clear, const LiedplanSettings &settings,
+			      const std::string &copy_dir)
+{
+	if (template_html.empty())
+		return "";
+
+	const std::string text_col = format_rgba(
+		card.text_color.empty() ? "#000000" : card.text_color, 0x000000u, card.text_opacity);
+	const std::string box_col = format_rgba(
+		card.box_color.empty() ? "#ffffff" : card.box_color, 0xFFFFFFu, card.box_opacity);
+	const std::string corner_a = format_rgba(
+		card.corner_color_a.empty() ? "#fce647" : card.corner_color_a, 0xFCE647u,
+		card.corner_opacity_a);
+	const std::string corner_b = format_rgba(
+		card.corner_color_b.empty() ? "#fce647" : card.corner_color_b, 0xFCE647u,
+		card.corner_opacity_b);
+	const std::string text_op = std::to_string(std::clamp(card.text_opacity, 0, 255));
+	const std::string box_op = std::to_string(std::clamp(card.box_opacity, 0, 255));
+	const std::string corner_op_a = std::to_string(std::clamp(card.corner_opacity_a, 0, 255));
+	const std::string corner_op_b = std::to_string(std::clamp(card.corner_opacity_b, 0, 255));
+	const std::string rainbow = card.rainbow_corners ? "1" : "0";
+	const std::string anim_src =
+		(template_html.find("{{anim_src}}") != std::string::npos)
+			? normalize_anim_src(card.anim_file, settings, copy_dir)
+			: std::string();
+	const std::string show_anim = card.show_anim ? "1" : "0";
+	const std::string anim_scale = std::to_string(card.anim_scale);
+	const std::string anim_x = std::to_string(card.anim_x);
+	const std::string anim_y = std::to_string(card.anim_y);
+	const std::string clear_str = clear ? "1" : "0";
+
+	const std::pair<const char *, std::string> tokens[] = {
+		{"{{zeile1}}", clear ? std::string() : card.zeile1},
+		{"{{zeile2}}", clear ? std::string() : card.zeile2},
+		{"{{zeile3}}", clear ? std::string() : card.zeile3},
+		{"{{text_color}}", text_col},
+		{"{{box_color}}", box_col},
+		{"{{corner_a}}", corner_a},
+		{"{{corner_b}}", corner_b},
+		{"{{corner_op_a}}", corner_op_a},
+		{"{{corner_op_b}}", corner_op_b},
+		{"{{text_opacity}}", text_op},
+		{"{{box_opacity}}", box_op},
+		{"{{rainbow}}", rainbow},
+		{"{{anim_src}}", anim_src},
+		{"{{show_anim}}", show_anim},
+		{"{{anim_scale}}", anim_scale},
+		{"{{anim_x}}", anim_x},
+		{"{{anim_y}}", anim_y},
+		{"{{card_id}}", card.id},
+		{"{{clear}}", clear_str},
+	};
+
+	std::string out = template_html;
+	for (const auto &kv : tokens) {
+		const std::string key(kv.first);
+		const std::string &val = kv.second;
+		std::size_t pos = 0;
+		while ((pos = out.find(key, pos)) != std::string::npos) {
+			out.replace(pos, key.size(), val);
+			pos += val.size();
+		}
+	}
+	return out;
+}
+
+std::string render_template_html(const LiedplanCard &card, const std::string &template_id,
+				 bool clear, const LiedplanSettings &settings,
+				 const std::string &copy_dir)
+{
+	if (template_id.empty())
+		return "";
+
+	const std::string dir = templates_dir();
+	if (dir.empty())
+		return "";
+
+	const std::string tpl_path = dir + "/" + template_id + ".html";
+	const std::string tpl_html = read_utf8_file(tpl_path.c_str());
+	if (tpl_html.empty())
+		return "";
+
+	return substitute_tokens(card, tpl_html, clear, settings, copy_dir);
+}
+
 std::string card_html(const LiedplanCard &card)
 {
 	const int box_alpha = std::clamp(card.box_opacity, 0, 255);
@@ -917,16 +1028,30 @@ bool write_card(const LiedplanCard &card, std::string &path_out, const LiedplanS
 	if (dir.empty())
 		return false;
 
-	const std::string textbox_path = resolve_textbox_path(settings);
-	const std::string repo_html = read_utf8_file(textbox_path.c_str());
-	if (repo_html.empty()) {
+	std::string html;
+	if (!card.template_id.empty()) {
+		html = render_template_html(card, card.template_id, false, settings, dir);
+		if (html.empty()) {
 #ifndef LIEDPLAN_TEST_NO_OBS
-		obs_log(LOG_INFO, "Liedplan: textbox.html nicht gefunden, nutze Fallback-Template");
+			obs_log(LOG_WARNING,
+				"Liedplan: Template '%s' nicht gefunden/leer — Karte nutzt classic-Fallback",
+				card.template_id.c_str());
 #endif
+		}
+	}
+
+	if (html.empty()) {
+		const std::string textbox_path = resolve_textbox_path(settings);
+		const std::string repo_html = read_utf8_file(textbox_path.c_str());
+		if (repo_html.empty()) {
+#ifndef LIEDPLAN_TEST_NO_OBS
+			obs_log(LOG_INFO, "Liedplan: textbox.html nicht gefunden, nutze Fallback-Template");
+#endif
+		}
+		html = render_card_html(card, repo_html, settings, dir);
 	}
 
 	const std::string full_path = dir + "/" + card.id + ".html";
-	const std::string html = render_card_html(card, repo_html, settings, dir);
 
 	std::ofstream file(std::filesystem::u8path(full_path), std::ios::binary | std::ios::trunc);
 	if (!file.is_open())
@@ -983,6 +1108,7 @@ void push_update(obs_source_t *src, const LiedplanCard &card, bool clear,
 	obj.insert(QStringLiteral("anim_scale"), card.anim_scale);
 	obj.insert(QStringLiteral("anim_x"), card.anim_x);
 	obj.insert(QStringLiteral("anim_y"), card.anim_y);
+	obj.insert(QStringLiteral("template_id"), QString::fromUtf8(card.template_id.c_str()));
 
 	const QByteArray json_bytes = QJsonDocument(obj).toJson(QJsonDocument::Compact);
 	g_last_push_update_json.assign(json_bytes.constData(),

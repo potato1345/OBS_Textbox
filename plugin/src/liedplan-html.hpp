@@ -22,6 +22,44 @@ namespace liedplan_html {
 // Rückgabe: UTF-8-Pfad des Verzeichnisses (ohne abschließenden Separator).
 std::string cards_dir();
 
+// Verzeichnis der user-Templates: <plugin_config>/liedplan-for-obs/templates/
+// Basis wie cards_dir() (obs_module_config_path("liedplan-state.json").parent_path()),
+// im Test-Modus (LIEDPLAN_TEST_NO_OBS) temp_directory_path()/liedplan_templates_test.
+// create_directories wie cards_dir(); UTF-8-Pfad ohne abschließenden Separator; "" bei Fehler.
+std::string templates_dir();
+
+// Substituiert {{Token}} in einem Template-String (bytes, UTF-8-safe; kein UTF-8-Parsing).
+// Kartenwerte werden wie in build_inject_css/push_update formatiert:
+//   {{zeile1}} {{zeile2}} {{zeile3}}   -> Rohtext der Zeile (clear=false) bzw. "" (clear=true)
+//   {{text_color}}   -> rgba(...) aus text_color+text_opacity (empty -> #000000-Fallback)
+//   {{box_color}}    -> rgba(...) aus box_color+box_opacity   (empty -> #ffffff-Fallback)
+//   {{corner_a}} {{corner_b}} -> rgba(...) aus corner_color_a/b + corner_opacity_a/b (empty -> #fce647)
+//   {{text_opacity}} {{box_opacity}} -> "1" wenn >0 (transparent 0), sonst String des 0..255-Werts —
+//     HALTE EXAKT die Formatierung, die build_inject_css heute für --box-opacity nutzt:
+//     --box-opacity ist 1 wenn die Karte Text hat, sonst 0. text_opacity/box_opacity-Tokens:
+//     Zahlenwert 0..255 (geklemmt) als String.
+//   {{rainbow}}    -> "1"/"0"
+//   {{anim_src}}   -> normalize_anim_src(card.anim_file, settings, copy_dir)
+//   {{show_anim}}  -> "1"/"0"
+//   {{anim_scale}} {{anim_x}} {{anim_y}} -> Zahlen als String
+//   {{card_id}}    -> card.id
+//   {{clear}}      -> "1" wenn clear=true sonst "0"
+// Unbekannte Tokens ({{foo}}) bleiben unersetzt im Output (No-op).
+// Ein Token, das im Template gar nicht vorkommt, ist irrelevant.
+// Hex-Validierung: Farb-Felder laufen über parse_hex_color mit denselben Fallbacks wie
+// heute (invalid/leer -> Default-Farbe), Output immer gültiges rgba(...).
+std::string substitute_tokens(const LiedplanCard &card, const std::string &template_html,
+			      bool clear = false,
+			      const LiedplanSettings &settings = LiedplanSettings(),
+			      const std::string &copy_dir = "");
+
+// Liest <templates_dir>/<template_id>.html und substituiert.
+// Rückgabe "" wenn: id empty, Datei fehlt/leer/unlesbar. Kein Log hier (Caller loggt).
+std::string render_template_html(const LiedplanCard &card, const std::string &template_id,
+				 bool clear = false,
+				 const LiedplanSettings &settings = LiedplanSettings(),
+				 const std::string &copy_dir = "");
+
 // Erzeugt das self-contained HTML der Karte (Template unten) und schreibt es nach
 // cards_dir() + "/" + card.id + ".html" (UTF-8, via std::filesystem::u8path).
 // true bei Erfolg. path_out = voller Pfad der Datei (UTF-8).
