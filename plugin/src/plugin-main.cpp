@@ -13,6 +13,7 @@
 #include <plugin-support.h>
 #include <util/bmem.h>
 #include "liedplan-log.hpp"
+#include "liedplan-state.hpp"
 
 #include <atomic>
 #include <chrono>
@@ -101,6 +102,14 @@ struct LiedplanFloatRoundedHelper : public QObject
 bool obs_module_load(void)
 {
 	blog(LOG_INFO, "[liedplan] Plugin erfolgreich geladen (Version %s)", PLUGIN_VERSION);
+
+	// IMP-D (#5): Gebündelte lieder.md im Plugin-Data-Verzeichnis via obs_module_file auflösen
+	// (mit Dev-Fallback in LiedplanSettings, falls nicht im OBS-Data-Ordner vorhanden).
+	char *mod_lieder = obs_module_file("lieder.md");
+	if (mod_lieder) {
+		liedplan_set_module_lieder_path(mod_lieder);
+		bfree(mod_lieder);
+	}
 #ifdef ENABLE_FRONTEND_API
 #ifdef ENABLE_QT
 	if (obs_frontend_get_main_window() && !g_dock) {

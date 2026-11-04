@@ -19,8 +19,11 @@ set(ZLIB_USE_STATIC_LIBS ON)
 find_package(ZLIB REQUIRED)
 target_link_libraries(
   ${CMAKE_PROJECT_NAME}
-  PRIVATE OBS::libobs nlohmann_json::nlohmann_json winhttp ZLIB::ZLIB
+  PRIVATE OBS::libobs nlohmann_json::nlohmann_json ZLIB::ZLIB
 )
+if(WIN32)
+  target_link_libraries(${CMAKE_PROJECT_NAME} PRIVATE winhttp)
+endif()
 
 if(ENABLE_FRONTEND_API)
   find_package(obs-frontend-api REQUIRED)
@@ -71,6 +74,17 @@ target_sources(
 
 set_target_properties_plugin(${CMAKE_PROJECT_NAME} PROPERTIES OUTPUT_NAME ${_name})
 
+# IMP-D (#5): Overlay-Template und Lied-Referenz in das OBS-Plugin-Data-Verzeichnis mitinstallieren
+# (analog target_install_resources -> ${CMAKE_PROJECT_NAME}/data für obs_module_file()).
+install(
+  FILES
+    "${CMAKE_CURRENT_SOURCE_DIR}/../main/textbox.html"
+    "${CMAKE_CURRENT_SOURCE_DIR}/../main/controlui/lieder.md"
+  DESTINATION "${CMAKE_PROJECT_NAME}/data"
+  COMPONENT Runtime
+  OPTIONAL
+)
+
 enable_testing()
 
 add_executable(
@@ -96,7 +110,10 @@ add_executable(
   src/liedplan-import.cpp
   src/liedplan-import.hpp
 )
-target_link_libraries(liedplan-import-tests PRIVATE nlohmann_json::nlohmann_json winhttp ZLIB::ZLIB)
+target_link_libraries(liedplan-import-tests PRIVATE nlohmann_json::nlohmann_json ZLIB::ZLIB)
+if(WIN32)
+  target_link_libraries(liedplan-import-tests PRIVATE winhttp)
+endif()
 add_test(NAME liedplan-import COMMAND liedplan-import-tests)
 
 add_executable(
@@ -109,7 +126,10 @@ target_compile_definitions(
   liedplan-ai-tests
   PRIVATE LIEDPLAN_REPO_ROOT="${CMAKE_CURRENT_SOURCE_DIR}/.."
 )
-target_link_libraries(liedplan-ai-tests PRIVATE nlohmann_json::nlohmann_json winhttp)
+target_link_libraries(liedplan-ai-tests PRIVATE nlohmann_json::nlohmann_json)
+if(WIN32)
+  target_link_libraries(liedplan-ai-tests PRIVATE winhttp)
+endif()
 add_test(NAME liedplan-ai COMMAND liedplan-ai-tests)
 
 if(ENABLE_QT)
@@ -120,7 +140,9 @@ if(ENABLE_QT)
     src/liedplan-render.hpp
     src/liedplan-html.cpp
     src/liedplan-html.hpp
+    src/liedplan-state.cpp
     src/liedplan-state.hpp
+    src/liedplan-profiles.hpp
     src/liedplan-textfmt.hpp
   )
   target_compile_definitions(liedplan-render-tests PRIVATE LIEDPLAN_TEST_NO_OBS)
@@ -131,6 +153,29 @@ if(ENABLE_QT)
   target_link_libraries(liedplan-render-tests PRIVATE Qt6::Core Qt6::Gui nlohmann_json::nlohmann_json)
   add_test(NAME liedplan-render COMMAND liedplan-render-tests)
   set_tests_properties(liedplan-render PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+
+  add_executable(
+    test-liedplan-html
+    src/tests/test-liedplan-html.cpp
+    src/liedplan-html.cpp
+    src/liedplan-html.hpp
+    src/liedplan-state.cpp
+    src/liedplan-state.hpp
+    src/liedplan-profiles.hpp
+    src/liedplan-textfmt.hpp
+  )
+  target_compile_definitions(
+    test-liedplan-html
+    PRIVATE
+      LIEDPLAN_TEST_NO_OBS
+      LIEDPLAN_REPO_ROOT="${CMAKE_CURRENT_SOURCE_DIR}/.."
+  )
+  target_include_directories(
+    test-liedplan-html
+    PRIVATE $<TARGET_PROPERTY:OBS::libobs,INTERFACE_INCLUDE_DIRECTORIES>
+  )
+  target_link_libraries(test-liedplan-html PRIVATE Qt6::Core nlohmann_json::nlohmann_json)
+  add_test(NAME test-liedplan-html COMMAND test-liedplan-html)
 
   if(WIN32)
     add_custom_command(
@@ -148,6 +193,15 @@ if(ENABLE_QT)
         "$<TARGET_FILE:Qt6::QWindowsIntegrationPlugin>"
         "$<TARGET_FILE:Qt6::QMinimalIntegrationPlugin>"
         "$<TARGET_FILE_DIR:liedplan-render-tests>/platforms"
+      COMMAND_EXPAND_LISTS
+    )
+    add_custom_command(
+      TARGET test-liedplan-html
+      POST_BUILD
+      COMMAND
+        "${CMAKE_COMMAND}" -E copy_if_different
+        $<TARGET_RUNTIME_DLLS:test-liedplan-html>
+        "$<TARGET_FILE_DIR:test-liedplan-html>"
       COMMAND_EXPAND_LISTS
     )
   endif()

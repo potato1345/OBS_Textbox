@@ -1,9 +1,9 @@
 # Funktionsvergleich: Dock-Version (v2-Dashboard) vs. OBS-Plugin (T7)
 
-Stand: 2026-10-28 — nach M5.1 + Ui3. Alle Meilensteine M0–M5.1 + Ui1–Ui3 committed
-(`d69e3dc`, `f1556e9`, `df8e5f4`+`d2b104a`, `ae4162b`, `97900a9`, `383d0d0`, `8539313`, `76da0a2`, `d398532`, `913072c`).
+Stand: 2026-11-04 — nach M7h (inkl. IMP-A..E). Alle Meilensteine M0–M7h + Ui1–Ui4 committed
+(`d69e3dc`, `f1556e9`, `df8e5f4`+`d2b104a`, `ae4162b`, `97900a9`, `383d0d0`, `8539313`, `76da0a2`, `d398532`, `913072c`, `1092aa0`, `e330a11`, `18987fb`, `7ad504a`, `8eb231d`, `90e25fd`, `7d097c9`, `32fc830`, `a32cf2d`+`fbca542`, `1ea454f`).
 Quellen: `rewrite/dashboard/` + `rewrite/server/` (v2, „Dock-Version“) vs. `plugin/` (natives OBS-32.2.2-Plugin).
-Verifikation Stand 28.10: ctest 5/5 (state, textfmt, import, ai, render), DLL deployed (obs-plugins\64bit).
+Verifikation Stand M7h: ctest 7/7 (state, textfmt, theme-icons, import, ai, render, test-liedplan-html), DLL deployed (obs-plugins\64bit).
 
 ## Architektur-Kontext (wichtig vor dem Tabellenvergleich)
 
@@ -82,11 +82,11 @@ haben im Plugin **kein Pendant — und brauchen keines**. Sie fallen von der Lis
 - In-Prozess-Sync ohne Latenz, Passwort, Reconnect-Logik
 - Dock ohne Browser-Tab; läuft, wenn OBS läuft (Ui3: natives OBS-Look — exakte Yami-Dark-Palette aus obs-studio 32.2.2)
 - Kein CSS-Variablen-Trick, keine Quellen-Neulade-Problematik (push_update ohne Reload)
-- CTest-Automatisierung: 5 Suiten (state, textfmt, import 19/19, ai, render) — v2 hat nur JS-Tests ohne OBS-Bezug
-- Backup/Restore atomar; Schnell-Profile als Gesamt-Snapshots
+- CTest-Automatisierung: 7 Suiten (state, textfmt, theme-icons, import, ai, render, test-liedplan-html) — v2 hat Python- + JS-Tests ohne OBS-Bezug
+- Backup/Restore atomar; Schnell-Profile als Gesamt-Snapshots; einstufiges Undo (Strg+Z)
 - AI-Import mit Offline-Fallback (läuft auch ohne OpenRouter-Key)
 
-## Meilenstein-Status (abgeschlossen 26.10–27.10)
+## Meilenstein-Status (abgeschlossen M0–M7h)
 
 | Meilenstein | Features | Status | Commit |
 |---|---|---|---|
@@ -104,8 +104,14 @@ haben im Plugin **kein Pendant — und brauchen keines**. Sie fallen von der Lis
 | M6 | A7/A8-UI (Deckkraft-Slider + Text-/BG-Color-Picker) + B2 eigene Farbprofile + B3 YAML-Export/Import | ✅ | `e330a11` |
 | M7 | Dock-Nativisierung R2: Icon-Toolbar unten (Neu/Löschen/AI-Import/Einstellungen inkl. Backup-Restore), Such-Dropdown oben (Profil + Karten mit Scroll-to-Card-Flash), einklappbare Style-Optionen (Preset/Text-Farbe/Box-Farbe/Ecken A+B/Deckkraft/gedruckt), schmalere Außen-/Box-Ränder, kVersion 2 | ✅ | `18987fb` |
 | M7b | Dock-Fixes (User-Feedback): 1px-Boxrand (Doppelrahmen entfernt), redundanter „Entf.“-Button entfernt (✕ in ID-Leiste löscht bereits Karte + Szenen-Quelle), 1px-Fensterrand um das Dock, Style-Optionen default-sichtbar (Chevron-Toggle bleibt) | ✅ | `7ad504a` |
+| M7c | Dock-Fensterrand klarer (`#464B59` → `#5B6273`, 1px) | ✅ | `8eb231d` |
+| M7d | Dock-Fensterrand dezent wie PTZ-Plugin (1px `#0F1013` statt heller `#5B6273`) | ✅ | `90e25fd` |
+| M7e | Dock-Innenrand entfernt — QSS-Border rendert in der Clientfläche, Kante pixelidentisch mit PTZ | ✅ | `7d097c9` |
+| M7f | Dock-Rand 1px `#3C404D` — gleiche Dicke und Farbe wie der Karten-Box-Rand | ✅ | `32fc830` |
+| M7g | Abgerundete Kartenecken unten (10px/9px per-Ecke `border-radius`), Trash-Icon in Karten-ID-Leiste, Profil-Lösch-Button im oberen Dropdown | ✅ | `a32cf2d`+`fbca542` |
+| M7h | Abgerundete untere Fensterecken des Docks (10px, inkl. `LiedplanFloatRoundedHelper` für Floating-Zustand) | ✅ | `1ea454f` |
 
-**Offen:** Einziger Rest = D3-OpenRouter-Key in `main/api.env` (User-Aktion; Offline-Fallback aktiv und E2E-verifiziert). Alle v2-Funktionsbereiche A–D sind damit portiert — **M7 (`18987fb`) schließt das letzte UI-Meilenstein ab; Feature-Parität vollständig.** (Ui4 `1092aa0`: SVG-Icons statt Emoji.)
+**Offen:** Einziger Rest = D3-OpenRouter-Key in `main/api.env` (User-Aktion; Offline-Fallback aktiv und E2E-verifiziert). Alle v2-Funktionsbereiche A–D sind damit portiert — **M7h (`1ea454f`) schließt die UI-Nativisierung ab; Feature-Parität vollständig.** (Ui4 `1092aa0`: SVG-Icons statt Emoji.)
 
 ## Entscheidungen (Johann, 2026-10-24 — final)
 

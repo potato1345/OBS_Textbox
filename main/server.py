@@ -23,6 +23,7 @@ import socket
 import threading
 import tempfile
 import json
+import posixpath
 import urllib.parse
 import logging
 import forms_import
@@ -87,6 +88,41 @@ def get_lan_ip():
     except Exception:
         return "127.0.0.1"
 
+
+def get_bind_host():
+    """
+    Liefert die Bind-Adresse des Servers aus der Umgebungsvariable OBS_TEXTBOX_BIND.
+    Standardmäßig wird nur auf Loopback ('127.0.0.1') gebunden; für Opt-in-LAN
+    kann z. B. OBS_TEXTBOX_BIND=0.0.0.0 gesetzt werden.
+    """
+    raw = os.environ.get("OBS_TEXTBOX_BIND", "127.0.0.1")
+    host = raw.strip() if raw is not None else ""
+    return host if host != "" else "127.0.0.1"
+
+
+def is_loopback_bind(bind_host=None):
+    """Prüft, ob die gegebene (oder konfigurierte) Bind-Adresse eine Loopback-Adresse ist."""
+    host = (bind_host if bind_host is not None else get_bind_host()).strip().lower()
+    return host in ("127.0.0.1", "localhost", "::1") or host.startswith("127.")
+
+
+def is_blocked_path(raw_path):
+    """
+    Prüft, ob ein angefragter GET-Pfad auf geschützte Dateien zeigt:
+    Punkt-Dateien/-Ordner ('/.*'), Python-Skripte ('*.py', '*.pyc') oder 'api.env'.
+    """
+    url_path = urllib.parse.urlsplit(raw_path or "").path
+    unquoted = urllib.parse.unquote(url_path).replace("\\", "/")
+    raw_parts = [p for p in unquoted.split("/") if p and p != "."]
+    if any(p == ".." or p.startswith(".") for p in raw_parts):
+        return True
+    norm_parts = [p for p in posixpath.normpath(unquoted).split("/") if p and p != "."]
+    for part in norm_parts:
+        low = part.lower()
+        if part.startswith(".") or low == "api.env" or low.endswith(".env") or low.endswith(".py") or low.endswith(".pyc"):
+            return True
+    return False
+
 class StatsHandler(SimpleHTTPRequestHandler):
     """
     HTTP-Request-Handler für das v1-Backend.
@@ -133,11 +169,34 @@ class StatsHandler(SimpleHTTPRequestHandler):
             if len(stats["recent_activity"]) > 10:
                 stats["recent_activity"].pop(0)
 
+    def _get_cors_origin(self):
+        """
+        Bestimmt den Access-Control-Allow-Origin-Header abhängig vom Bind-Modus:
+        - Loopback-Bind (Standard '127.0.0.1'): beschränkt auf Loopback/Localhost-Origins.
+        - Opt-in-LAN-Bind (z. B. OBS_TEXTBOX_BIND=0.0.0.0): '*' für Geräte im Kirchen-WLAN.
+        """
+        bind_host = getattr(getattr(self, "server", None), "bind_host", None)
+        if not is_loopback_bind(bind_host):
+            return "*"
+        origin = self.headers.get("Origin", "").strip() if getattr(self, "headers", None) else ""
+        if origin:
+            try:
+                parsed = urllib.parse.urlsplit(origin)
+                hostname = (parsed.hostname or "").lower()
+                if parsed.scheme in ("http", "https") and (
+                    hostname in ("localhost", "127.0.0.1", "::1") or hostname.startswith("127.")
+                ):
+                    return origin
+            except Exception:
+                pass
+        port = getattr(getattr(self, "server", None), "server_port", 8080)
+        return f"http://127.0.0.1:{port}"
+
     def do_OPTIONS(self):
         """Behandelt CORS-Preflight-Anfragen des Browser-Dashboards."""
         logger.info("OPTIONS-Preflight: %s von %s", self.path, self.client_address[0])
         self.send_response(204)
-        self.send_header('Access-Control-Allow-Origin', '*')
+        self.send_header('Access-Control-Allow-Origin', self._get_cors_origin())
         self.send_header('Access-Control-Allow-Methods', 'POST, GET, OPTIONS')
         self.send_header('Access-Control-Allow-Headers', 'Content-Type, X-Filename')
         self.end_headers()
@@ -273,9 +332,14 @@ class StatsHandler(SimpleHTTPRequestHandler):
     def do_GET(self):
         """
         Behandelt GET-Anfragen:
+          - Blockiert Punkt-Dateien ('/.*'), '.py' und 'api.env' mit 404 (von jeder IP)
           - /api/form-responses: Holt aktuelle Antworten via Google Forms API
           - Sonstige Pfade: Statische Dateien ausliefern
         """
+        if is_blocked_path(self.path):
+            logger.warning("Blockierter Pfad abgelehnt (404): %s von %s", self.path, self.client_address[0])
+            self.send_error(404, 'File not found')
+            return
         if self.path == '/api/form-responses':
             logger.info("GET /api/form-responses aufgerufen von %s", self.client_address[0])
             try:
@@ -304,7 +368,7 @@ class StatsHandler(SimpleHTTPRequestHandler):
         self.send_response(status_code)
         self.send_header('Content-Type', 'application/json; charset=utf-8')
         self.send_header('Content-Length', str(len(response_bytes)))
-        self.send_header('Access-Control-Allow-Origin', '*')
+        self.send_header('Access-Control-Allow-Origin', self._get_cors_origin())
         self.end_headers()
         self.wfile.write(response_bytes)
 
@@ -429,11 +493,13 @@ def main():
             pass
             
     lan_ip = get_lan_ip()
-    server_address = ('', port)
+    bind_host = get_bind_host()
+    server_address = (bind_host, port)
     
     try:
         httpd = HTTPServer(server_address, StatsHandler)
-        logger.info("Server-Start auf Port %d (LAN-Adresse: %s)", port, lan_ip)
+        httpd.bind_host = bind_host
+        logger.info("Server-Start auf %s:%d (LAN-Adresse: %s)", bind_host, port, lan_ip)
     except OSError as e:
         logger.error("Fehler beim Starten des Servers auf Port %d: %s", port, e)
         print(f"Fehler beim Starten des Servers auf Port {port}: {e}")

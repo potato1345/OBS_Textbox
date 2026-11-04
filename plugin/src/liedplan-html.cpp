@@ -293,9 +293,47 @@ bool starts_with_icase(const std::string &s, const char *prefix)
 
 bool is_abs_win_path(const std::string &s)
 {
-	return s.size() >= 3 && std::isalpha(static_cast<unsigned char>(s[0])) && s[1] == ':' &&
-	       (s[2] == '\\' || s[2] == '/');
+	if (s.empty())
+		return false;
+	if (std::filesystem::path(std::filesystem::u8path(s)).is_absolute())
+		return true;
+	// Auch UNC-Pfade ("\\...") und POSIX-Absolutpfade ("/...") plattformübergreifend als absolut behandeln.
+	if (s[0] == '/')
+		return true;
+	if (s.size() >= 2 && s[0] == '\\' && s[1] == '\\')
+		return true;
+	return false;
 }
+
+// Löst den Pfad zu textbox.html auf:
+// 1. settings.textbox_path (Settings-Override, falls gesetzt und Datei existiert)
+// 2. obs_module_file("textbox.html") (OBS Plugin-Data-Verzeichnis, falls vorhanden)
+// 3. kRepoTextboxPath (Dev-Fallback auf diesem PC)
+std::string resolve_textbox_path(const LiedplanSettings &settings)
+{
+	std::error_code ec;
+	if (!settings.textbox_path.empty()) {
+		const std::filesystem::path p = std::filesystem::u8path(settings.textbox_path);
+		if (std::filesystem::exists(p, ec) && !ec)
+			return settings.textbox_path;
+	}
+#ifndef LIEDPLAN_TEST_NO_OBS
+	char *mod_file = obs_module_file("textbox.html");
+	if (mod_file) {
+		const std::string mod_path(mod_file);
+		bfree(mod_file);
+		if (!mod_path.empty()) {
+			ec.clear();
+			const std::filesystem::path p = std::filesystem::u8path(mod_path);
+			if (std::filesystem::exists(p, ec) && !ec)
+				return mod_path;
+		}
+	}
+#endif
+	return kRepoTextboxPath;
+}
+
+std::string g_last_push_update_json;
 
 std::string path_to_file_url(const std::string &path_utf8)
 {
@@ -457,7 +495,7 @@ std::string normalize_anim_src(const std::string &raw, const LiedplanSettings &s
 		const std::string base_dir_str =
 			!settings.animation_dir.empty()
 				? settings.animation_dir
-				: (std::filesystem::u8path(kRepoTextboxPath).parent_path() / "animation")
+				: (std::filesystem::u8path(resolve_textbox_path(settings)).parent_path() / "animation")
 					  .u8string();
 		std::error_code ec;
 		const std::filesystem::path anim_dir = std::filesystem::u8path(base_dir_str);
@@ -879,7 +917,8 @@ bool write_card(const LiedplanCard &card, std::string &path_out, const LiedplanS
 	if (dir.empty())
 		return false;
 
-	const std::string repo_html = read_utf8_file(kRepoTextboxPath);
+	const std::string textbox_path = resolve_textbox_path(settings);
+	const std::string repo_html = read_utf8_file(textbox_path.c_str());
 	if (repo_html.empty()) {
 #ifndef LIEDPLAN_TEST_NO_OBS
 		obs_log(LOG_INFO, "Liedplan: textbox.html nicht gefunden, nutze Fallback-Template");
@@ -900,6 +939,11 @@ bool write_card(const LiedplanCard &card, std::string &path_out, const LiedplanS
 
 	path_out = full_path;
 	return true;
+}
+
+std::string last_push_update_json()
+{
+	return g_last_push_update_json;
 }
 
 void push_update(obs_source_t *src, const LiedplanCard &card, bool clear,
@@ -941,6 +985,8 @@ void push_update(obs_source_t *src, const LiedplanCard &card, bool clear,
 	obj.insert(QStringLiteral("anim_y"), card.anim_y);
 
 	const QByteArray json_bytes = QJsonDocument(obj).toJson(QJsonDocument::Compact);
+	g_last_push_update_json.assign(json_bytes.constData(),
+				       static_cast<std::size_t>(json_bytes.size()));
 
 #ifndef LIEDPLAN_TEST_NO_OBS
 	proc_handler_t *ph = obs_source_get_proc_handler(src);

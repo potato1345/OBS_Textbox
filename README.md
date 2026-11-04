@@ -1,6 +1,6 @@
 # OBS_Textbox
 
-OBS browser view text field that can be customized via the "Custom CSS" tab — with external live control through a web dashboard.
+OBS browser view text field that can be customized via the "Custom CSS" tab — with external live control through a web dashboard or a native OBS Studio plugin.
 
 ## Ordner-Layout (drei Versionen, komplett separiert)
 
@@ -8,15 +8,41 @@ OBS browser view text field that can be customized via the "Custom CSS" tab — 
 |--------|---------|--------|
 | `main/` | **v1** | Original: `server.py` (Port 8080), `controlui/` Dashboard, `textbox.html` Overlay, Liedplan-Quellen, Tests |
 | `rewrite/` | **v2** | Neuschreibung: `server/` (http_app, forms_import, documents), `dashboard/` (ES-Modules), `tests/` (Python + JS) |
-| `plugin/` | **v3** | Native OBS-Plugin (Qt6/CMake, M0–M7h, ctest 6/6) — eigenständiges obs-plugintemplate-Projekt |
+| `plugin/` | **v3** | Native OBS-Plugin (Qt6/CMake, M0–M7h + IMP-A–E, ctest 7/7) — eigenständiges obs-plugintemplate-Projekt |
 
 Root enthält nur Projekt-Doku (`README.md`, `FUNKTIONSVERGLEICH.md`, `CODE_TODO.md`) und das floorplan-Tooling. Secrets (`*.env`, api.env, tokens) sind überall durch `.gitignore` ausgeschlossen.
+
+## Build- & Start-Anleitung für v3 (`plugin/`) und v2 (`rewrite/`)
+
+### v3 — Natives OBS-Studio-Plugin (`plugin/`)
+Kein lokaler Python-Server und kein OBS-WebSocket nötig (läuft direkt in-process als natives Qt6-Dock in OBS Studio 32.x):
+
+1. **Konfigurieren & Bauen** (Arbeitsverzeichnis `plugin/`, wo `CMakePresets.json` liegt):
+   ```powershell
+   cd plugin
+   cmake --preset windows-x64
+   cmake --build --preset windows-x64 --config RelWithDebInfo
+   ```
+2. **Unit-Tests ausführen** (7 CTest-Suiten):
+   ```powershell
+   ctest --test-dir build_x64 -C RelWithDebInfo
+   ```
+3. **Installation / Deploy nach OBS Studio**:
+   - Gebaute DLL `plugin/build_x64/RelWithDebInfo/liedplan-for-obs.dll` nach `<OBS Studio>\obs-plugins\64bit\liedplan-for-obs.dll` kopieren.
+   - Optional für andere PCs (ohne lokales Repo): `main/textbox.html` und `main/controlui/lieder.md` werden über `cmake --install` in das Plugin-Data-Verzeichnis (`<OBS Studio>\data\obs-plugins\liedplan-for-obs\`) installiert und zur Laufzeit über `obs_module_file()` aufgelöst (Reihenfolge: Settings-Override → `obs_module_file()` → Dev-Fallback).
+
+### v2 — Modulare Web-Neuschreibung (`rewrite/`)
+1. **Server starten**: `rewrite/start_server.bat` (Windows) bzw. `./rewrite/start_server.sh` (Linux/macOS) ausführen (oder `python -m rewrite.server`).
+2. **Dashboard in OBS einbinden**: Unter **Docks -> Custom Browser Docks...** die URL `http://127.0.0.1:8080/dashboard/` eintragen.
+3. **Tests ausführen**:
+   - Python: `.venv\Scripts\python.exe -m unittest discover rewrite/tests`
+   - JS: `node tests/test_js_modules.js` (aus `rewrite/`)
 
 ## Preview
 
 ![OBS Textbox Preview](main/preview.png)
 
-## How It Works
+## How It Works (v1 — `main/`)
 
 | File | Purpose |
 |------|---------|
@@ -28,7 +54,7 @@ The dashboard talks to OBS over the **OBS WebSocket server** (built into OBS 28+
 
 While the core text system works offline and serverless, using advanced features like **AI PDF Import** requires the dashboard to be served via the local web server (`start_server` scripts) because the OBS browser strictly blocks external API requests from local `file:///` paths.
 
-## Setup
+## Setup (v1 — `main/`)
 
 ### 1. Enable the OBS WebSocket Server
 
@@ -51,12 +77,13 @@ While the core text system works offline and serverless, using advanced features
 6. Open **Einstellungen** in the dashboard, enter the WebSocket password and click **Mit OBS verbinden** (auto-reconnect is on by default).
 
 > **Offline Mode (No AI PDF Import):** If you don't need the AI PDF features, you can skip starting the server and just enter the local file path directly as the URL (e.g. `file:///C:/Path/To/OBS_Textbox/main/controlui/control.html`).
+>
+> **Netzwerk-Bindung & Sicherheit (`OBS_TEXTBOX_BIND` in `main/server.py`):** Standardmäßig bindet `main/server.py` nur lokal auf Loopback (`127.0.0.1:8080`) und beschränkt `Access-Control-Allow-Origin` auf Loopback/Localhost-Origins. Zugriffe auf Punkt-Dateien (`/.…`), `.py`-Skripte und `api.env` werden von jeder IP mit `404` abgewiesen. Für den bewussten Opt-in-Zugriff im Kirchen-WLAN (z. B. vom Smartphone) kann die Umgebungsvariable `OBS_TEXTBOX_BIND=0.0.0.0` gesetzt werden (aktiviert LAN-Bindung und `Access-Control-Allow-Origin: *`).
 
 ### 3. Add the Textbox to OBS
 
 1. Add a new **Browser Source** in OBS.
 2. Check the **"Local file"** box and select the `main/textbox.html` file.
-3. Set the dimensions (e.g. Width: 800, Height: 300)
 3. Set the dimensions to at least **Width: 1200, Height: 600** (the overlay uses large padding to leave room for animations above the box — smaller values may push the textbox out of the visible area).
 4. Scroll down to the **"Custom CSS"** field.
 5. Define your `--box-id` exactly like this:

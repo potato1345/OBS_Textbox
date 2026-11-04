@@ -9,6 +9,9 @@
  * Hinweis: Qt- und libobs-frei; wird auch in Standalone-Tests (test-liedplan-state) verwendet.
  */
 
+#ifndef _CRT_SECURE_NO_WARNINGS
+#define _CRT_SECURE_NO_WARNINGS
+#endif
 #ifndef _SILENCE_CXX20_U8PATH_DEPRECATION_WARNING
 #define _SILENCE_CXX20_U8PATH_DEPRECATION_WARNING
 #endif
@@ -18,6 +21,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <cstdlib>
 #include <filesystem>
 #include <fstream>
 #include <iterator>
@@ -25,6 +29,13 @@
 #include <sstream>
 
 namespace {
+
+constexpr const char *kFallbackTokenPath =
+	"C:\\Users\\Johann\\AppData\\Local\\hermes\\google_token.json";
+constexpr const char *kFallbackLiederPath =
+	"C:\\Users\\Johann\\Desktop\\GitHub\\OBS_Textbox\\rewrite\\dashboard\\lieder.md";
+
+std::string g_module_lieder_path;
 
 std::filesystem::path to_fs_path(const std::string &utf8_path)
 {
@@ -154,6 +165,7 @@ nlohmann::json state_to_json(const LiedplanState &s)
 			 {"markitdown_python", s.settings.markitdown_python},
 			 {"animation_dir", s.settings.animation_dir},
 			 {"lieder_path", s.settings.lieder_path},
+			 {"textbox_path", s.settings.textbox_path},
 			 {"ai_system_prompt", s.settings.ai_system_prompt},
 		 }},
 		{"quick_profiles", std::move(qp_json)},
@@ -186,16 +198,24 @@ std::string state_from_json(LiedplanState &s, const nlohmann::json &root)
 		const auto &st = root["settings"];
 		if (st.contains("google_form_id") && st["google_form_id"].is_string())
 			loaded_settings.google_form_id = st["google_form_id"].get<std::string>();
-		if (st.contains("token_path") && st["token_path"].is_string())
-			loaded_settings.token_path = st["token_path"].get<std::string>();
+		if (st.contains("token_path") && st["token_path"].is_string()) {
+			const std::string tp = st["token_path"].get<std::string>();
+			if (!tp.empty())
+				loaded_settings.token_path = tp;
+		}
 		if (st.contains("openrouter_key_path") && st["openrouter_key_path"].is_string())
 			loaded_settings.openrouter_key_path = st["openrouter_key_path"].get<std::string>();
 		if (st.contains("markitdown_python") && st["markitdown_python"].is_string())
 			loaded_settings.markitdown_python = st["markitdown_python"].get<std::string>();
 		if (st.contains("animation_dir") && st["animation_dir"].is_string())
 			loaded_settings.animation_dir = st["animation_dir"].get<std::string>();
-		if (st.contains("lieder_path") && st["lieder_path"].is_string())
-			loaded_settings.lieder_path = st["lieder_path"].get<std::string>();
+		if (st.contains("lieder_path") && st["lieder_path"].is_string()) {
+			const std::string lp = st["lieder_path"].get<std::string>();
+			if (!lp.empty())
+				loaded_settings.lieder_path = lp;
+		}
+		if (st.contains("textbox_path") && st["textbox_path"].is_string())
+			loaded_settings.textbox_path = st["textbox_path"].get<std::string>();
 		if (st.contains("ai_system_prompt") && st["ai_system_prompt"].is_string())
 			loaded_settings.ai_system_prompt = st["ai_system_prompt"].get<std::string>();
 	}
@@ -309,6 +329,42 @@ bool is_valid_hex_color(const std::string &s)
 }
 
 } // namespace
+
+std::string default_google_token_path()
+{
+	const char *env = std::getenv("LOCALAPPDATA");
+	if (env && env[0] != '\0') {
+		std::string val(env);
+		while (!val.empty() && (val.back() == '\\' || val.back() == '/'))
+			val.pop_back();
+		if (!val.empty()) {
+#ifdef _WIN32
+			return val + "\\hermes\\google_token.json";
+#else
+			return val + "/hermes/google_token.json";
+#endif
+		}
+	}
+	return kFallbackTokenPath;
+}
+
+std::string default_lieder_path()
+{
+	if (!g_module_lieder_path.empty())
+		return g_module_lieder_path;
+	return kFallbackLiederPath;
+}
+
+void liedplan_set_module_lieder_path(const std::string &path)
+{
+	if (path.empty()) {
+		g_module_lieder_path.clear();
+		return;
+	}
+	std::error_code ec;
+	if (std::filesystem::exists(to_fs_path(path), ec) && !ec)
+		g_module_lieder_path = path;
+}
 
 void LiedplanState::reset()
 {

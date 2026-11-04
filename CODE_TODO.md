@@ -1,6 +1,6 @@
 # CODE_TODO — OBS_Textbox
 
-Stand: 2026-10-26 (M4-Review)
+Stand: 2026-11-04 (IMP-D abgeschlossen — ctest 7/7; IMP-A–E committet)
 Details zur Bewertung: `hermes-memory/notes/rewrite-bewertung.md` (F1–F18) — außerhalb des Repos.
 
 ## ✅ Fertig (T5-Batch 2026-10-22/23)
@@ -26,12 +26,12 @@ Details zur Bewertung: `hermes-memory/notes/rewrite-bewertung.md` (F1–F18) —
 - [x] **Einheitlicher Import-Dialog:** AI (PDF/Word) + Datei (CSV/XLSX/ZIP) + Google Forms als Tabs in `#import-dialog`; Formular-Abruf listet **alle** Einreichungen (neueste zuerst) mit Auswahl-Dropdown, gemeinsame HTML-maskierte Vorschau.
 - [x] **`app.js`** an die neue Modul-API synchronisiert (`initImportModal`, `import-dialog`, `btn-open-import`).
 
-## ☐ Offen
+## ☐ Offen / Abgeschlossene Großpunkte
 
-- [ ] **T7 — Standalone OBS-Plugin:** `plugin/` mit C++/CMake/MSVC-Umsetzung (Karten-Anzeige + Import), KEIN lokaler Python-Server, externe Verbindungen erlaubt (Google Forms API, OpenRouter); README mit Build-Anleitung. → **M1–M4 fertig (Commit 2026-10-26)**; offener Rest siehe „Echtes Formular-End-to-End“.
+- [x] **T7 — Standalone OBS-Plugin:** `plugin/` mit C++/CMake/MSVC-Umsetzung (Karten-Anzeige + Import), KEIN lokaler Python-Server, externe Verbindungen erlaubt (Google Forms API, OpenRouter); README mit Build-Anleitung. → **FERTIG (M0–M7h + Ui1–Ui4 + IMP-A–E; Feature-Parität vollständig, README hat Build-/Deploy-Anleitung)**; offener Rest nur: OpenRouter-Key in `main/api.env` (User-Aktion; Offline-Fallback aktiv).
+- [x] ~~**T6 (Repo-Außen):** Vollständige Repo-Kopie auf den Desktop~~ — **vom User verworfen (2026-10-23)**, nicht umsetzen.
 - [ ] **Echtes Formular-End-to-End:** Liedplan-Formular einmal ausfüllen → `GET /api/forms/responses` mit echten Daten testen + echten CSV-Export aus Google importieren.
-- [ ] **Optional (nur auf Wunsch):** Wochenplan-Auswahl — mehrere Gottesdienste pro Woche parallel auswählen.
-- [ ] **T6 (Repo-Außen):** Vollständige Repo-Kopie auf den Desktop (`OBS_Textbox-Kopie`, inkl. `.git`, ohne `.venv`) — erst nach T5+T7 ansetzen.
+- [x] **Optional (nur auf Wunsch):** Wochenplan-Auswahl — mehrere Gottesdienste pro Woche parallel auswählen (in IMP-B via `ImportResult.services` + Auswahl-ComboBox umgesetzt).
 
 ## 🔎 M4 5-Achsen-Review (2026-10-26, Hermes selbst — Gemini-Free-Tier-Sperre)
 
@@ -39,12 +39,12 @@ Diff: XLSX/ZIP-Import (Mini-ZIP + Mini-XML + zlib), Backup/Restore, Schnell-Prof
 Ergebnis: **Approve, kein Blocker.** ctest 4/4, import 19/19, state 15/15. E2E per computer_use: Schnell-Profile speichern/löschen im LIVE-OBS-Dock, Status-Labels + Persistenz verifiziert.
 
 ### Korrektheit (sollte fixen, nicht blockierend)
-- [ ] **M4-K1:** `inflate_data()` in `liedplan-import.cpp` — keine harte Obergrenze für dekomprimierte Größe (zip-bomb-DoS per lokaler Datei: kleines ZIP → mehr-GB-Allokation). Vorschlag: Cap ~256 MB, bei Überschreitung `nullopt` + deutscher Fehler „Datei im Archiv zu groß“.
+- [x] **M4-K1:** `inflate_data()` in `liedplan-import.cpp` — harte Obergrenze (64 MB pro Eintrag + Archiv-Budget) in IMP-A ergänzt.
 
 ### Trimmen (niedrige Priorität, als Batch)
 - [ ] **M4-T1:** `build_zip_archive()` ist nur Test-Hilfe, steht aber im öffentlichen `liedplan-import.hpp` (exportiert von der Produktions-DLL). Können in Test-Helper wandern.
-- [ ] **M4-T2:** Import-Dialog: Form-ID/Token-Pfad-Fields rufen `save_state()` pro Tastendruck (Disk-Write/Keystroke). Besser: bei blur/Dialog-Schließen speichern.
-- [ ] **M4-T3:** `decode_xml_entities()`: Surrogate-CPs (0xD800–0xDFFF) nicht verworfen → invalides UTF-8 nur bei defektem XLSX.
+- [x] **M4-T2:** Import-Dialog: Form-ID/Token-Pfad-Fields speichern auf `editingFinished` statt `textChanged` (IMP-C).
+- [x] **M4-T3:** `decode_xml_entities()`: Surrogate-CPs (0xD800–0xDFFF) werden abgefangen und durch `U+FFFD` ersetzt (IMP-A).
 
 ### Positiv (NICHT antasten)
 - EOCD-Backward-Scan mit Comment-Länge-Toleranz + uint64-Overflow-Guards (`cd_offset+cd_size`).
@@ -59,10 +59,10 @@ Diff: Animationen A10 (State-Felder + `normalize_anim_src` + `build_inject_css`/
 Ergebnis: **Approve, kein Blocker.** ctest 5/5 (neu `liedplan-ai`), state-Suite 18 Checks grün.
 
 ### Korrektheit (minor, nicht blockierend)
-- [ ] **M5-1:** `path_to_file_url()` in `liedplan-html.cpp` percent-encodiert nur `\` und Leerzeichen — nicht-ASCII-Dateinamen (Umlaute) landen roh im `file://`-URL. Aktuelle Animationen (`1_advent.gif` …) sind ASCII, daher unkritisch; bei Umlaut-Datei würde CEF das Laden verweigern.
+- [x] **M5-1:** `path_to_file_url()` in `liedplan-html.cpp` percent-encodiert alle Nicht-Unreserved-Zeichen inkl. Umlaute (`%C3%BC`, M5.1).
 - [ ] **M5-2:** AI-Test 10a (`extract_document_text`) verlangt Repo-`.venv` + markitdown — ohne Venv wird ctest rot (maschinenabhängig). Besser: Venv-Check → Test sauber skippen (PASS mit Vermerk).
-- [ ] **M5-3:** Worker-Threads (AI- + CSV-Import) prüfen `QPointer` kurz vor `QMetaObject::invokeMethod` — enges Race-Fenster (Dock-Zerstörung zwischen Check und Post). Modaler Dialog hält den Dock in der Praxis am Leben; Musters aus M3, hier nur dokumentiert.
-- [ ] **M5-4:** `extract_document_text()` in `liedplan-ai.cpp`: Kommandozeile mit einfachem `%s`-Quoting — Dateinamen mit Doppel-Quote brechen die Kommandokonstruktion (lokale Datei, vom User gewählt; Low). Besser: `"` in `""` escapen oder Argument-Passing ohne Shell.
+- [x] **M5-3:** Worker-Threads über `cancel_`-Token + `ActiveJobGuard` / `g_active_jobs` in `obs_module_unload()` abgesichert (IMP-E).
+- [x] **M5-4:** `extract_document_text()` in `liedplan-ai.cpp`: sicheres Win32-Argument-Quoting (`quote_win32_arg`, IMP-A).
 
 ### Positiv (NICHT antasten)
 - AI-Flow auf `std::thread` + `Qt::QueuedConnection` — UI-Thread nie blockiert (Worst-Case ~14 min Retry-Chain läuft im Hintergrund).
@@ -71,15 +71,24 @@ Ergebnis: **Approve, kein Blocker.** ctest 5/5 (neu `liedplan-ai`), state-Suite 
 - State-Backward-Compat: alle 5 Anim-Felder + 5 Settings nur `contains()`-geprüft geladen; Legacy-State lädt unverändert.
 - Retry-Logik 1:1 v2 (429/502/503/504/524/529, 2 Versuche/Modell, 6 Modelle, 3 s Pause); Offline-Fallback bei LLM-Fehler UND bei leerem Key.
 
-## 🔎 M7 5-Achsen-Review (2026-10-30, Hermes — eigenverifiziert: Build RelWithDebInfo grün, ctest 6/6 selbst ausgeführt; agy-Run proc_36439f76c223 nur Build/ctest/Report)
+## 🔎 M7–M7h 5-Achsen-Review & UI-Abschluss (2026-10-30 bis 2026-11-04)
 
-Diff: Dock-Nativisierung R2 — schmalere Ränder (root 8→4, Karten-Container 8→4, Panel-Innen 16→10, ID-Leiste 12/6→8/4), Toolbar nach unten (4× QToolButton Icons-only, Settings-QMenu mit Schnell-Profile/Einstellungen/Backup/Restore), Top-Row mit `profil_select_` + `card_search_` (QCompleter-Search, MatchContains, case-insensitiv), per-Karte einklappbare Stil-Sektion (`lpStyleSection` default-einklapppt, Chevron-Toggle), 2 neue Chevron-SVGs + `kVersion` 1→2. 5 Allow-List-Dateien, +411/−130.
-Ergebnis: **Approve, kein Blocker.** ctest 6/6 (theme-icons-Suite um Chevron-Checks erweitert).
+Diff M7: Dock-Nativisierung R2 — schmalere Ränder (root 8→4, Karten-Container 8→4, Panel-Innen 16→10, ID-Leiste 12/6→8/4), Toolbar nach unten (4× QToolButton Icons-only, Settings-QMenu mit Schnell-Profile/Einstellungen/Backup/Restore), Top-Row mit `profil_select_` + `card_search_` (QCompleter-Search, MatchContains, case-insensitiv), per-Karte einklappbare Stil-Sektion (`lpStyleSection` ab M7b default-sichtbar, Chevron-Toggle), 2 neue Chevron-SVGs + `kVersion` 1→2.
+Ergebnis: **Approve, kein Blocker.** ctest 7/7 (inkl. `liedplan-theme-icons` und `test-liedplan-html`).
+
+### Erledigte Meilensteine M7b–M7h
+- [x] **M7b (`7ad504a`):** 1px-Boxrand (Doppelrahmen entfernt), redundanten „Entf.“-Button entfernt, 1px-Fensterrand, `lpStyleSection` default-sichtbar (Chevron-Toggle bleibt).
+- [x] **M7c (`8eb231d`):** Dock-Fensterrand klarer (`#464B59` → `#5B6273`, 1px).
+- [x] **M7d (`90e25fd`):** Dock-Fensterrand dezent wie PTZ-Plugin (1px `#0F1013`).
+- [x] **M7e (`7d097c9`):** Dock-Innenrand entfernt — QSS-Border rendert in der Clientfläche, Kante pixelidentisch mit PTZ.
+- [x] **M7f (`32fc830`):** Dock-Rand 1px `#3C404D` — gleiche Dicke/Farbe wie Box-Rand.
+- [x] **M7g (`a32cf2d` + `fbca542`):** Abgerundete Kartenecken unten (10px/9px per-Ecke `border-radius`), Trash-Icon in Karten-ID-Leiste, Profil-Lösch-Button im oberen Dropdown.
+- [x] **M7h (`1ea454f`):** Abgerundete untere Fensterecken des Docks (10px, inkl. `LiedplanFloatRoundedHelper` im Floating-Zustand).
 
 ### Trimmen (niedrige Priorität, Batch-Kandidat)
 - [ ] **M7-1:** Label-Format `"id · titel"` (20-Zeichen-Truncation) ist 2× dupliziert (zeile3-`textChanged`-Lambda + `refresh_top_row`) — kleiner Helper `card_search_label(card)` in dock.cpp deduplizieren.
 - [ ] **M7-2:** `flash_row` testet `style_section`-Äquivalent via `isVisible()` statt `isHidden()` (Chevron-Toggle-Lambda) — bei verstecktem Dock (Parent-Chain) flippt das Icon vor dem tatsächlichen State-Change; self-correcting, aber `isHidden()` wäre robuster.
-- [ ] **M7-3:** Quick-Profiles-Dialog „Übernehmen“ meldet „Schnell-Profil übernommen“ auch, wenn `apply_quick_profile(name)` fehlschlägt (Name nicht gefunden) — Dialog-Lambda bekommt keinen bool zurück; in Praxis kein Race (Name kommt direkt aus `state_`), Low.
+- [x] **M7-3:** Quick-Profiles-Status-Feedback im Header beim Laden ergänzt (`Profil "…" geladen`, IMP-A).
 
 ### Positiv (NICHT antasten)
 - `refresh_top_row()` mit `QSignalBlocker` + `prev_text`-Restore der Such-LineEdits — kein Cursor-Sprung/Signal-Feedback beim Rebuild.

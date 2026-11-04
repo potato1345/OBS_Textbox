@@ -60,13 +60,22 @@ struct LiedplanCard {
 	}
 };
 
+// Ermittelt den Standardpfad für google_token.json über %LOCALAPPDATA%/hermes/google_token.json
+// mit Fallback auf den bestehenden Entwickler-Pfad.
+std::string default_google_token_path();
+
+// Ermittelt den Standardpfad für lieder.md (obs_module_file-Auflösung falls vorhanden, sonst Dev-Fallback).
+std::string default_lieder_path();
+void liedplan_set_module_lieder_path(const std::string &path);
+
 struct LiedplanSettings {
 	std::string google_form_id = "1jreAuzd-jt1x48WDmjaP7v0OusdVO2lb55Kt4JrhEgY";
-	std::string token_path = "C:\\Users\\Johann\\AppData\\Local\\hermes\\google_token.json";
+	std::string token_path = default_google_token_path();
 	std::string openrouter_key_path = "C:\\Users\\Johann\\Desktop\\GitHub\\OBS_Textbox\\main\\api.env";
 	std::string markitdown_python = "C:\\Users\\Johann\\Desktop\\GitHub\\OBS_Textbox\\.venv\\Scripts\\python.exe";
 	std::string animation_dir = "C:\\Users\\Johann\\Desktop\\GitHub\\OBS_Textbox\\animation";
-	std::string lieder_path = "C:\\Users\\Johann\\Desktop\\GitHub\\OBS_Textbox\\rewrite\\dashboard\\lieder.md";
+	std::string lieder_path = default_lieder_path();
+	std::string textbox_path = ""; // leer = obs_module_file("textbox.html") -> Dev-Fallback kRepoTextboxPath
 	std::string ai_system_prompt = ""; // leer = LiedplanAi::kDefaultSystemPrompt verwenden
 
 	bool operator==(const LiedplanSettings &other) const
@@ -75,6 +84,7 @@ struct LiedplanSettings {
 		       openrouter_key_path == other.openrouter_key_path &&
 		       markitdown_python == other.markitdown_python &&
 		       animation_dir == other.animation_dir && lieder_path == other.lieder_path &&
+		       textbox_path == other.textbox_path &&
 		       ai_system_prompt == other.ai_system_prompt;
 	}
 };
