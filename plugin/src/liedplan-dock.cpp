@@ -176,15 +176,14 @@ load_song_reference(const std::string &lieder_path)
 	return liedplan_ai::parse_song_reference(ss.str());
 }
 
-// Erzeugt eine Standardkarte für Index i (box1..boxN) mit Standardprofil "OBS Dark".
+// Erzeugt eine Standardkarte für Index i (box1..boxN) mit Standardprofil "Karte Dunkel".
 LiedplanCard make_default_card(std::size_t i)
 {
 	LiedplanCard c;
 	c.id = "box" + std::to_string(i + 1);
-	c.profile = "OBS Dark";
+	c.profile = "Karte Dunkel";
 	if (const LiedplanProfile *prof = profile_by_name(c.profile)) {
-		c.text_color = prof->text_color;
-		c.box_color = prof->box_color;
+		profile_apply(*prof, c);
 	}
 	return c;
 }
@@ -247,12 +246,17 @@ LiedplanDock::LiedplanDock(const std::string &state_path, QWidget *parent)
 	profil_select_->setEditable(true);
 	profil_select_->setInsertPolicy(QComboBox::NoInsert);
 	profil_select_->setMinimumWidth(160);
+	profil_select_->setToolTip(
+		QStringLiteral("Schnellprofile-Liste (gespeicherte Karten-Sets, nicht Kartenfarben)"));
 	if (QCompleter *c = profil_select_->completer()) {
 		c->setCaseSensitivity(Qt::CaseInsensitive);
 		c->setFilterMode(Qt::MatchContains);
 	}
 	if (profil_select_->lineEdit()) {
-		profil_select_->lineEdit()->setPlaceholderText(QStringLiteral("Profil suchen…"));
+		profil_select_->lineEdit()->setPlaceholderText(
+			QStringLiteral("Schnellprofil suchen…"));
+		profil_select_->lineEdit()->setToolTip(
+			QStringLiteral("Schnellprofile-Liste (gespeicherte Karten-Sets, nicht Kartenfarben)"));
 	}
 
 	card_search_ = new QComboBox(this);
@@ -636,30 +640,35 @@ void LiedplanDock::create_row_widget(const LiedplanCard &card)
 
 	auto *lbl_prof = new QLabel(QStringLiteral("PROFIL"), style_section);
 	lbl_prof->setObjectName(QStringLiteral("lpFieldLabel"));
+	lbl_prof->setToolTip(
+		QStringLiteral("Karten-Farbprofil (Text/Box/Ecken/Deckkraft)"));
 
 	auto *prof_row = new QHBoxLayout();
 	prof_row->setContentsMargins(0, 0, 0, 0);
 	prof_row->setSpacing(6);
 
 	/*
-	 * M6-B2: Dropdown füllt mit 6 Standard-Profilen + Custom-Profilen aus
+	 * M6-B2 / F1: Dropdown füllt mit 6 Standard-Profilen + Custom-Profilen aus
 	 * state_.color_profiles. Zeigt card.profile auf ein gelöschtes Profil,
 	 * bleibt das harmlos: die auf der Karte gebakten Farben (text_color /
 	 * box_color) werden NICHT automatisch zurückgesetzt.
 	 */
 	auto *profile_combo = new QComboBox(style_section);
 	profile_combo->setFixedHeight(34);
+	profile_combo->setToolTip(
+		QStringLiteral("Karten-Farbprofil (Text/Box/Ecken/Deckkraft)"));
 	int selected_index = 0;
+	const std::string canonical_prof = profile_name_canonical(card.profile);
 	const auto &profiles = liedplan_profiles();
 	for (size_t i = 0; i < profiles.size(); ++i) {
 		profile_combo->addItem(QString::fromUtf8(profiles[i].name.c_str()));
-		if (profiles[i].name == card.profile)
+		if (profiles[i].name == canonical_prof)
 			selected_index = static_cast<int>(i);
 	}
 	for (size_t i = 0; i < state_.color_profiles.size(); ++i) {
 		const auto &cp = state_.color_profiles[i];
 		profile_combo->addItem(QString::fromUtf8(cp.name.c_str()));
-		if (cp.name == card.profile)
+		if (cp.name == canonical_prof || cp.name == card.profile)
 			selected_index = static_cast<int>(profiles.size() + i);
 	}
 	profile_combo->setCurrentIndex(selected_index);
@@ -668,7 +677,7 @@ void LiedplanDock::create_row_widget(const LiedplanCard &card)
 	new_prof_btn->setObjectName(QStringLiteral("lpBtnNewProfile"));
 	new_prof_btn->setFixedHeight(34);
 	new_prof_btn->setToolTip(
-		QStringLiteral("Aktuelle Text-/Box-Farbe dieser Karte als Profil speichern"));
+		QStringLiteral("Aktuelles Karten-Farbprofil (Text/Box/Ecken/Deckkraft) speichern"));
 
 	prof_row->addWidget(profile_combo, 1);
 	prof_row->addWidget(new_prof_btn);
@@ -1007,20 +1016,37 @@ void LiedplanDock::create_row_widget(const LiedplanCard &card)
 	});
 
 	connect(profile_combo, &QComboBox::currentTextChanged, this,
-		[this, card_id, text_color_btn, box_color_btn, schedule_save](const QString &profile_text) {
+		[this, card_id, text_color_btn, box_color_btn, color_a_btn, color_b_btn,
+		 opacity_a_slider, opacity_b_slider, text_opacity_slider, box_opacity_slider,
+		 rainbow_cb, schedule_save](const QString &profile_text) {
 			if (LiedplanCard *c = find_card_mut(card_id)) {
 				c->profile = profile_text.toUtf8().toStdString();
 				if (const LiedplanProfile *prof =
 					    liedplan_profile_lookup(c->profile, state_.color_profiles)) {
-					c->text_color = prof->text_color;
-					c->box_color = prof->box_color;
+					profile_apply(*prof, *c);
 				}
-				// M6-A8: Profil-Dropdown = Reset auf Profilsatz → Button-Labels
-				// auf die (neuen) Werte aktualisieren.
+				// M6-A8 / F1: Profil-Dropdown = Reset auf kompletten Profilsatz →
+				// Button-Labels, Ecken, Deckkraft-Slider und Regenbogen aktualisieren.
 				text_color_btn->setText(QString::fromUtf8(
 					(c->text_color.empty() ? "#000000" : c->text_color).c_str()).toUpper());
 				box_color_btn->setText(QString::fromUtf8(
 					(c->box_color.empty() ? "#ffffff" : c->box_color).c_str()).toUpper());
+				color_a_btn->setText(QString::fromUtf8(
+					(c->corner_color_a.empty() ? "#fce647" : c->corner_color_a).c_str()).toUpper());
+				color_b_btn->setText(QString::fromUtf8(
+					(c->corner_color_b.empty() ? "#fce647" : c->corner_color_b).c_str()).toUpper());
+				{
+					const QSignalBlocker b1(opacity_a_slider);
+					const QSignalBlocker b2(opacity_b_slider);
+					const QSignalBlocker b3(text_opacity_slider);
+					const QSignalBlocker b4(box_opacity_slider);
+					const QSignalBlocker b5(rainbow_cb);
+					opacity_a_slider->setValue(std::clamp(c->corner_opacity_a, 0, 255));
+					opacity_b_slider->setValue(std::clamp(c->corner_opacity_b, 0, 255));
+					text_opacity_slider->setValue(std::clamp(c->text_opacity, 0, 255));
+					box_opacity_slider->setValue(std::clamp(c->box_opacity, 0, 255));
+					rainbow_cb->setChecked(c->rainbow_corners);
+				}
 				schedule_save();
 			}
 		});
@@ -1049,7 +1075,18 @@ void LiedplanDock::create_row_widget(const LiedplanCard &card)
 			return;
 		const std::string tc = c->text_color.empty() ? "#000000" : c->text_color;
 		const std::string bc = c->box_color.empty() ? "#ffffff" : c->box_color;
-		LiedplanProfile prof{name_utf8, tc, bc};
+		LiedplanProfile prof{
+			name_utf8,
+			tc,
+			bc,
+			c->corner_color_a.empty() ? "#fce647" : c->corner_color_a,
+			c->corner_color_b.empty() ? "#fce647" : c->corner_color_b,
+			c->corner_opacity_a,
+			c->corner_opacity_b,
+			c->text_opacity,
+			c->box_opacity,
+			c->rainbow_corners,
+		};
 		auto it = std::find_if(state_.color_profiles.begin(), state_.color_profiles.end(),
 				       [&name_utf8](const LiedplanProfile &p) {
 					       return p.name == name_utf8;
@@ -2620,11 +2657,19 @@ void LiedplanDock::on_open_settings_dialog()
 
 	root->addWidget(m5_group);
 
-	// Gruppe 3 (M6-B2/B3): Eigene Farbprofile + YAML-Export/Import
+	// Gruppe 3 (M6-B2/B3 / F1): Dock-Theme & Eigene Karten-Farbprofile + YAML-Export/Import
 	auto *profiles_group = new QGroupBox(QStringLiteral("Farbprofile"), &dlg);
 	auto *profiles_layout = new QVBoxLayout(profiles_group);
 	profiles_layout->setContentsMargins(12, 16, 12, 12);
 	profiles_layout->setSpacing(8);
+
+	/* F1: Das Dock-Theme ist aktuell fest OBS Yami Dark (liedplan-theme.hpp) —
+	 * kein umschaltbares Preset. Statische Info-Zeile statt eines funktionslosen
+	 * Combos; getrennt von den Karten-Farbprofilen, die hier darunter stehen. */
+	auto *lbl_dock_theme = new QLabel(QStringLiteral("Dock-Theme: OBS Yami Dark"), profiles_group);
+	lbl_dock_theme->setObjectName(QStringLiteral("lpFieldLabel"));
+	lbl_dock_theme->setToolTip(
+		QStringLiteral("Färbt ausschließlich die Dock-Widgets im OBS-Panel (nicht die Kartenfarben)"));
 
 	auto *lbl_custom_profiles = new QLabel(QStringLiteral("EIGENE FARBPROFILE"), profiles_group);
 	lbl_custom_profiles->setObjectName(QStringLiteral("lpFieldLabel"));
@@ -2656,6 +2701,7 @@ void LiedplanDock::on_open_settings_dialog()
 	yaml_btn_row->addWidget(export_yaml_btn, 1);
 	yaml_btn_row->addWidget(import_yaml_btn, 1);
 
+	profiles_layout->addWidget(lbl_dock_theme);
 	profiles_layout->addWidget(lbl_custom_profiles);
 	profiles_layout->addWidget(profile_list);
 	profiles_layout->addWidget(del_prof_btn);

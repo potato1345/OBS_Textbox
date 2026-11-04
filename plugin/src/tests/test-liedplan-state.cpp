@@ -63,7 +63,7 @@ int main()
 		c.zeile1 = "467";
 		c.zeile2 = "1+3";
 		c.zeile3 = "Übermorgen 1 — Freu dich sehr, o meine Seele";
-		c.profile = "Forest Green";
+		c.profile = "Karte Wald";
 		c.text_color = "#d4e0d0";
 		c.text_opacity = 240;
 		c.box_color = "#344530";
@@ -141,6 +141,11 @@ int main()
 			  s.cards[0].zeile2 == "1-4" && s.cards[0].zeile3 == "Lobet den Herrn";
 		check(ok, "4. unknown Felder im JSON werden ignoriert, bekannte bleiben erhalten",
 		      err);
+		// F1-Migration: Legacy-String "OBS Dark" im alten JSON -> kanonischer neuer Name
+		check(s.cards.size() == 1 && s.cards[0].profile == "Karte Dunkel",
+		      "4b. F1 Legacy-Migration: Karten-Profil -> kanonischer Name", s.cards[0].profile);
+		check(s.active_profile == "Karte Dunkel",
+		      "4c. F1 Legacy-Migration: active_profile Default -> Karte Dunkel");
 	}
 
 	// 5. 3 Karten anlegen (Box-Id-Regel): box1, box2, box3; box1 löschen; neu anlegen -> box4
@@ -178,29 +183,34 @@ int main()
 	{
 		const auto &profiles = liedplan_profiles();
 		bool ok = (profiles.size() == 6) &&
-			  (profiles[0].name == "OBS Dark" && profiles[0].text_color == "#eff0f1" &&
+			  (profiles[0].name == "Karte Dunkel" && profiles[0].text_color == "#eff0f1" &&
 			   profiles[0].box_color == "#3C404D") &&
-			  (profiles[1].name == "OBS Light" && profiles[1].text_color == "#1a1a1a" &&
+			  (profiles[1].name == "Karte Hell" && profiles[1].text_color == "#1a1a1a" &&
 			   profiles[1].box_color == "#d5d5d5") &&
-			  (profiles[2].name == "Midnight Blue" &&
+			  (profiles[2].name == "Karte Mitternacht" &&
 			   profiles[2].text_color == "#c9d1d9" &&
 			   profiles[2].box_color == "#252d3a") &&
-			  (profiles[3].name == "Forest Green" &&
+			  (profiles[3].name == "Karte Wald" &&
 			   profiles[3].text_color == "#d4e0d0" &&
 			   profiles[3].box_color == "#344530") &&
-			  (profiles[4].name == "Sunset Warm" &&
+			  (profiles[4].name == "Karte Sonne" &&
 			   profiles[4].text_color == "#f0ddd0" &&
 			   profiles[4].box_color == "#3d2a20") &&
-			  (profiles[5].name == "High Contrast" &&
+			  (profiles[5].name == "Karte Kontrast" &&
 			   profiles[5].text_color == "#ffffff" &&
 			   profiles[5].box_color == "#222222");
-		check(ok, "7. liedplan_profiles(): genau 6 Profile mit exakten Namen und Farben");
+		// F1: erweiterte Felder haben Karten-Defaults
+		for (const auto &p : profiles)
+			ok = ok && p.corner_a == "#fce647" && p.corner_b == "#fce647" &&
+			       p.corner_op_a == 255 && p.corner_op_b == 255 &&
+			       p.text_opacity == 255 && p.box_opacity == 255 && p.rainbow == false;
+		check(ok, "7. liedplan_profiles(): genau 6 Profile \"Karte …\" mit exakten Farben und Ecken-Defaults");
 	}
 
 	// 8. profile_by_name("nicht da") -> nullptr (+ bekannter Name wird gefunden)
 	{
 		const LiedplanProfile *missing = profile_by_name("nicht da");
-		const LiedplanProfile *hc = profile_by_name("High Contrast");
+		const LiedplanProfile *hc = profile_by_name("Karte Kontrast");
 		bool ok = (missing == nullptr) && (hc != nullptr) && (hc->text_color == "#ffffff") &&
 			  (hc->box_color == "#222222");
 		check(ok, "8. profile_by_name(\"nicht da\") -> nullptr");
@@ -242,7 +252,7 @@ int main()
 		c.zeile1 = "123";
 		c.zeile2 = "1-2";
 		c.zeile3 = "Lobe den Herren";
-		c.profile = "Midnight Blue";
+		c.profile = "Karte Mitternacht";
 		c.text_color = "#c9d1d9";
 		c.text_opacity = 220;
 		c.box_color = "#252d3a";
@@ -304,7 +314,7 @@ int main()
 			  s.cards[0].id == "box3" && s.cards[0].zeile1 == "290" &&
 			  s.cards[0].zeile2 == "1-4" &&
 			  s.cards[0].zeile3 == "Großer Gott, wir loben dich" &&
-			  s.cards[0].profile == "OBS Dark" &&
+			  s.cards[0].profile == "Karte Dunkel" &&
 			  s.cards[0].text_color == "#eff0f1" &&
 			  s.cards[0].text_opacity == 255 &&
 			  s.cards[0].box_color == "#3C404D" &&
@@ -322,7 +332,7 @@ int main()
 	{
 		const std::string backup_path = (temp_dir / "backup_m4.json").u8string();
 		LiedplanState s1;
-		s1.active_profile = "Midnight Blue";
+		s1.active_profile = "Karte Mitternacht";
 		s1.settings.google_form_id = "custom_form_id_123";
 		s1.settings.token_path = "C:\\custom\\path\\token.json";
 
@@ -348,7 +358,7 @@ int main()
 				(s1 == s2) &&
 				(s2.settings.google_form_id == "custom_form_id_123") &&
 				(s2.settings.token_path == "C:\\custom\\path\\token.json") &&
-				(s2.active_profile == "Midnight Blue") &&
+				(s2.active_profile == "Karte Mitternacht") &&
 				(s2.quick_profiles.size() == 1);
 		check(ok, "13. M4 Backup-Roundtrip: Tiefenvergleich (nlohmann == und struct ==)",
 		      save_err + " " + restore_err);
@@ -362,7 +372,7 @@ int main()
 		c1.zeile1 = "144";
 		c1.zeile2 = "1-3";
 		c1.zeile3 = "Sonntagslied";
-		c1.profile = "Forest Green";
+		c1.profile = "Karte Wald";
 		s1.save_quick_profile("So 19.10.");
 
 		// Jetzt aktuellen State verändern (andere Karten)
@@ -386,7 +396,7 @@ int main()
 			applied && s2.cards.size() == 1 && s2.cards[0].id == "box1" &&
 			s2.cards[0].zeile1 == "144" && s2.cards[0].zeile2 == "1-3" &&
 			s2.cards[0].zeile3 == "Sonntagslied" &&
-			s2.cards[0].profile == "Forest Green";
+			s2.cards[0].profile == "Karte Wald";
 
 		check( save_err.empty() && before_apply && after_apply,
 		      "14. M4 Schnellprofil-Roundtrip: Speichern, Laden und Apply ersetzt cards komplett",
@@ -427,7 +437,7 @@ int main()
 		bool ok = err.empty() && s.next_id == 3 && s.cards.size() == 1 &&
 			  s.cards[0].id == "box1" && s.cards[0].zeile1 == "175" &&
 			  s.cards[0].zeile3 == "Halleluja!" &&
-			  s.active_profile == "OBS Dark" &&
+			  s.active_profile == "Karte Dunkel" &&
 			  s.settings == default_settings &&
 			  s.quick_profiles.empty();
 
@@ -519,6 +529,8 @@ int main()
 		const LiedplanSettings def_settings;
 		const bool ok =
 			err.empty() && s.cards.size() == 1 &&
+			s.active_profile == "Karte Dunkel" &&
+			s.cards[0].profile == "Karte Dunkel" &&
 			s.cards[0].anim_file.empty() &&
 			s.cards[0].show_anim == false &&
 			s.cards[0].anim_scale == 3 &&
@@ -551,7 +563,7 @@ int main()
 		const std::string v2_yaml = R"(# ============================================================
 # OBS Textbox Farbprofil (v2 18-Key Export)
 # ============================================================
-name: "Midnight Blue"
+name: "Karte Mitternacht"
 colors:
   bgPrimary: "#0d1117"
   bgPrimaryOpacity: 255
@@ -575,7 +587,7 @@ colors:
 		LiedplanProfile parsed;
 		std::string err;
 		const bool ok = liedplan_yaml_to_profile(v2_yaml, parsed, err) && err.empty() &&
-				parsed.name == "Midnight Blue" &&
+				parsed.name == "Karte Mitternacht" &&
 				parsed.text_color == "#c9d1d9" &&
 				parsed.box_color == "#252d3a";
 		check(ok, "19. M6-B3 v2-18-Key-YAML-Import: extrahiert exakt textColor + cardOuterBg, ignoriert übrige 16 Keys",
@@ -619,19 +631,30 @@ colors:
 	// 22. (M6-B2 #5) Lookup: Standard vor Custom, Custom gefunden, unbekannter Name -> nullptr
 	{
 		const std::vector<LiedplanProfile> custom = {
-			{"OBS Dark", "#111111", "#222222"},
+			{"Karte Dunkel", "#111111", "#222222"},
 			{"Kirchen-Gold", "#fce647", "#2a1f0d"},
 		};
-		const LiedplanProfile *std_hit = liedplan_profile_lookup("OBS Dark", custom);
+		const LiedplanProfile *std_hit = liedplan_profile_lookup("Karte Dunkel", custom);
 		const LiedplanProfile *cust_hit = liedplan_profile_lookup("Kirchen-Gold", custom);
 		const LiedplanProfile *miss = liedplan_profile_lookup("Unbekannt", custom);
 
 		const bool ok = (std_hit != nullptr && std_hit->text_color == "#eff0f1" &&
-				 std_hit->box_color == "#3C404D") &&
-				(cust_hit != nullptr && cust_hit->text_color == "#fce647" &&
-				 cust_hit->box_color == "#2a1f0d") &&
-				(miss == nullptr);
+					 std_hit->box_color == "#3C404D") &&
+					(cust_hit != nullptr && cust_hit->text_color == "#fce647" &&
+					 cust_hit->box_color == "#2a1f0d") &&
+					(miss == nullptr);
 		check(ok, "22. M6-B2 Lookup: Standard vor Custom, Custom wird gefunden, Unbekannt -> nullptr");
+
+		// F1: Legacy-Aliase funktionieren in Lookup und profile_by_name (case-insensitive)
+		const LiedplanProfile *alias1 = profile_by_name("OBS Dark");
+		const LiedplanProfile *alias2 = profile_by_name("high contrast");
+		const LiedplanProfile *alias3 = liedplan_profile_lookup("Forest Green", custom);
+		check(alias1 != nullptr && alias1->name == "Karte Dunkel" && alias1->box_color == "#3C404D",
+		      "22b. F1 Alias profile_by_name(\"OBS Dark\") -> Karte Dunkel");
+		check(alias2 != nullptr && alias2->name == "Karte Kontrast",
+		      "22c. F1 Alias case-insensitive -> Karte Kontrast");
+		check(alias3 != nullptr && alias3->name == "Karte Wald",
+		      "22d. F1 Alias lookup(\"Forest Green\") -> Karte Wald");
 	}
 
 	// 23. (M6-B2 #6) State-Seriale: 2 Custom-Profile -> save -> load -> identisch; JSON ohne Key -> leer; reset() -> leer
@@ -668,6 +691,90 @@ colors:
 		      save_err + " " + load_err + " " + back_err);
 	}
 
+	// 24. (F1) YAML-Roundtrip mit erweiterten Feldern + 2-Feld-Profil ohne Extra-Keys -> Defaults
+	{
+		const LiedplanProfile ext{"Goldprofil", "#fce647", "#2a1f0d", "#ff0000", "#00ff00",
+		                          128, 64, 220, 200, true};
+		const std::string yaml_ext = liedplan_profile_to_yaml(ext);
+		LiedplanProfile parsed_ext;
+		std::string err_ext;
+		const bool ext_ok = liedplan_yaml_to_profile(yaml_ext, parsed_ext, err_ext) &&
+		                    err_ext.empty() && (parsed_ext == ext);
+
+		const LiedplanProfile duo{"Zweifelder", "#aabbcc", "#ddeeff"};
+		const std::string yaml_duo = liedplan_profile_to_yaml(duo);
+		LiedplanProfile parsed_duo;
+		std::string err_duo;
+		const bool duo_ok = liedplan_yaml_to_profile(yaml_duo, parsed_duo, err_duo) &&
+		                    err_duo.empty() && (parsed_duo == duo) &&
+		                    parsed_duo.corner_a == "#fce647" && parsed_duo.rainbow == false;
+		check(ext_ok && duo_ok, "24. F1 YAML-Roundtrip: erweiterte Felder + 2-Feld-Profil -> Defaults",
+		      err_ext + " | " + err_duo);
+	}
+
+	// 25. (F1) profile_apply schreibt alle Kartenfelder; 2-Feld-Profil -> Defaults; operator== vergleicht Ecken
+	{
+		LiedplanCard card;
+		const LiedplanProfile ext{"P", "#112233", "#445566", "#ff0000", "#00ff00", 10, 20, 200, 150, true};
+		profile_apply(ext, card);
+		card.profile = ext.name; // wie im Dock-Handler: Profilname separat gesetzt
+		const bool applied = card.profile == "P" && card.text_color == "#112233" &&
+		                     card.box_color == "#445566" && card.corner_color_a == "#ff0000" &&
+		                     card.corner_color_b == "#00ff00" && card.corner_opacity_a == 10 &&
+		                     card.corner_opacity_b == 20 && card.text_opacity == 200 &&
+		                     card.box_opacity == 150 && card.rainbow_corners == true;
+
+		LiedplanCard card2;
+		card2.corner_color_a = "#abcdef";
+		profile_apply({"Q", "#aabbcc", "#ddeeff"}, card2);
+		const bool legacy_reset = card2.corner_color_a == "#fce647" &&
+		                          card2.corner_opacity_a == 255 && card2.text_opacity == 255 &&
+		                          card2.rainbow_corners == false;
+
+		const LiedplanProfile base{"R", "#112233", "#445566"};
+		LiedplanProfile other = base;
+		other.corner_a = "#000000";
+		const bool neq = !(base == other);
+
+		check(applied && legacy_reset && neq,
+		      "25. F1 profile_apply: alle Felder, Legacy-Reset auf Defaults, operator== incl. Ecken");
+	}
+
+	// 26. (F1) State-JSON-Seriale der erweiterten color_profiles
+	{
+		const std::string path = (temp_dir / "roundtrip_f1_profiles.json").u8string();
+		LiedplanState s1;
+		s1.color_profiles.push_back({"Ext", "#112233", "#445566", "#ff0000", "#00ff00",
+		                            10, 20, 30, 40, true});
+		const std::string save_err = s1.save(path);
+		LiedplanState s2;
+		const std::string load_err = s2.load(path);
+		const bool ok = save_err.empty() && load_err.empty() && (s1 == s2) &&
+		                s2.color_profiles.size() == 1 &&
+		                s2.color_profiles[0].corner_a == "#ff0000" &&
+		                s2.color_profiles[0].rainbow == true;
+		check(ok, "26. F1 State-JSON: erweiterte color_profiles save->load identisch",
+		      save_err + " " + load_err);
+	}
+
+	// 27. (F1) Alias-Migration im Dock-State: aktives Profil "Karte Dunkel" nach Load eines Alt-States
+	{
+		const std::filesystem::path fs_path = temp_dir / "legacy_f1_active.json";
+		{
+			std::ofstream out(fs_path, std::ios::binary | std::ios::trunc);
+			out << R"({
+  "version": 1,
+  "next_id": 2,
+  "active_profile": "Sunset Warm",
+  "cards": []
+})";
+		}
+		LiedplanState s;
+		const std::string err = s.load(fs_path.u8string());
+		check(err.empty() && s.active_profile == "Karte Sonne",
+		      "27. F1 Migration active_profile \"Sunset Warm\" -> Karte Sonne", err);
+	}
+
 	std::error_code ec;
 	std::filesystem::remove_all(temp_dir, ec);
 
@@ -675,6 +782,6 @@ colors:
 		std::cerr << g_failures << " test(s) failed.\n";
 		return 1;
 	}
-	std::cout << "All 23 checks passed.\n";
+	std::cout << "All 27 checks passed.\n";
 	return 0;
 }

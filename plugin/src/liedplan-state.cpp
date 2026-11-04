@@ -54,7 +54,7 @@ LiedplanCard card_from_json(const nlohmann::json &item)
 	if (item.contains("zeile3") && item["zeile3"].is_string())
 		c.zeile3 = item["zeile3"].get<std::string>();
 	if (item.contains("profile") && item["profile"].is_string())
-		c.profile = item["profile"].get<std::string>();
+		c.profile = profile_name_canonical(item["profile"].get<std::string>());
 	if (item.contains("text_color") && item["text_color"].is_string())
 		c.text_color = item["text_color"].get<std::string>();
 	if (item.contains("text_opacity") && item["text_opacity"].is_number_integer())
@@ -150,6 +150,13 @@ nlohmann::json state_to_json(const LiedplanState &s)
 			{"name", cp.name},
 			{"text_color", cp.text_color},
 			{"box_color", cp.box_color},
+			{"corner_a", cp.corner_a},
+			{"corner_b", cp.corner_b},
+			{"corner_op_a", cp.corner_op_a},
+			{"corner_op_b", cp.corner_op_b},
+			{"text_opacity", cp.text_opacity},
+			{"box_opacity", cp.box_opacity},
+			{"rainbow", cp.rainbow},
 		});
 	}
 
@@ -188,9 +195,10 @@ std::string state_from_json(LiedplanState &s, const nlohmann::json &root)
 			loaded_next_id = 1;
 	}
 
-	std::string loaded_active_profile = "OBS Dark";
+	std::string loaded_active_profile = "Karte Dunkel";
 	if (root.contains("active_profile") && root["active_profile"].is_string()) {
-		loaded_active_profile = root["active_profile"].get<std::string>();
+		loaded_active_profile =
+			profile_name_canonical(root["active_profile"].get<std::string>());
 	}
 
 	LiedplanSettings loaded_settings;
@@ -250,6 +258,20 @@ std::string state_from_json(LiedplanState &s, const nlohmann::json &root)
 				cp.text_color = cp_item["text_color"].get<std::string>();
 			if (cp_item.contains("box_color") && cp_item["box_color"].is_string())
 				cp.box_color = cp_item["box_color"].get<std::string>();
+			if (cp_item.contains("corner_a") && cp_item["corner_a"].is_string())
+				cp.corner_a = cp_item["corner_a"].get<std::string>();
+			if (cp_item.contains("corner_b") && cp_item["corner_b"].is_string())
+				cp.corner_b = cp_item["corner_b"].get<std::string>();
+			if (cp_item.contains("corner_op_a") && cp_item["corner_op_a"].is_number_integer())
+				cp.corner_op_a = cp_item["corner_op_a"].get<int>();
+			if (cp_item.contains("corner_op_b") && cp_item["corner_op_b"].is_number_integer())
+				cp.corner_op_b = cp_item["corner_op_b"].get<int>();
+			if (cp_item.contains("text_opacity") && cp_item["text_opacity"].is_number_integer())
+				cp.text_opacity = cp_item["text_opacity"].get<int>();
+			if (cp_item.contains("box_opacity") && cp_item["box_opacity"].is_number_integer())
+				cp.box_opacity = cp_item["box_opacity"].get<int>();
+			if (cp_item.contains("rainbow") && cp_item["rainbow"].is_boolean())
+				cp.rainbow = cp_item["rainbow"].get<bool>();
 			loaded_color_profiles.push_back(std::move(cp));
 		}
 	}
@@ -370,7 +392,7 @@ void LiedplanState::reset()
 {
 	cards.clear();
 	next_id = 1;
-	active_profile = "OBS Dark";
+	active_profile = "Karte Dunkel";
 	settings = LiedplanSettings{};
 	quick_profiles.clear();
 	color_profiles.clear();
@@ -512,10 +534,9 @@ LiedplanCard &LiedplanState::add_card()
 {
 	LiedplanCard c;
 	c.id = "box" + std::to_string(next_id++);
-	c.profile = "OBS Dark";
+	c.profile = "Karte Dunkel";
 	if (const LiedplanProfile *prof = profile_by_name(c.profile)) {
-		c.text_color = prof->text_color;
-		c.box_color = prof->box_color;
+		profile_apply(*prof, c);
 	}
 	cards.push_back(std::move(c));
 	return cards.back();
@@ -588,6 +609,20 @@ std::string liedplan_profile_to_yaml(const LiedplanProfile &p)
 	yaml += "colors:\n";
 	yaml += "  textColor: \"" + tc + "\"\n";
 	yaml += "  cardOuterBg: \"" + bc + "\"\n";
+	if (!p.corner_a.empty() && p.corner_a != "#fce647")
+		yaml += "  cornerA: \"" + p.corner_a + "\"\n";
+	if (!p.corner_b.empty() && p.corner_b != "#fce647")
+		yaml += "  cornerB: \"" + p.corner_b + "\"\n";
+	if (p.corner_op_a != 255)
+		yaml += "  cornerOpA: " + std::to_string(p.corner_op_a) + "\n";
+	if (p.corner_op_b != 255)
+		yaml += "  cornerOpB: " + std::to_string(p.corner_op_b) + "\n";
+	if (p.text_opacity != 255)
+		yaml += "  textOp: " + std::to_string(p.text_opacity) + "\n";
+	if (p.box_opacity != 255)
+		yaml += "  boxOp: " + std::to_string(p.box_opacity) + "\n";
+	if (p.rainbow)
+		yaml += "  rainbow: true\n";
 	return yaml;
 }
 
@@ -599,8 +634,37 @@ bool liedplan_yaml_to_profile(const std::string &text, LiedplanProfile &out, std
 	bool in_colors = false;
 	bool has_text_color = false;
 	bool has_box_color = false;
+	bool has_corner_a = false;
+	bool has_corner_b = false;
+	bool has_corner_op_a = false;
+	bool has_corner_op_b = false;
+	bool has_text_op = false;
+	bool has_box_op = false;
+	bool has_rainbow = false;
 	std::string raw_text_color;
 	std::string raw_box_color;
+	std::string raw_corner_a;
+	std::string raw_corner_b;
+	int parsed_corner_op_a = 255;
+	int parsed_corner_op_b = 255;
+	int parsed_text_op = 255;
+	int parsed_box_op = 255;
+	bool parsed_rainbow = false;
+
+	auto parse_opacity_val = [](const std::string &v, int &out_val) {
+		if (v.empty())
+			return false;
+		try {
+			std::size_t idx = 0;
+			const int n = std::stoi(v, &idx);
+			if (idx != v.size())
+				return false;
+			out_val = std::clamp(n, 0, 255);
+			return true;
+		} catch (...) {
+			return false;
+		}
+	};
 
 	while (std::getline(iss, raw_line)) {
 		const std::string line = trim_ws(raw_line);
@@ -635,6 +699,32 @@ bool liedplan_yaml_to_profile(const std::string &text, LiedplanProfile &out, std
 				} else if (key == "cardOuterBg") {
 					has_box_color = true;
 					raw_box_color = val;
+				} else if (key == "cornerA") {
+					has_corner_a = true;
+					raw_corner_a = val;
+				} else if (key == "cornerB") {
+					has_corner_b = true;
+					raw_corner_b = val;
+				} else if (key == "cornerOpA") {
+					if (parse_opacity_val(val, parsed_corner_op_a))
+						has_corner_op_a = true;
+				} else if (key == "cornerOpB") {
+					if (parse_opacity_val(val, parsed_corner_op_b))
+						has_corner_op_b = true;
+				} else if (key == "textOp") {
+					if (parse_opacity_val(val, parsed_text_op))
+						has_text_op = true;
+				} else if (key == "boxOp") {
+					if (parse_opacity_val(val, parsed_box_op))
+						has_box_op = true;
+				} else if (key == "rainbow") {
+					if (liedplan_iequals(val, "true") || val == "1") {
+						has_rainbow = true;
+						parsed_rainbow = true;
+					} else if (liedplan_iequals(val, "false") || val == "0") {
+						has_rainbow = true;
+						parsed_rainbow = false;
+					}
 				}
 			}
 		}
@@ -660,9 +750,34 @@ bool liedplan_yaml_to_profile(const std::string &text, LiedplanProfile &out, std
 		return false;
 	}
 
+	if (has_corner_a && !is_valid_hex_color(raw_corner_a)) {
+		err = "Ungültige Farbformat: " + raw_corner_a;
+		return false;
+	}
+
+	if (has_corner_b && !is_valid_hex_color(raw_corner_b)) {
+		err = "Ungültige Farbformat: " + raw_corner_b;
+		return false;
+	}
+
+	out = LiedplanProfile{};
 	out.name = std::move(parsed_name);
 	out.text_color = has_text_color ? std::move(raw_text_color) : "#000000";
 	out.box_color = has_box_color ? std::move(raw_box_color) : "#ffffff";
+	if (has_corner_a)
+		out.corner_a = std::move(raw_corner_a);
+	if (has_corner_b)
+		out.corner_b = std::move(raw_corner_b);
+	if (has_corner_op_a)
+		out.corner_op_a = parsed_corner_op_a;
+	if (has_corner_op_b)
+		out.corner_op_b = parsed_corner_op_b;
+	if (has_text_op)
+		out.text_opacity = parsed_text_op;
+	if (has_box_op)
+		out.box_opacity = parsed_box_op;
+	if (has_rainbow)
+		out.rainbow = parsed_rainbow;
 	err.clear();
 	return true;
 }

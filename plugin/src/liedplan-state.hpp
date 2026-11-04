@@ -27,7 +27,7 @@ struct LiedplanCard {
 	std::string zeile1; // GL-Nummer
 	std::string zeile2; // Verse
 	std::string zeile3; // Liedtitel
-	std::string profile = "OBS Dark";
+	std::string profile = "Karte Dunkel";
 	std::string text_color = "#000000";
 	int text_opacity = 255;
 	std::string box_color = "#ffffff";
@@ -103,7 +103,7 @@ class LiedplanState {
 public:
 	std::vector<LiedplanCard> cards;
 	int next_id = 1; // Id-Zähler; Ids "box1","box2",... werden NIEMALS wiederverwendet
-	std::string active_profile = "OBS Dark";
+	std::string active_profile = "Karte Dunkel";
 	LiedplanSettings settings;
 	std::vector<LiedplanQuickProfile> quick_profiles;
 	std::vector<LiedplanProfile> color_profiles;
