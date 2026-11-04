@@ -29,6 +29,11 @@ void send_to_current_scene(const LiedplanCard &card,
 
 /** Aktualisiert alle bereits platzierten Kopien dieser Karte in allen Szenen. */
 void update_everywhere(const LiedplanCard &card, bool clear,
+                       const LiedplanSettings &settings = LiedplanSettings());
+
+/** Schreibt die Karten-HTML neu und reloadt alle Browser-Quellen dieser Karte
+ * in allen Szenen (Template-Wechsel, Spec F2b — Document-Neuerstellung). */
+void reload_everywhere(const LiedplanCard &card,
 		       const LiedplanSettings &settings = LiedplanSettings());
 
 /** Entfernt alle Szenen-Items dieser Karte aus allen Szenen und gibt die Source frei. */

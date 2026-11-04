@@ -192,6 +192,31 @@ void update_everywhere(const LiedplanCard &card, bool clear, const LiedplanSetti
 	}
 }
 
+void reload_everywhere(const LiedplanCard &card, const LiedplanSettings &settings)
+{
+	std::string html_path;
+	if (liedplan_html::write_card(card, html_path, settings)) {
+		lp_log("HTML geschrieben (Template-Reload): " + html_path);
+	}
+
+	const std::string name = source_name(card.id);
+	const std::vector<obs_scene_t *> scenes = collect_all_scenes();
+
+	int reloaded = 0;
+	for (obs_scene_t *scene : scenes) {
+		obs_sceneitem_t *item = obs_scene_find_source(scene, name.c_str());
+		if (!item)
+			continue;
+		obs_source_t *src = obs_sceneitem_get_source(item);
+		if (!is_browser_source(src))
+			continue;
+		if (liedplan_html::reload_browser_source(src))
+			++reloaded;
+	}
+	blog(LOG_INFO, "[liedplan] Template-Reload für '%s': %d Browser-Quelle(n)",
+	     name.c_str(), reloaded);
+}
+
 void remove_everywhere(const std::string &card_id)
 {
 	const std::string name = source_name(card_id);

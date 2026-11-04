@@ -85,6 +85,15 @@ install(
   OPTIONAL
 )
 
+# IMP-F (F2b): Beispiel-Vorlagen ins Data-Verzeichnis ("Vorlagen-Ordner").
+install(
+  DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/templates/"
+  DESTINATION "${CMAKE_PROJECT_NAME}/data/templates"
+  COMPONENT Runtime
+  OPTIONAL
+  FILES_MATCHING PATTERN "*.html"
+)
+
 enable_testing()
 
 add_executable(

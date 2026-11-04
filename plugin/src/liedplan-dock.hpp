@@ -68,6 +68,10 @@ private:
 	void on_backup_state();
 	void on_restore_state();
 	void on_open_settings_dialog();
+	void on_open_templates_folder();
+	void on_copy_template_from_classic();
+	void refresh_templates_ui();
+	void apply_template_id(const std::string &card_id, const std::string &template_id);
 	void apply_import_result(const liedplan_import::LiedplanImportResult &res);
 	void sync_all_cards_live(const std::vector<std::string> &previous_ids);
 	void set_dock_status(const QString &msg, bool is_error = false);

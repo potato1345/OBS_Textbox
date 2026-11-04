@@ -345,6 +345,102 @@ int main()
 		      raw);
 	}
 
+	// 9. F2b: Beispiel-Vorlagen im builtin-Ordner (plugin/templates/) werden
+	//    gefunden, token-substituiert und über write_card ausgeliefert.
+	{
+		std::error_code ec;
+		const std::string user_dir = liedplan_html::templates_dir();
+		check(!user_dir.empty(), "9a. templates_dir() liefert gültiges Verzeichnis im Test-Modus", user_dir);
+
+		// User-Ordner leeren, damit die builtin-Examples gefunden werden.
+		for (const auto &entry : std::filesystem::directory_iterator(std::filesystem::u8path(user_dir), ec)) {
+			if (entry.is_regular_file())
+				std::filesystem::remove(entry.path(), ec);
+		}
+
+		const std::vector<std::string> ids = liedplan_html::list_template_ids();
+		const bool has_standard = std::find(ids.begin(), ids.end(), "standard") != ids.end();
+		const bool has_minimal = std::find(ids.begin(), ids.end(), "minimal") != ids.end();
+		const bool has_display = std::find(ids.begin(), ids.end(), "display") != ids.end();
+		std::string id_list;
+		for (const std::string &id : ids)
+			id_list += id + ",";
+		check(has_standard && has_minimal && has_display,
+		      "9b. list_template_ids(): builtin-Vorlagen standard/minimal/display gefunden", id_list);
+
+		LiedplanCard c;
+		c.id = "box_builtin";
+		c.zeile1 = "Vorgehen";
+		c.zeile2 = "501, 1";
+		c.zeile3 = "Gemeinde singt";
+		c.box_color = "#101820";
+		c.box_opacity = 180;
+		c.text_color = "#c9d1d9";
+		c.text_opacity = 255;
+		c.corner_color_a = "#123456";
+		c.corner_opacity_a = 255;
+		c.corner_color_b = "#654321";
+		c.corner_opacity_b = 128;
+		c.rainbow_corners = true;
+
+		// standard.html: Marker + Token-Substitution + rainbow-Klasse.
+		const std::string html_std = liedplan_html::render_template_html(c, "standard");
+		const bool c_marker = html_std.find("LIEDPLAN_TEMPLATE: standard") != std::string::npos;
+		const bool c_rainbow = html_std.find("class=\"rainbow\"") != std::string::npos;
+		const bool c_rgba = html_std.find("--lp-bg-color: rgba(16,24,32,0.705882)") != std::string::npos;
+		const bool c_line = html_std.find("\"Vorgehen\"") != std::string::npos;
+		const bool c_clean = html_std.find("{{") == std::string::npos;
+		std::string c_detail = std::string(c_marker ? "marker " : "NO-marker ") +
+			(c_rainbow ? "rainbow " : "NO-rainbow ") +
+			(c_rgba ? "rgba " : "NO-rgba ") +
+			(c_line ? "line " : "NO-line ") +
+			(c_clean ? "clean" : "TOKEN-REST: " + html_std.substr(html_std.find("{{"), 40));
+		check(c_marker && c_rainbow && c_rgba && c_line && c_clean,
+		      "9c. standard.html: Marker, rainbow-Klasse, rgba-Tokens + Zeilen substituiert, kein Token-Rest",
+		      c_detail);
+
+		// minimal.html: rendert ohne rainbow-Klasse.
+		const std::string html_min = liedplan_html::render_template_html(c, "minimal");
+		check(html_min.find("LIEDPLAN_TEMPLATE: minimal") != std::string::npos &&
+		      html_min.find("class=\"rainbow\"") == std::string::npos,
+		      "9d. minimal.html: rendert ohne rainbow-Klasse");
+
+		// Live-Push-Contract: builtin-Templates enthalten den Update-Listener.
+		const std::string builtin_dir = liedplan_html::builtin_templates_dir();
+		const std::string tpl_raw =
+			read_file_utf8(std::filesystem::u8path(builtin_dir) / "standard.html");
+		check(tpl_raw.find("liedplan_card_update") != std::string::npos,
+		      "9e. standard.html enthält liedplan_card_update-Listener (reload-free push)", builtin_dir);
+
+		// write_card(template_id="display"): frisches Template, keine INJECT-Marker.
+		c.template_id = "display";
+		std::string out_path;
+		const bool wrote = liedplan_html::write_card(c, out_path);
+		const std::string html_disp =
+			wrote ? read_file_utf8(std::filesystem::u8path(out_path)) : "";
+		check(wrote &&
+		      html_disp.find("LIEDPLAN_TEMPLATE: display") != std::string::npos &&
+		      html_disp.find("OBS_TEXTBOX_INJECT_START") == std::string::npos,
+		      "9f. write_card(template_id=\"display\"): Template-HTML ohne CSS-Injektion");
+
+		// Fehlende Vorlage -> classic-Fallback (INJECT-Marker), kein Crash.
+		c.template_id = "gibt-es-nicht";
+		std::string out_fb;
+		const bool wrote_fb = liedplan_html::write_card(c, out_fb);
+		const std::string html_fb =
+			wrote_fb ? read_file_utf8(std::filesystem::u8path(out_fb)) : "";
+		check(wrote_fb && html_fb.find("OBS_TEXTBOX_INJECT_START") != std::string::npos,
+		      "9g. write_card mit fehlender Vorlage: fällt auf classic zurück");
+
+		// User-Ordner überschreibt builtin (gleicher id).
+		write_file_bytes(std::filesystem::u8path(user_dir) / "standard.html",
+				 "<!DOCTYPE html><html><body>{{zeile1}}</body></html>");
+		const std::string html_override = liedplan_html::render_template_html(c, "standard");
+		check(html_override == "<!DOCTYPE html><html><body>Vorgehen</body></html>",
+		      "9h. user-Vorlage überschreibt builtin-Vorlage gleicher id", html_override);
+		std::filesystem::remove(std::filesystem::u8path(user_dir) / "standard.html", ec);
+	}
+
 	if (g_failures > 0) {
 		std::cerr << g_failures << " check(s) failed.\n";
 		return 1;

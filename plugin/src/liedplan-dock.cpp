@@ -59,8 +59,12 @@
 #include <QTableWidgetItem>
 #include <QTimer>
 #include <QToolButton>
+#include <QUrl>
 #include <QVBoxLayout>
 #include <QVariant>
+#include <QtGlobal>
+
+#include <QDesktopServices>
 
 #include <algorithm>
 #include <cstring>
@@ -348,6 +352,11 @@ LiedplanDock::LiedplanDock(const std::string &state_path, QWidget *parent)
 	QAction *act_quick = settings_menu->addAction(QStringLiteral("Schnell-Profile…"));
 	settings_menu->addSeparator();
 	QAction *act_settings = settings_menu->addAction(QStringLiteral("Einstellungen…"));
+	// IMP-F (F2b): Karten-Vorlagen (Templates) direkt im Zahnrad-Menü.
+	QAction *act_tpl_folder =
+		settings_menu->addAction(QStringLiteral("Vorlagen-Ordner öffnen"));
+	QAction *act_tpl_copy =
+		settings_menu->addAction(QStringLiteral("Vorlage aus classic kopieren"));
 	settings_menu->addSeparator();
 	QAction *act_backup = settings_menu->addAction(QStringLiteral("Backup"));
 	QAction *act_restore = settings_menu->addAction(QStringLiteral("Restore"));
@@ -398,6 +407,8 @@ LiedplanDock::LiedplanDock(const std::string &state_path, QWidget *parent)
 	connect(tool_import, &QToolButton::clicked, this, &LiedplanDock::on_open_import_dialog);
 	connect(act_quick, &QAction::triggered, this, &LiedplanDock::on_open_quick_profiles_dialog);
 	connect(act_settings, &QAction::triggered, this, &LiedplanDock::on_open_settings_dialog);
+	connect(act_tpl_folder, &QAction::triggered, this, &LiedplanDock::on_open_templates_folder);
+	connect(act_tpl_copy, &QAction::triggered, this, &LiedplanDock::on_copy_template_from_classic);
 	connect(act_backup, &QAction::triggered, this, &LiedplanDock::on_backup_state);
 	connect(act_restore, &QAction::triggered, this, &LiedplanDock::on_restore_state);
 
@@ -515,6 +526,16 @@ LiedplanDock::LiedplanDock(const std::string &state_path, QWidget *parent)
 	}
 
 	rebuild_rows();
+
+	// Spec F2b: Karten-HTML ab Start aus Zustand + Vorlagen neu erzeugen und die
+	// Browser-Dokumente neu laden — so wirken Vorlagen (auch Vorlagen-Ordner-
+	// Änderungen) ohne Dock-Interaktion und HTML bleibt konsistent mit dem State.
+	for (const auto &card : state_.cards) {
+		if (cancel_ && *cancel_)
+			break;
+		liedplan_scene::reload_everywhere(card, state_.settings);
+	}
+
 	setMinimumSize(360, 240);
 }
 
@@ -826,6 +847,40 @@ void LiedplanDock::create_row_widget(const LiedplanCard &card)
 	rainbow_cb->setChecked(card.rainbow_corners);
 	style_layout->addWidget(rainbow_cb);
 
+	// IMP-F (F2b): Karten-Vorlage (Template). "classic" = klassischer Weg
+	// (template_id leer); weitere Einträge = discovered .html-Vorlagen.
+	// Wechsel → write_card neu + Browser-Source-Reload (spec: Document-Neuerstellung).
+	auto *tpl_layout = new QVBoxLayout();
+	tpl_layout->setContentsMargins(0, 0, 0, 0);
+	tpl_layout->setSpacing(4);
+	auto *lbl_tpl = new QLabel(QStringLiteral("VORLAGE"), style_section);
+	lbl_tpl->setObjectName(QStringLiteral("lpFieldLabel"));
+	lbl_tpl->setToolTip(QStringLiteral(
+		"Karten-Vorlage (HTML-Template). 'classic' = Standard. Weitere Vorlagen "
+		"sind .html-Dateien im Vorlagen-Ordner (Zahnrad-Menü → Vorlagen-Ordner öffnen)."));
+	auto *tpl_combo = new QComboBox(style_section);
+	tpl_combo->setObjectName(QStringLiteral("lpTemplate"));
+	tpl_combo->setToolTip(lbl_tpl->toolTip());
+	tpl_combo->setFixedHeight(34);
+	tpl_combo->addItem(QStringLiteral("classic"), QString());
+	for (const std::string &tid : liedplan_html::list_template_ids()) {
+		tpl_combo->addItem(QString::fromUtf8(tid.c_str()), QString::fromUtf8(tid.c_str()));
+	}
+	const QString cur_tid = QString::fromUtf8(card.template_id.c_str());
+	const int tid_idx = tpl_combo->findData(cur_tid);
+	tpl_combo->setCurrentIndex(tid_idx >= 0 ? tid_idx : 0);
+	// Vorlagen, die nicht (mehr) im Ordner liegen, trotzdem zeigen, damit der
+	// State-Wert nicht stumm auf "classic" fällt.
+	if (tid_idx < 0 && !card.template_id.empty()) {
+		tpl_combo->addItem(QStringLiteral("%1 (fehlt)").arg(cur_tid), cur_tid);
+		tpl_combo->setCurrentIndex(tpl_combo->count() - 1);
+	}
+	tpl_layout->addWidget(lbl_tpl);
+	tpl_layout->addWidget(tpl_combo);
+	style_layout->addLayout(tpl_layout);
+	// Für refresh_templates_ui() (Vorlagen-Ordner geändert) am Row erreichbar.
+	row_widget->setProperty("lpHasTemplate", true);
+
 	auto *anim_group = new QGroupBox(style_section);
 	anim_group->setObjectName(QStringLiteral("lpAnimGroup"));
 	anim_group->setTitle(QStringLiteral("Animation"));
@@ -1050,6 +1105,12 @@ void LiedplanDock::create_row_widget(const LiedplanCard &card)
 				schedule_save();
 			}
 		});
+
+	connect(tpl_combo, &QComboBox::activated, this, [this, card_id, tpl_combo]() {
+		const QVariant data = tpl_combo->currentData();
+		const QString tid = data.toString();
+		apply_template_id(card_id, tid.toUtf8().toStdString());
+	});
 
 	connect(new_prof_btn, &QPushButton::clicked, this, [this, card_id]() {
 		bool ok = false;
@@ -1309,6 +1370,147 @@ void LiedplanDock::sync_profil_del_state()
 	const bool valid = idx > 0 && idx < profil_select_->count() &&
 			   !profil_select_->itemData(idx).toString().isEmpty();
 	profil_del_btn_->setEnabled(valid);
+}
+
+void LiedplanDock::apply_template_id(const std::string &card_id, const std::string &template_id)
+{
+	LiedplanCard *c = find_card_mut(card_id);
+	if (!c)
+		return;
+	c->template_id = template_id;
+
+	// Spec F2b: Template-Wechsel = Document-Neuerstellung -> Reload der
+	// Browser-Quellen (farbliche Live-Pushes laufen über die CSS-Vars im Template).
+	save_state();
+	liedplan_scene::reload_everywhere(*c, state_.settings);
+	refresh_templates_ui();
+
+	if (template_id.empty()) {
+		set_dock_status(QStringLiteral("Karte %1: Vorlage „classic“")
+				.arg(QString::fromUtf8(card_id.c_str())),
+			false);
+	} else {
+		set_dock_status(QStringLiteral("Vorlage \"%1\" auf Karte %2 angewendet")
+				.arg(QString::fromUtf8(template_id.c_str()),
+				     QString::fromUtf8(card_id.c_str())),
+			false);
+	}
+}
+
+void LiedplanDock::refresh_templates_ui()
+{
+	const std::vector<std::string> ids = liedplan_html::list_template_ids();
+	for (QWidget *w : row_widgets_) {
+		if (!w || !w->property("lpHasTemplate").toBool())
+			continue;
+		QComboBox *combo = w->findChild<QComboBox *>(QStringLiteral("lpTemplate"));
+		if (!combo)
+			continue;
+		const std::string card_id = w->property("lpCardId").toString().toUtf8().toStdString();
+		const LiedplanCard *card = find_card_mut(card_id);
+		const QString cur_tid = card ? QString::fromUtf8(card->template_id.c_str()) : QString();
+
+		const QSignalBlocker blocker(combo);
+		combo->clear();
+		combo->addItem(QStringLiteral("classic"), QString());
+		for (const std::string &tid : ids) {
+			combo->addItem(QString::fromUtf8(tid.c_str()), QString::fromUtf8(tid.c_str()));
+		}
+		int idx = combo->findData(cur_tid);
+		if (idx < 0 && !cur_tid.isEmpty()) {
+			combo->addItem(QStringLiteral("%1 (fehlt)").arg(cur_tid), cur_tid);
+			idx = combo->count() - 1;
+		}
+		combo->setCurrentIndex(idx >= 0 ? idx : 0);
+	}
+}
+
+void LiedplanDock::on_open_templates_folder()
+{
+	const std::string dir = liedplan_html::templates_dir();
+	if (dir.empty()) {
+		set_dock_status(QStringLiteral("Vorlagen-Ordner konnte nicht bestimmt werden."), true);
+		return;
+	}
+
+	// Beispiele seeden, wenn der user-Ordner noch leer ist (kopiert aus dem
+	// builtin-Data-Verzeichnis; Überschreiben existierender Dateien = NO-OP).
+	const std::string builtin = liedplan_html::builtin_templates_dir();
+	if (!builtin.empty()) {
+		std::error_code ec;
+		for (const auto &entry : std::filesystem::directory_iterator(builtin, ec)) {
+			if (!entry.is_regular_file())
+				continue;
+			const std::filesystem::path dst =
+				std::filesystem::u8path(dir) / entry.path().filename();
+			if (std::filesystem::exists(dst, ec))
+				continue;
+			std::filesystem::copy_file(entry.path(), dst,
+					    std::filesystem::copy_options::overwrite_existing, ec);
+		}
+	}
+	refresh_templates_ui();
+
+	const QUrl url = QUrl::fromLocalFile(QString::fromUtf8(dir.c_str()));
+	if (!QDesktopServices::openUrl(url)) {
+		set_dock_status(QStringLiteral("Ordner konnte nicht geöffnet werden: %1")
+				.arg(QString::fromUtf8(dir.c_str())),
+			true);
+		return;
+	}
+	set_dock_status(QStringLiteral("Vorlagen-Ordner geöffnet: %1")
+				.arg(QString::fromUtf8(dir.c_str())),
+		false);
+}
+
+void LiedplanDock::on_copy_template_from_classic()
+{
+	bool ok = false;
+	const QString raw_name = QInputDialog::getText(
+		this, QStringLiteral("Vorlage aus classic kopieren"),
+		QStringLiteral("Vorlagename (Datei <name>.html im Vorlagen-Ordner):"),
+		QLineEdit::Normal, QStringLiteral("meine-vorlage"), &ok);
+	if (!ok)
+		return;
+	QString name = raw_name.trimmed();
+	name.replace(QRegularExpression(QStringLiteral("[^a-zA-Z0-9_-]")), QStringLiteral("_"));
+	if (name.isEmpty()) {
+		set_dock_status(QStringLiteral("Bitte einen Vorlagennamen eingeben."), true);
+		return;
+	}
+
+	const std::string src_path = liedplan_html::resolve_textbox_path(state_.settings);
+	QFile src(QString::fromUtf8(src_path.c_str()));
+	if (!src.open(QIODevice::ReadOnly)) {
+		set_dock_status(QStringLiteral("classic-Vorlage nicht lesbar: %1")
+				.arg(QString::fromUtf8(src_path.c_str())),
+			true);
+		return;
+	}
+	const QByteArray contents = src.readAll();
+	src.close();
+	if (contents.isEmpty()) {
+		set_dock_status(QStringLiteral("classic-Vorlage ist leer."), true);
+		return;
+	}
+
+	const std::string dir = liedplan_html::templates_dir();
+	if (dir.empty()) {
+		set_dock_status(QStringLiteral("Vorlagen-Ordner konnte nicht bestimmt werden."), true);
+		return;
+	}
+	const QString dst = QString::fromUtf8(dir.c_str()) + "/" + name + ".html";
+	QFile out(dst);
+	if (!out.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
+		set_dock_status(QStringLiteral("Vorlage konnte nicht geschrieben werden: %1").arg(dst),
+			true);
+		return;
+	}
+	out.write(contents);
+	out.close();
+
+	refresh_templates_ui();
+	set_dock_status(QStringLiteral("Vorlage \"%1\" aus classic kopiert").arg(name), false);
 }
 
 void LiedplanDock::refresh_top_row()
@@ -2604,6 +2806,40 @@ void LiedplanDock::on_open_settings_dialog()
 	oauth_layout->addWidget(lbl_token);
 	oauth_layout->addLayout(token_row);
 	root->addWidget(oauth_group);
+
+	// Gruppe (IMP-F / F2b): Karten-Vorlagen (Templates)
+	auto *tpl_group = new QGroupBox(QStringLiteral("Karten-Vorlagen"), &dlg);
+	auto *tpl_group_layout = new QVBoxLayout(tpl_group);
+	tpl_group_layout->setContentsMargins(12, 16, 12, 12);
+	tpl_group_layout->setSpacing(8);
+
+	auto *tpl_info = new QLabel(
+		QStringLiteral("Vorlagen sind .html-Dateien im Vorlagen-Ordner des Plugins; "
+				 "jede Karte wählt seine Vorlage im Feld „VORLAGE“ (classic = Standard)."),
+		tpl_group);
+	tpl_info->setWordWrap(true);
+	tpl_info->setObjectName(QStringLiteral("lpFieldLabel"));
+
+	auto *tpl_btn_row = new QHBoxLayout();
+	tpl_btn_row->setSpacing(8);
+	auto *tpl_folder_btn =
+		new QPushButton(QStringLiteral("Vorlagen-Ordner öffnen"), tpl_group);
+	tpl_folder_btn->setObjectName(QStringLiteral("lpBtn"));
+	auto *tpl_copy_btn =
+		new QPushButton(QStringLiteral("Neue Vorlage aus classic kopieren"), tpl_group);
+	tpl_copy_btn->setObjectName(QStringLiteral("lpBtn"));
+	tpl_btn_row->addWidget(tpl_folder_btn);
+	tpl_btn_row->addWidget(tpl_copy_btn);
+	tpl_btn_row->addStretch(1);
+
+	tpl_group_layout->addWidget(tpl_info);
+	tpl_group_layout->addLayout(tpl_btn_row);
+	root->addWidget(tpl_group);
+
+	connect(tpl_folder_btn, &QPushButton::clicked, &dlg,
+		[this]() { on_open_templates_folder(); });
+	connect(tpl_copy_btn, &QPushButton::clicked, &dlg,
+		[this]() { on_copy_template_from_classic(); });
 
 	// Gruppe 2 (M5): AI-Import & Animationen Pfade
 	auto *m5_group = new QGroupBox(QStringLiteral("AI-Import & Animationen"), &dlg);

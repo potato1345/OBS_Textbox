@@ -309,7 +309,8 @@ bool is_abs_win_path(const std::string &s)
 // 1. settings.textbox_path (Settings-Override, falls gesetzt und Datei existiert)
 // 2. obs_module_file("textbox.html") (OBS Plugin-Data-Verzeichnis, falls vorhanden)
 // 3. kRepoTextboxPath (Dev-Fallback auf diesem PC)
-std::string resolve_textbox_path(const LiedplanSettings &settings)
+// anon-Impl; exportierter Wrapper am Namespace-Ende (für Dock "Vorlage aus classic kopieren").
+std::string resolve_textbox_path_impl(const LiedplanSettings &settings)
 {
 	std::error_code ec;
 	if (!settings.textbox_path.empty()) {
@@ -470,6 +471,12 @@ bool path_inside_dir(const std::string &p, const std::string &dir)
 }
 
 } // namespace
+
+// Exportierter Wrapper (Header-Deklaration): classic-Vorlagen-Pfad für Dock & interne Aufrufer.
+std::string resolve_textbox_path(const LiedplanSettings &settings)
+{
+	return resolve_textbox_path_impl(settings);
+}
 
 std::string hex_to_rgba(const std::string &hex, int opacity_0_255)
 {
@@ -780,6 +787,48 @@ std::string substitute_tokens(const LiedplanCard &card, const std::string &templ
 	return out;
 }
 
+std::string builtin_templates_dir()
+{
+#ifdef LIEDPLAN_TEST_NO_OBS
+#if defined(LIEDPLAN_REPO_ROOT)
+	const std::filesystem::path dir =
+		std::filesystem::u8path(LIEDPLAN_REPO_ROOT) / "plugin" / "templates";
+	if (std::filesystem::is_directory(dir))
+		return dir.generic_u8string();
+#endif
+	return "";
+#else
+	// OBS liefert hier oft NULL für obs_module_file (Data-Pfad-Ableitung hängt von der
+	// Installation ab). Analog zu resolve_textbox_path: erst Plugin-Data-Verzeichnis
+	// (falls vorhanden), dann Repo-Fallback neben dem Dev-Textbox-Pfad.
+	char *mod_file = obs_module_file("templates/standard.html");
+	const std::string base = mod_file ? mod_file : "";
+	bfree(mod_file);
+	if (!base.empty()) {
+		const std::filesystem::path dir = std::filesystem::u8path(base).parent_path();
+		if (std::filesystem::is_directory(dir)) {
+			std::string out = dir.generic_u8string();
+			while (!out.empty() && (out.back() == '/' || out.back() == '\\'))
+				out.pop_back();
+			obs_log(LOG_INFO, "Liedplan: builtin-Vorlagenordner (Data): %s", out.c_str());
+			return out;
+		}
+	}
+	const std::filesystem::path repo_dir =
+		std::filesystem::u8path(kRepoTextboxPath).parent_path().parent_path() /
+		"plugin" / "templates";
+	if (std::filesystem::is_directory(repo_dir)) {
+		std::string out = repo_dir.generic_u8string();
+		while (!out.empty() && (out.back() == '/' || out.back() == '\\'))
+			out.pop_back();
+		obs_log(LOG_INFO, "Liedplan: builtin-Vorlagenordner (Repo): %s", out.c_str());
+		return out;
+	}
+	obs_log(LOG_INFO, "Liedplan: kein builtin-Vorlagenordner gefunden");
+	return "";
+#endif
+}
+
 std::string render_template_html(const LiedplanCard &card, const std::string &template_id,
 				 bool clear, const LiedplanSettings &settings,
 				 const std::string &copy_dir)
@@ -787,16 +836,67 @@ std::string render_template_html(const LiedplanCard &card, const std::string &te
 	if (template_id.empty())
 		return "";
 
-	const std::string dir = templates_dir();
-	if (dir.empty())
-		return "";
+	// Suchpfad: user-Dir zuerst (überschreibt builtin), dann builtin-Examples.
+	const std::string user_dir = templates_dir();
+	const std::string builtin_dir = builtin_templates_dir();
+	const std::string dirs[] = {user_dir, builtin_dir};
+	for (const std::string &dir : dirs) {
+		if (dir.empty())
+			continue;
+		const std::string tpl_path = dir + "/" + template_id + ".html";
+		const std::string tpl_html = read_utf8_file(tpl_path.c_str());
+		if (!tpl_html.empty())
+			return substitute_tokens(card, tpl_html, clear, settings, copy_dir);
+	}
+	return "";
+}
 
-	const std::string tpl_path = dir + "/" + template_id + ".html";
-	const std::string tpl_html = read_utf8_file(tpl_path.c_str());
-	if (tpl_html.empty())
-		return "";
+std::vector<std::string> list_template_ids()
+{
+	std::vector<std::string> ids;
+	const std::string dirs[] = {templates_dir(), builtin_templates_dir()};
+	for (const std::string &dir : dirs) {
+		if (dir.empty())
+			continue;
+		std::error_code ec;
+		if (!std::filesystem::is_directory(dir, ec))
+			continue;
+		for (const auto &entry : std::filesystem::directory_iterator(dir, ec)) {
+			if (!entry.is_regular_file())
+				continue;
+			const std::string name = entry.path().filename().u8string();
+			if (name.size() < 6 || name.compare(name.size() - 5, 5, ".html") != 0)
+				continue;
+			std::string id = name.substr(0, name.size() - 5);
+			if (id.empty())
+				continue;
+			if (std::find(ids.begin(), ids.end(), id) == ids.end())
+				ids.push_back(id);
+		}
+	}
+	std::sort(ids.begin(), ids.end());
+	return ids;
+}
 
-	return substitute_tokens(card, tpl_html, clear, settings, copy_dir);
+bool reload_browser_source(obs_source_t *source)
+{
+	if (!source)
+		return false;
+#ifdef LIEDPLAN_TEST_NO_OBS
+	(void)source;
+	return false;
+#else
+	// Browser-Source hat die Proc "reload" (argumentlos); proc_handler_call aus
+	// callback/proc.h ruft sie mit leerem calldata auf. false, wenn Proc fehlt.
+	proc_handler_t *ph = obs_source_get_proc_handler(source);
+	if (!ph)
+		return false;
+	calldata_t cd;
+	calldata_init(&cd);
+	const bool ok = proc_handler_call(ph, "reload", &cd);
+	calldata_free(&cd);
+	return ok;
+#endif
 }
 
 std::string card_html(const LiedplanCard &card)

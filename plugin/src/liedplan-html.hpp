@@ -14,6 +14,7 @@
 #include "liedplan-state.hpp"
 #include <obs.h>
 #include <string>
+#include <vector>
 
 namespace liedplan_html {
 
@@ -53,12 +54,32 @@ std::string substitute_tokens(const LiedplanCard &card, const std::string &templ
 			      const LiedplanSettings &settings = LiedplanSettings(),
 			      const std::string &copy_dir = "");
 
-// Liest <templates_dir>/<template_id>.html und substituiert.
+// Verzeichnis der mitinstallierten Beispiel-Vorlagen (Plugin-Data-Verzeichnis,
+// Basis obs_module_file("templates/standard.html")). Im Test-Modus: repo
+// plugin/templates via LIEDPLAN_REPO_ROOT; sonst "".
+std::string builtin_templates_dir();
+
+// Liest <template_id>.html aus dem Suchpfad — zuerst templates_dir()
+// (user-editierbar, überschreibt builtin), dann builtin_templates_dir() —
+// und substituiert.
 // Rückgabe "" wenn: id empty, Datei fehlt/leer/unlesbar. Kein Log hier (Caller loggt).
 std::string render_template_html(const LiedplanCard &card, const std::string &template_id,
 				 bool clear = false,
 				 const LiedplanSettings &settings = LiedplanSettings(),
 				 const std::string &copy_dir = "");
+
+// Vorlagen-IDs beider Suchverzeichnisse (user-Dir + builtin), Dedup, sortiert.
+// "classic" ist hier nicht enthalten (leere template_id = klassischer Weg).
+std::vector<std::string> list_template_ids();
+
+// Löst den Pfad der classic-Vorlage (textbox.html) auf: settings.textbox_path →
+// obs_module_file("textbox.html") → Repo-Fallback. Für "Vorlage aus classic
+// kopieren" (Spec F2b).
+std::string resolve_textbox_path(const LiedplanSettings &settings = LiedplanSettings());
+
+// Browser-Source-Reload über proc_handler "reload" (spec F2b: Template-Wechsel
+// -> Reload). false bei nullptr / ohne Reload-Prozedur / im Test-Modus.
+bool reload_browser_source(obs_source_t *source);
 
 // Erzeugt das self-contained HTML der Karte (Template unten) und schreibt es nach
 // cards_dir() + "/" + card.id + ".html" (UTF-8, via std::filesystem::u8path).

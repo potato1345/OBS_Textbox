@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<!-- LIEDPLAN_TEMPLATE: standard
+     Beispiel-Vorlage (F2b): Nachbau der klassischen textbox.html mit den
+     offiziellen TOKEN-Platzhaltern (zeile1..3, box_color, corner_a/b u.a.).
+     des Plugins und können dort frei editiert/kopiert werden. -->
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<style>
+    /* Token-Werte werden bei write_card substituiert; der Live-Push unten
+       überschreibt dieselben CSS-Variablen ohne Reload. */
+    :root {
+        --zeile-1: "{{zeile1}}";
+        --zeile-2: "{{zeile2}}";
+        --zeile-3: "{{zeile3}}";
+        --lp-bg-color: {{box_color}};
+        --lp-text-color: {{text_color}};
+        --lp-border-color: rgba(0, 0, 0, 0.7);
+        --lp-border-width: 0px;
+        --lp-corner-1: {{corner_a}};
+        --lp-corner-2: {{corner_a}};
+        --lp-corner-3: {{corner_b}};
+        --lp-corner-4: {{corner_b}};
+        --anim-file: "{{anim_src}}";
+        --show-anim: {{show_anim}};
+        --anim-scale: {{anim_scale}};
+        --anim-x: {{anim_x}}px;
+        --anim-y: {{anim_y}}px;
+    }
+    html, body {
+        margin: 0;
+        padding: 0;
+        background: transparent;
+        overflow: hidden;
+        width: auto;
+        height: auto;
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    }
+    .card {
+        position: relative;
+        width: 100%;
+        height: auto;
+        padding: 18px 26px;
+        box-sizing: border-box;
+        border-radius: 14px;
+        background: var(--lp-bg-color);
+        border: var(--lp-border-width) solid var(--lp-border-color);
+    }
+    /* Farbige Eck-Akzente (Regenbogen): Token {{rainbow}} -> class="rainbow"/"0". */
+    .corner {
+        position: absolute;
+        width: 18px;
+        height: 18px;
+        border-radius: 5px;
+        display: none;
+    }
+    body.rainbow .corner { display: block; animation: corner-rotate 12s linear infinite; }
+    .c1 { top: -6px; left: -6px; background: var(--lp-corner-1); }
+    .c2 { top: -6px; right: -6px; background: var(--lp-corner-2); }
+    .c3 { bottom: -6px; left: -6px; background: var(--lp-corner-3); }
+    .c4 { bottom: -6px; right: -6px; background: var(--lp-corner-4); }
+    @keyframes corner-rotate { to { transform: rotate(360deg); } }
+    .anim-wrapper {
+        position: absolute;
+        bottom: 100%;
+        right: 0;
+        margin-bottom: 15px;
+        z-index: 10;
+        transform: translate(var(--anim-x, 0px), var(--anim-y, 0px)) scale(var(--anim-scale, 3));
+        transform-origin: bottom right;
+    }
+    .anim-wrapper img, .anim-wrapper video {
+        display: block;
+        image-rendering: pixelated;
+    }
+    .text-line { line-height: 1.2; color: var(--lp-text-color); }
+    .text-line::before { display: inline-block; white-space: pre-wrap; }
+    .line1::before { content: var(--zeile-1); font-size: 38px; font-weight: 500; margin-bottom: 5px; }
+    .line2::before { content: var(--zeile-2); font-size: 32px; font-weight: 400; }
+    .line3::before { content: var(--zeile-3); font-size: 32px; font-weight: 400; }
+</style>
+</head>
+<body class="{{rainbow}}">
+<div class="card">
+    <div class="corner c1"></div>
+    <div class="corner c2"></div>
+    <div class="corner c3"></div>
+    <div class="corner c4"></div>
+    <div class="anim-wrapper" id="anim-wrapper" style="display: none;"></div>
+    <div class="text-line line1"></div>
+    <div class="text-line line2"></div>
+    <div class="text-line line3"></div>
+</div>
+<script>
+    // Auto-verbirgt leere Zeilen und schaltet die Animation (wie textbox.html).
+    (function () {
+        let currentAnimFile = '';
+        function updateLines() {
+            const cs = getComputedStyle(document.documentElement);
+            for (let n = 1; n <= 3; n++) {
+                const raw = (cs.getPropertyValue('--zeile-' + n) || '').trim();
+                const text = raw.replace(/^["']|["']$/g, '');
+                const line = document.querySelector('.line' + n);
+                if (line) line.style.display = text ? '' : 'none';
+            }
+            const showAnimRaw = (cs.getPropertyValue('--show-anim') || '').trim();
+            const animFileRaw = (cs.getPropertyValue('--anim-file') || '').trim();
+            const animFile = animFileRaw.replace(/^["']|["']$/g, '');
+            const animWrapper = document.getElementById('anim-wrapper');
+            if (!animWrapper) return;
+            if (showAnimRaw === '1' && animFile) {
+                animWrapper.style.display = 'block';
+                if (animFile !== currentAnimFile) {
+                    currentAnimFile = animFile;
+                    animWrapper.innerHTML = '';
+                    if (animFile.toLowerCase().endsWith('.webm') || animFile.toLowerCase().endsWith('.mp4')) {
+                        const vid = document.createElement('video');
+                        vid.src = animFile; vid.autoplay = true; vid.loop = true; vid.muted = true;
+                        animWrapper.appendChild(vid);
+                    } else {
+                        const img = document.createElement('img');
+                        img.src = animFile;
+                        animWrapper.appendChild(img);
+                    }
+                }
+            } else {
+                animWrapper.style.display = 'none';
+                if (currentAnimFile !== '') {
+                    currentAnimFile = '';
+                    animWrapper.innerHTML = '';
+                }
+            }
+        }
+        updateLines();
+        setInterval(updateLines, 150);
+
+        // Live-Push vom Plugin (javascript_event -> CustomEvent), ohne Reload.
+        window.addEventListener('liedplan_card_update', function (ev) {
+            const d = ev.detail;
+            if (!d) return;
+            const setVar = (name, value) => document.documentElement.style.setProperty(name, value);
+            if (d.zeile1 != null) setVar('--zeile-1', '"' + String(d.zeile1) + '"');
+            if (d.zeile2 != null) setVar('--zeile-2', '"' + String(d.zeile2) + '"');
+            if (d.zeile3 != null) setVar('--zeile-3', '"' + String(d.zeile3) + '"');
+            if (d.box_bg != null) setVar('--lp-bg-color', d.box_bg);
+            if (d.text_color != null) setVar('--lp-text-color', d.text_color);
+            if (d.triangle_color_a != null) {
+                setVar('--lp-corner-1', d.triangle_color_a);
+                setVar('--lp-corner-2', d.triangle_color_a);
+            }
+            if (d.triangle_color_b != null) {
+                setVar('--lp-corner-3', d.triangle_color_b);
+                setVar('--lp-corner-4', d.triangle_color_b);
+            }
+            if (d.anim_file != null) setVar('--anim-file', '"' + String(d.anim_file) + '"');
+            if (d.show_anim != null) setVar('--show-anim', String(d.show_anim));
+            if (d.anim_scale != null) setVar('--anim-scale', String(d.anim_scale));
+            if (d.anim_x != null) setVar('--anim-x', String(d.anim_x) + 'px');
+            if (d.anim_y != null) setVar('--anim-y', String(d.anim_y) + 'px');
+            document.body.classList.toggle('rainbow', !!d.rainbow);
+        });
+    })();
+</script>
+</body>
+</html>
