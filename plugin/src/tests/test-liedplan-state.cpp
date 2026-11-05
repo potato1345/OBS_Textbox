@@ -628,7 +628,8 @@ colors:
 		      err);
 	}
 
-	// 22. (M6-B2 #5) Lookup: Standard vor Custom, Custom gefunden, unbekannter Name -> nullptr
+	// 22. (M6-B2 #5, IMP-H5) Lookup: Custom vor Standard (materialisierte Profile
+	// sind die Wahrheit; Standard nur Fallback), Custom gefunden, unbekannt -> nullptr
 	{
 		const std::vector<LiedplanProfile> custom = {
 			{"Karte Dunkel", "#111111", "#222222"},
@@ -638,12 +639,12 @@ colors:
 		const LiedplanProfile *cust_hit = liedplan_profile_lookup("Kirchen-Gold", custom);
 		const LiedplanProfile *miss = liedplan_profile_lookup("Unbekannt", custom);
 
-		const bool ok = (std_hit != nullptr && std_hit->text_color == "#eff0f1" &&
-					 std_hit->box_color == "#3C404D") &&
-					(cust_hit != nullptr && cust_hit->text_color == "#fce647" &&
-					 cust_hit->box_color == "#2a1f0d") &&
-					(miss == nullptr);
-		check(ok, "22. M6-B2 Lookup: Standard vor Custom, Custom wird gefunden, Unbekannt -> nullptr");
+		const bool ok = (std_hit != nullptr && std_hit->text_color == "#111111" &&
+				std_hit->box_color == "#222222") &&
+				(cust_hit != nullptr && cust_hit->text_color == "#fce647" &&
+				 cust_hit->box_color == "#2a1f0d") &&
+				(miss == nullptr);
+		check(ok, "22. M6-B2/IMP-H5 Lookup: Custom vor Standard, Custom wird gefunden, Unbekannt -> nullptr");
 
 		// F1: Legacy-Aliase funktionieren in Lookup und profile_by_name (case-insensitive)
 		const LiedplanProfile *alias1 = profile_by_name("OBS Dark");
@@ -655,6 +656,35 @@ colors:
 		      "22c. F1 Alias case-insensitive -> Karte Kontrast");
 		check(alias3 != nullptr && alias3->name == "Karte Wald",
 		      "22d. F1 Alias lookup(\"Forest Green\") -> Karte Wald");
+
+		// 22e/22f (IMP-H5): Profilwechsel übernimmt Farb-Regeln, behält Nicht-Farb-Regeln;
+		// typisierte Profil-Stilregeln + profiles_seeded überleben den JSON-Roundtrip.
+		LiedplanCard sc;
+		sc.style = {{"--lp-radius", "14px", "px"}, {"--lp-color-box", "#3D1806", "hex"}};
+		const LiedplanProfile sp{"Testprofil", "#eff0f1", "#3C404D"};
+		profile_switch(sp, sc);
+		bool box_ok = false;
+		bool radius_ok = false;
+		for (const auto &r : sc.style) {
+			if (r.name == "--lp-color-box" && r.value == "#3C404D" && r.type == "hex")
+				box_ok = true;
+			if (r.name == "--lp-radius" && r.value == "14px")
+				radius_ok = true;
+		}
+		check(box_ok && radius_ok && sc.box_color == "#3C404D",
+		      "22e. IMP-H5 profile_switch: Farb-Regeln werden übernommen, Radius-Regel bleibt");
+
+		LiedplanState ss;
+		ss.color_profiles.push_back(
+			{"S", "#111111", "#222222", "#fce647", "#fce647", 255, 255, 255, 255, false,
+				{{"--lp-radius", "10px", "px"}}});
+		ss.profiles_seeded = true;
+		LiedplanState ss2;
+		const std::string derr = ss2.deserialize_json(ss.serialize_json());
+		check(derr.empty() && ss2.color_profiles.size() == 1 &&
+		      ss2.color_profiles[0].style.size() == 1 &&
+		      ss2.color_profiles[0].style[0].type == "px" && ss2.profiles_seeded,
+		      "22f. IMP-H5 Profil-Stil (typisiert) + profiles_seeded JSON-Roundtrip");
 	}
 
 	// 23. (M6-B2 #6) State-Seriale: 2 Custom-Profile -> save -> load -> identisch; JSON ohne Key -> leer; reset() -> leer

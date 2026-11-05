@@ -201,6 +201,10 @@ nlohmann::json state_to_json(const LiedplanState &s)
 
 	nlohmann::json cp_json = nlohmann::json::array();
 	for (const auto &cp : s.color_profiles) {
+			// IMP-H5: Profil-Stilregeln typisiert persistieren (wie Karten-Regeln).
+		nlohmann::json cp_style = nlohmann::json::array();
+		for (const auto &sr : cp.style)
+			cp_style.push_back({{"name", sr.name}, {"value", sr.value}, {"type", sr.type}});
 		cp_json.push_back({
 			{"name", cp.name},
 			{"text_color", cp.text_color},
@@ -212,6 +216,7 @@ nlohmann::json state_to_json(const LiedplanState &s)
 			{"text_opacity", cp.text_opacity},
 			{"box_opacity", cp.box_opacity},
 			{"rainbow", cp.rainbow},
+			{"style", cp_style},
 		});
 	}
 
@@ -231,6 +236,7 @@ nlohmann::json state_to_json(const LiedplanState &s)
 			 {"ai_system_prompt", s.settings.ai_system_prompt},
 		 }},
 		{"quick_profiles", std::move(qp_json)},
+		{"profiles_seeded", s.profiles_seeded},
 		{"color_profiles", std::move(cp_json)},
 		{"cards", std::move(cards_json)},
 	};
@@ -327,6 +333,23 @@ std::string state_from_json(LiedplanState &s, const nlohmann::json &root)
 				cp.box_opacity = cp_item["box_opacity"].get<int>();
 			if (cp_item.contains("rainbow") && cp_item["rainbow"].is_boolean())
 				cp.rainbow = cp_item["rainbow"].get<bool>();
+			if (cp_item.contains("style") && cp_item["style"].is_array()) {
+				for (const auto &s_item : cp_item["style"]) {
+					if (!s_item.is_object())
+						continue;
+					LiedplanStyleRule rule;
+					if (s_item.contains("name") && s_item["name"].is_string())
+						rule.name = s_item["name"].get<std::string>();
+					if (s_item.contains("value") && s_item["value"].is_string())
+						rule.value = s_item["value"].get<std::string>();
+					if (s_item.contains("type") && s_item["type"].is_string())
+						rule.type = s_item["type"].get<std::string>();
+					else
+						rule.type = infer_style_type(rule.value);
+					if (!rule.name.empty())
+						cp.style.push_back(rule);
+				}
+			}
 			loaded_color_profiles.push_back(std::move(cp));
 		}
 	}
@@ -352,6 +375,8 @@ std::string state_from_json(LiedplanState &s, const nlohmann::json &root)
 	s.settings = std::move(loaded_settings);
 	s.quick_profiles = std::move(loaded_quick_profiles);
 	s.color_profiles = std::move(loaded_color_profiles);
+	if (root.contains("profiles_seeded") && root["profiles_seeded"].is_boolean())
+		s.profiles_seeded = root["profiles_seeded"].get<bool>();
 	return "";
 }
 
@@ -451,6 +476,7 @@ void LiedplanState::reset()
 	settings = LiedplanSettings{};
 	quick_profiles.clear();
 	color_profiles.clear();
+	profiles_seeded = false;
 }
 
 std::string LiedplanState::serialize_json() const

@@ -558,6 +558,27 @@ LiedplanDock::LiedplanDock(const std::string &state_path, QWidget *parent)
 		save_state();
 	}
 
+	/*
+	 * IMP-H5: Standardprofile einmalig in state_.color_profiles materialisieren.
+	 * Danach sind sie normale Daten: löschbar, umbenennbar, überschreibbar.
+	 * profiles_seeded prevents re-seeding deleted profiles on next start.
+	 */
+	if (!state_.profiles_seeded) {
+		for (const auto &bp : liedplan_profiles()) {
+			bool present = false;
+			for (const auto &cp : state_.color_profiles) {
+				if (cp.name == bp.name) {
+					present = true;
+					break;
+				}
+			}
+			if (!present)
+				state_.color_profiles.push_back(bp);
+		}
+		state_.profiles_seeded = true;
+		save_state();
+	}
+
 	rebuild_rows();
 
 	// Spec F2b: Karten-HTML ab Start aus Zustand + Vorlagen neu erzeugen und die
@@ -967,17 +988,11 @@ void LiedplanDock::create_row_widget(const LiedplanCard &card)
 		QStringLiteral("Karten-Farbprofil (Text/Box/Ecken/Deckkraft)"));
 	int selected_index = 0;
 	const std::string canonical_prof = profile_name_canonical(card.profile);
-	const auto &profiles = liedplan_profiles();
-	for (size_t i = 0; i < profiles.size(); ++i) {
-		profile_combo->addItem(QString::fromUtf8(profiles[i].name.c_str()));
-		if (profiles[i].name == canonical_prof)
-			selected_index = static_cast<int>(i);
-	}
 	for (size_t i = 0; i < state_.color_profiles.size(); ++i) {
 		const auto &cp = state_.color_profiles[i];
 		profile_combo->addItem(QString::fromUtf8(cp.name.c_str()));
 		if (cp.name == canonical_prof || cp.name == card.profile)
-			selected_index = static_cast<int>(profiles.size() + i);
+			selected_index = static_cast<int>(i);
 	}
 	profile_combo->setCurrentIndex(selected_index);
 
@@ -987,8 +1002,22 @@ void LiedplanDock::create_row_widget(const LiedplanCard &card)
 	new_prof_btn->setToolTip(
 		QStringLiteral("Aktuelles Karten-Farbprofil (Text/Box/Ecken/Deckkraft) speichern"));
 
+	auto *prof_rename_btn = new QPushButton(QStringLiteral("✎"), style_section);
+	prof_rename_btn->setObjectName(QStringLiteral("lpBtnRenameProfile"));
+	prof_rename_btn->setFixedHeight(34);
+	prof_rename_btn->setToolTip(QStringLiteral("Aktuelles Profil umbenennen"));
+	prof_rename_btn->setMaximumWidth(40);
+
+	auto *prof_del_btn = new QPushButton(QStringLiteral("−"), style_section);
+	prof_del_btn->setObjectName(QStringLiteral("lpBtnDeleteProfile"));
+	prof_del_btn->setFixedHeight(34);
+	prof_del_btn->setToolTip(QStringLiteral("Aktuelles Profil löschen"));
+	prof_del_btn->setMaximumWidth(40);
+
 	prof_row->addWidget(profile_combo, 1);
 	prof_row->addWidget(new_prof_btn);
+	prof_row->addWidget(prof_rename_btn);
+	prof_row->addWidget(prof_del_btn);
 
 	prof_layout->addWidget(lbl_prof);
 	prof_layout->addLayout(prof_row);
@@ -1490,14 +1519,16 @@ void LiedplanDock::create_row_widget(const LiedplanCard &card)
 	actions_layout->addWidget(clear_src_btn, 1);
 	inner_layout->addLayout(actions_layout);
 
-	connect(profile_combo, &QComboBox::currentTextChanged, this,
-		[this, card_id, schedule_save, rebuild_css_rows](const QString &profile_text) {
+	// activated fires only on USER selection — programmatic setCurrentIndex
+	// during UI rebuild must not re-apply the profile over baked card colors.
+	connect(profile_combo, QOverload<int>::of(&QComboBox::activated), this,
+		[this, card_id, schedule_save, rebuild_css_rows, profile_combo](int) {
 			if (LiedplanCard *c = find_card_mut(card_id)) {
-				c->profile = profile_text.toUtf8().toStdString();
+				c->profile = profile_combo->currentText().toUtf8().toStdString();
 				if (const LiedplanProfile *prof =
 					liedplan_profile_lookup(c->profile, state_.color_profiles))
-					profile_apply(*prof, *c);
-				rebuild_css_rows(); // Profil-Werte + Karten-Regeln als Regelzeilen
+					profile_switch(*prof, *c); // Farb-Regeln des Profils übernehmen
+				rebuild_css_rows(); // Regelzeilen zeigen jetzt die Profil-Werte
 				schedule_save();
 			}
 		});
@@ -1521,12 +1552,6 @@ void LiedplanDock::create_row_widget(const LiedplanCard &card)
 			return;
 		}
 		const std::string name_utf8 = qname.toUtf8().toStdString();
-		if (liedplan_is_default_profile(name_utf8)) {
-			set_dock_status(
-				QStringLiteral("\"%1\" ist ein geschütztes Standard-Profil.").arg(qname),
-				true);
-			return;
-		}
 		LiedplanCard *c = find_card_mut(card_id);
 		if (!c)
 			return;
@@ -1544,6 +1569,8 @@ void LiedplanDock::create_row_widget(const LiedplanCard &card)
 			c->box_opacity,
 			c->rainbow_corners,
 		};
+		// IMP-H5: Profil = Snapshot der generellen CSS-Regeln der Karte.
+		prof.style = c->style;
 		auto it = std::find_if(state_.color_profiles.begin(), state_.color_profiles.end(),
 				       [&name_utf8](const LiedplanProfile &p) {
 					       return p.name == name_utf8;
@@ -1558,6 +1585,74 @@ void LiedplanDock::create_row_widget(const LiedplanCard &card)
 		rebuild_rows();
 		set_dock_status(QStringLiteral("Farbprofil \"%1\" gespeichert").arg(qname), false);
 	});
+
+	// IMP-H5: Profil löschen (aktuelle Combo-Auswahl) — auch Standardprofile.
+	connect(prof_del_btn, &QPushButton::clicked, this,
+		[this, card_id, profile_combo]() {
+			const QString qname = profile_combo->currentText().trimmed();
+			if (qname.isEmpty())
+				return;
+			const std::string name_utf8 = qname.toUtf8().toStdString();
+			auto it = std::find_if(state_.color_profiles.begin(),
+				state_.color_profiles.end(),
+				[&name_utf8](const LiedplanProfile &p) {
+					return p.name == name_utf8;
+				});
+			if (it == state_.color_profiles.end()) {
+				set_dock_status(QStringLiteral("Profil \"%1\" nicht gefunden.").arg(qname), true);
+				return;
+			}
+			state_.color_profiles.erase(it);
+			if (LiedplanCard *c = find_card_mut(card_id))
+				c->profile = ""; // baked Farben bleiben (kein Auto-Reset)
+			save_state();
+			rebuild_rows();
+			set_dock_status(QStringLiteral("Profil \"%1\" gelöscht").arg(qname), false);
+		});
+
+	// IMP-H5: Profil umbenennen; Karten mit altem Namen folgen dem neuen.
+	connect(prof_rename_btn, &QPushButton::clicked, this,
+		[this, profile_combo]() {
+			const QString old_name = profile_combo->currentText().trimmed();
+			if (old_name.isEmpty())
+				return;
+			bool ok = false;
+			const QString raw = QInputDialog::getText(
+				this, QStringLiteral("Profil umbenennen"),
+				QStringLiteral("Neuer Profilname:"), QLineEdit::Normal, old_name, &ok);
+			if (!ok)
+				return;
+			const QString qname = raw.trimmed();
+			if (qname.isEmpty() || qname == old_name)
+				return;
+			const std::string old_utf8 = old_name.toUtf8().toStdString();
+			const std::string new_utf8 = qname.toUtf8().toStdString();
+			for (const auto &cp : state_.color_profiles) {
+				if (cp.name == new_utf8) {
+					set_dock_status(
+						QStringLiteral("\"%1\" existiert bereits als Profil.").arg(qname), true);
+					return;
+				}
+			}
+			auto it = std::find_if(state_.color_profiles.begin(),
+				state_.color_profiles.end(),
+				[&old_utf8](const LiedplanProfile &p) {
+					return p.name == old_utf8;
+				});
+			if (it == state_.color_profiles.end()) {
+				set_dock_status(QStringLiteral("Profil \"%1\" nicht gefunden.").arg(old_name), true);
+				return;
+			}
+			it->name = new_utf8;
+			for (auto &c : state_.cards) {
+				if (c.profile == old_utf8 || profile_name_canonical(c.profile) == old_utf8)
+					c.profile = new_utf8;
+			}
+			save_state();
+			rebuild_rows();
+			set_dock_status(QStringLiteral("Profil \"%1\" → \"%2\" umbenannt")
+				    .arg(old_name, qname), false);
+		});
 
 	connect(anim_file_edit, &QLineEdit::textChanged, this,
 		[this, card_id, schedule_save](const QString &text) {

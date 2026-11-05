@@ -143,17 +143,22 @@ inline const LiedplanProfile *profile_by_name(const std::string &name)
 	return nullptr;
 }
 
+/**
+ * Lookup-Reihenfolge: custom (materialisierte/editierte Profile) zuerst, dann
+ * Hardcode-Defaults als Fallback. Gelöschte oder umbenannte Standardprofile
+ * werden dadurch nicht mehr gegen die Nutzer-Version ausgewechselt.
+ */
 inline const LiedplanProfile *
 liedplan_profile_lookup(const std::string &name,
 			const std::vector<LiedplanProfile> &custom)
 {
-	if (const LiedplanProfile *std_prof = profile_by_name(name))
-		return std_prof;
 	const std::string canonical = profile_name_canonical(name);
 	for (const auto &p : custom) {
 		if (p.name == name || p.name == canonical)
 			return &p;
 	}
+	if (const LiedplanProfile *std_prof = profile_by_name(name))
+		return std_prof;
 	return nullptr;
 }
 
@@ -229,6 +234,25 @@ inline void apply_style_rules(CardT &card)
 	}
 }
 
+/**
+ * Die Farb-/Deckkraft-/Regenbogen-Regeln, die ein Profil aus seinen Feldern
+ * erzeugt (typisiert, damit das Dock passende Wert-Widgets zeigt).
+ */
+inline std::vector<LiedplanStyleRule> profile_color_rules(const LiedplanProfile &prof)
+{
+	std::vector<LiedplanStyleRule> rules;
+	rules.push_back({"--lp-color-text", prof.text_color, "hex"});
+	rules.push_back({"--lp-color-box", prof.box_color, "hex"});
+	rules.push_back({"--lp-corner-color-a", prof.corner_a, "hex"});
+	rules.push_back({"--lp-corner-color-b", prof.corner_b, "hex"});
+	rules.push_back({"--lp-corner-opacity-a", std::to_string(prof.corner_op_a), "num"});
+	rules.push_back({"--lp-corner-opacity-b", std::to_string(prof.corner_op_b), "num"});
+	rules.push_back({"--lp-text-opacity", std::to_string(prof.text_opacity), "num"});
+	rules.push_back({"--lp-box-opacity", std::to_string(prof.box_opacity), "num"});
+	rules.push_back({"--lp-rainbow", prof.rainbow ? "1" : "0", "bool"});
+	return rules;
+}
+
 template <typename CardT>
 inline void profile_apply(const LiedplanProfile &prof, CardT &card)
 {
@@ -254,4 +278,29 @@ inline void profile_apply(const LiedplanProfile &prof, CardT &card)
 	}
 	// Karten-eigene Regeln schlagen Profil-Feldwerte (UI ist die Wahrheit).
 	apply_style_rules(card);
+}
+
+/**
+ * Profilwechsel im Dock: Farb-/Deckkraft-Regeln des Profils ÜBERNEHMEN die
+ * Karten-Regeln gleichen Namens (sonst bleibt der Wechsel unsichtbar, weil
+ * Karten-Regeln gewinnen). Nicht-Farb-Regeln der Karte (Radius, Padding,
+ * Fonts ...) bleiben erhalten.
+ */
+template <typename CardT>
+inline void profile_switch(const LiedplanProfile &prof, CardT &card)
+{
+	auto upsert = [&card](const LiedplanStyleRule &rule) {
+		for (auto &cr : card.style) {
+			if (cr.name == rule.name) {
+				cr = rule;
+				return;
+			}
+		}
+		card.style.push_back(rule);
+	};
+	for (const auto &rule : profile_color_rules(prof))
+		upsert(rule);
+	for (const auto &rule : prof.style)
+		upsert(rule);
+	profile_apply(prof, card);
 }

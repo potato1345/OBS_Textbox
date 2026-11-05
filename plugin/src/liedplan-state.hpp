@@ -117,6 +117,9 @@ public:
 	LiedplanSettings settings;
 	std::vector<LiedplanQuickProfile> quick_profiles;
 	std::vector<LiedplanProfile> color_profiles;
+	// false = Standardprofile noch nicht in color_profiles materialisiert
+	// (Seed erfolgt einmalig im Dock; danach bleiben Löschungen/Umbenennungen erhalten).
+	bool profiles_seeded = false;
 	// Einstufiger Undo-Snapshot für destruktive Karten-Aktionen im Dock
 	std::vector<LiedplanCard> undo_snapshot_;
 	bool undo_available_ = false;
@@ -143,6 +146,7 @@ public:
 	{
 		return cards == other.cards && next_id == other.next_id &&
 		       active_profile == other.active_profile && settings == other.settings &&
+	       profiles_seeded == other.profiles_seeded &&
 		       quick_profiles == other.quick_profiles &&
 		       color_profiles == other.color_profiles;
 	}
