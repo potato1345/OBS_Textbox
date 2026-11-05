@@ -640,8 +640,10 @@ void LiedplanDock::create_row_widget(const LiedplanCard &card)
 	auto *id_prefix = new QLabel(QStringLiteral("ID"), id_bar);
 	id_prefix->setObjectName(QStringLiteral("lpIdPrefix"));
 
-	auto *id_label = new QLabel(QString::fromUtf8(card.id.c_str()), id_bar);
-	id_label->setObjectName(QStringLiteral("lpIdValue"));
+	auto *id_edit = new QLineEdit(QString::fromUtf8(card.id.c_str()), id_bar);
+	id_edit->setObjectName(QStringLiteral("lpIdValue"));
+	id_edit->setFixedWidth(96);
+	id_edit->setToolTip(QStringLiteral("ID umbenennen (Enter); nur Buchstaben/Zahlen/-/_"));
 
 	auto *style_toggle_btn = new QToolButton(id_bar);
 	style_toggle_btn->setObjectName(QStringLiteral("lpStyleToggle"));
@@ -651,6 +653,13 @@ void LiedplanDock::create_row_widget(const LiedplanCard &card)
 	style_toggle_btn->setIconSize(QSize(16, 16));
 	style_toggle_btn->setToolTip(QStringLiteral("Stil-Optionen einklappen"));
 
+	auto *dup_btn = new QToolButton(id_bar);
+	dup_btn->setObjectName(QStringLiteral("lpStyleToggle"));
+	dup_btn->setFixedSize(28, 28);
+	dup_btn->setAutoRaise(true);
+	dup_btn->setText(QStringLiteral("⧉"));
+	dup_btn->setToolTip(QStringLiteral("Karte duplizieren (neue ID, gleicher Inhalt + Stil)"));
+
 	auto *del_btn = new QPushButton(id_bar);
 	del_btn->setObjectName(QStringLiteral("lpDelBtn"));
 	del_btn->setFixedSize(28, 28);
@@ -659,9 +668,10 @@ void LiedplanDock::create_row_widget(const LiedplanCard &card)
 	del_btn->setToolTip(QStringLiteral("Karte löschen"));
 
 	id_layout->addWidget(id_prefix);
-	id_layout->addWidget(id_label);
+	id_layout->addWidget(id_edit);
 	id_layout->addStretch(1);
 	id_layout->addWidget(style_toggle_btn);
+	id_layout->addWidget(dup_btn);
 	id_layout->addWidget(del_btn);
 	inner_layout->addWidget(id_bar);
 	inner_layout->addSpacing(2);
@@ -1805,10 +1815,77 @@ void LiedplanDock::create_row_widget(const LiedplanCard &card)
 		liedplan_scene::remove_everywhere(card_id);
 		cards_layout_->removeWidget(row_widget);
 		row_widgets_.erase(std::remove(row_widgets_.begin(), row_widgets_.end(), row_widget),
-				   row_widgets_.end());
+			   row_widgets_.end());
 		row_widget->deleteLater();
 		refresh_top_row();
 	});
+
+	connect(dup_btn, &QToolButton::clicked, this, [this, card_id]() {
+		capture_undo_snapshot(this, state_);
+		const LiedplanCard *src = find_card_mut(card_id);
+		if (!src)
+			return;
+		LiedplanCard copy = *src;
+		LiedplanCard &nc = state_.add_card();
+		const std::string new_id = nc.id;
+		nc = copy;
+		nc.id = new_id;
+		create_row_widget(nc);
+		refresh_top_row();
+		save_state();
+		bool any_text = !nc.zeile1.empty() || !nc.zeile2.empty() || !nc.zeile3.empty();
+		for (const auto &r : nc.rows)
+			if (!r.value.empty())
+				any_text = true;
+		if (any_text)
+			liedplan_scene::send_to_current_scene(nc, state_.settings);
+		else
+			liedplan_scene::reload_everywhere(nc, state_.settings);
+	});
+
+	// ID-Umbenennung: validate, alte HTML-Datei + Sources entfernen, Widget neu bauen.
+	connect(id_edit, &QLineEdit::editingFinished, this,
+	        [this, card_id, id_edit, row_widget, schedule_save]() {
+		        const QString t = id_edit->text().trimmed();
+		        static const QRegularExpression re(QStringLiteral("^[A-Za-z0-9_-]{1,32}$"));
+		        const std::string new_id = t.toStdString();
+		        if (new_id == card_id)
+			        return;
+		        if (!re.match(t).hasMatch() || find_card_mut(new_id)) {
+			        id_edit->setText(QString::fromUtf8(card_id.c_str()));
+			        return;
+		        }
+		        LiedplanCard *c = find_card_mut(card_id);
+		        if (!c)
+			        return;
+		        capture_undo_snapshot(this, state_);
+		        std::error_code ec;
+		        std::filesystem::remove(
+			        std::filesystem::u8path(liedplan_html::cards_dir() + "/" + card_id + ".html"), ec);
+		        const bool had_text = [&c]() {
+			        if (!c->zeile1.empty() || !c->zeile2.empty() || !c->zeile3.empty())
+				        return true;
+			        for (const auto &r : c->rows)
+				        if (!r.value.empty())
+					        return true;
+			        return false;
+		        }();
+		        c->id = new_id;
+		        liedplan_scene::remove_everywhere(card_id);
+		        save_state();
+		        if (had_text)
+			        liedplan_scene::send_to_current_scene(*c, state_.settings);
+		        else
+			        liedplan_scene::reload_everywhere(*c, state_.settings);
+		        // Widget mit neuer ID neu aufbauen (alte Handler capturen die alte ID).
+		        cards_layout_->removeWidget(row_widget);
+		        row_widgets_.erase(std::remove(row_widgets_.begin(), row_widgets_.end(), row_widget),
+			           row_widgets_.end());
+		        row_widget->deleteLater();
+		        create_row_widget(*c);
+		        refresh_top_row();
+		        schedule_save();
+	        });
 
 	const int insert_idx = std::max(0, cards_layout_->count() - 1);
 	cards_layout_->insertWidget(insert_idx, row_widget);
