@@ -37,6 +37,7 @@ struct LiedplanRow {
 struct LiedplanStyleRule {
 	std::string name;
 	std::string value;
+	std::string type; // "text" | "num" | "hex" | "px" | "bool" ("" = infer aus value)
 
 	bool operator==(const LiedplanStyleRule &other) const
 	{
@@ -170,6 +171,64 @@ inline bool liedplan_is_default_profile(const std::string &name)
  * Überträgt sämtliche Farb-, Ecken-, Deckkraft- und Regenbogen-Felder eines Profils auf eine Karte.
  * Profil-CSS-Regeln werden ergänzt; Karten-Regeln mit gleichem Namen gewinnen.
  */
+// Typ einer CSS-Regel: aus dem Wert inferiert, wenn kein type gespeichert ist.
+inline std::string infer_style_type(const std::string &value)
+{
+	if (value.size() >= 7 && value[0] == '#' && value[6] != 'x')
+		return "hex";
+	if (value.size() > 2 && value.compare(value.size() - 2, 2, "px") == 0)
+		return "px";
+	bool digits = !value.empty();
+	for (char ch : value) {
+		if (ch < '0' || ch > '9') {
+			digits = false;
+			break;
+		}
+	}
+	if (digits)
+		return "num";
+	return "text";
+}
+
+// Bekannte Farb-/Deckkraft-Variablen auf die Karten-Felder mappen, damit der
+// klassische Renderer (inline Farben) und die CSS-Regeln konsistent bleiben.
+template <typename CardT>
+inline void apply_style_rules(CardT &card)
+{
+	auto to_int = [](const std::string &v) -> int {
+		int n = 0;
+		for (char ch : v) {
+			if (ch >= '0' && ch <= '9')
+				n = n * 10 + (ch - '0');
+			else if (ch == 'p' || ch == 'x')
+				break;
+		}
+		if (n > 255)
+			n = 255;
+		return n;
+	};
+	for (const auto &rule : card.style) {
+		if (rule.name == "--lp-color-text")
+			card.text_color = rule.value;
+		else if (rule.name == "--lp-color-box")
+			card.box_color = rule.value;
+		else if (rule.name == "--lp-corner-color-a")
+			card.corner_color_a = rule.value;
+		else if (rule.name == "--lp-corner-color-b")
+			card.corner_color_b = rule.value;
+		else if (rule.name == "--lp-corner-opacity-a")
+			card.corner_opacity_a = to_int(rule.value);
+		else if (rule.name == "--lp-corner-opacity-b")
+			card.corner_opacity_b = to_int(rule.value);
+		else if (rule.name == "--lp-text-opacity")
+			card.text_opacity = to_int(rule.value);
+		else if (rule.name == "--lp-box-opacity")
+			card.box_opacity = to_int(rule.value);
+		else if (rule.name == "--lp-rainbow")
+			card.rainbow_corners = rule.value == "1";
+	}
+}
+
 template <typename CardT>
 inline void profile_apply(const LiedplanProfile &prof, CardT &card)
 {
@@ -193,4 +252,6 @@ inline void profile_apply(const LiedplanProfile &prof, CardT &card)
 		if (!owned)
 			card.style.push_back(rule);
 	}
+	// Karten-eigene Regeln schlagen Profil-Feldwerte (UI ist die Wahrheit).
+	apply_style_rules(card);
 }

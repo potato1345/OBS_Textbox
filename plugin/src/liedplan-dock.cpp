@@ -1030,329 +1030,290 @@ void LiedplanDock::create_row_widget(const LiedplanCard &card)
 	css_layout->addLayout(css_bar);
 	style_layout->addWidget(css_frame);
 
-	auto css_name_edits = std::make_shared<std::vector<QLineEdit *>>();
-	auto css_value_edits = std::make_shared<std::vector<QLineEdit *>>();
 	// Übliche Template-Variablen als Autovervollständigung für Regel-Namen.
 	auto css_var_model = std::make_shared<QStringList>();
 	for (const char *v : {"--lp-radius", "--lp-padding", "--lp-padding-top", "--lp-padding-left",
 	                      "--lp-gap", "--lp-min-width", "--lp-max-width", "--lp-text-align",
 	                      "--lp-font-family", "--lp-font-first", "--lp-font-first-weight",
-	                      "--lp-font-rest", "--lp-font-rest-weight", "--lp-corner-size"})
+	                      "--lp-font-rest", "--lp-font-rest-weight", "--lp-corner-size",
+	                      "--lp-color-text", "--lp-color-box", "--lp-corner-color-a", "--lp-corner-color-b",
+	                      "--lp-corner-opacity-a", "--lp-corner-opacity-b", "--lp-text-opacity",
+	                      "--lp-box-opacity", "--lp-rainbow"})
 		css_var_model->append(QString::fromLatin1(v));
 
-	connect(lbl_css, &QToolButton::clicked, css_frame,
-	        [css_collapsed, css_name_edits, css_value_edits, lbl_css]() {
-		        *css_collapsed = !*css_collapsed;
-		        lbl_css->setText(*css_collapsed ? QStringLiteral("▶ GENERELLE CSS-REGELN")
-		                                          : QStringLiteral("▼ GENERELLE CSS-REGELN"));
-		        for (auto *e : *css_name_edits)
-			        e->setVisible(!*css_collapsed);
-		        for (auto *e : *css_value_edits)
-			        e->setVisible(!*css_collapsed);
-	        });
+	auto paint_color_swatch = [](QPushButton *btn, const QString &hex) {
+		const QColor col(hex);
+		const bool light = (col.red() + col.green() + col.blue()) > 160;
+		btn->setStyleSheet(QStringLiteral("background-color: %1; color: %2; font-weight: bold;")
+		                       .arg(hex)
+		                       .arg(light ? QStringLiteral("#1a1a1a") : QStringLiteral("#ffffff")));
+	};
 
-	auto collect_css = [this, card_id, css_name_edits, css_value_edits]() -> bool {
+	// Eine Regelzeile: Variablenname + Wert-Eingarte (Typ) + Wert-Widget.
+	struct CssRuleRow {
+		QLineEdit *name_edit = nullptr;
+		QComboBox *type_combo = nullptr;
+		QWidget *value_widget = nullptr;
+		QHBoxLayout *row_layout = nullptr;
+		std::function<QString()> getter;
+	};
+	auto css_rows = std::make_shared<std::vector<CssRuleRow>>();
+
+// Einklappen/ausklappen der CSS-Regelzeilen.
+	QObject::connect(lbl_css, &QToolButton::clicked, this,
+		[this, lbl_css, css_collapsed, css_rows]() {
+			*css_collapsed = !*css_collapsed;
+			lbl_css->setText(*css_collapsed ? QStringLiteral("▶ GENERELLE CSS-REGELN")
+			                                : QStringLiteral("▼ GENERELLE CSS-REGELN"));
+			for (auto &r : *css_rows) {
+				r.name_edit->setVisible(!*css_collapsed);
+				r.type_combo->setVisible(!*css_collapsed);
+				r.value_widget->setVisible(!*css_collapsed);
+			}
+		});
+
+	auto collect_css = [this, card_id, css_rows]() -> bool {
 		LiedplanCard *c = find_card_mut(card_id);
 		if (!c)
 			return false;
 		std::vector<LiedplanStyleRule> rules;
-		for (size_t i = 0; i < css_name_edits->size(); ++i) {
-			LiedplanStyleRule r;
-			r.name = liedplan_html::sanitize_css_var_name(
-				css_name_edits->at(i)->text().toUtf8().toStdString());
-			r.value = liedplan_html::sanitize_css_value(
-				css_value_edits->at(i)->text().toUtf8().toStdString());
-			if (r.name.empty())
+		for (auto &r : *css_rows) {
+			LiedplanStyleRule rule;
+			rule.name = liedplan_html::sanitize_css_var_name(
+				r.name_edit->text().toUtf8().toStdString());
+			rule.value = liedplan_html::sanitize_css_value(
+				r.getter().toUtf8().toStdString());
+			rule.type = r.type_combo->currentData().toString().toUtf8().toStdString();
+			if (rule.name.empty())
 				continue;
-			rules.push_back(r);
+			rules.push_back(rule);
 		}
 		c->style = std::move(rules);
+		apply_style_rules(*c); // bekannte Farb-/Deckkraft-Regeln auf Felder mappen
 		return true;
 	};
 
-	auto rebuild_css_rows = [this, card_id, css_frame, css_layout, css_name_edits, css_value_edits, css_collapsed, css_var_model, collect_css, schedule_save]() {
-		// Header-Layout (index 0) behalten, Regel-Zeilen neu aufbauen.
-		while (css_layout->count() > 1) {
-			QLayoutItem *item = css_layout->takeAt(1);
-			if (item->layout()) {
-				for (int k = item->layout()->count() - 1; k >= 0; --k) {
-					auto *sub = item->layout()->takeAt(k);
-					if (sub->widget())
-						sub->widget()->deleteLater();
-					delete sub;
-				}
-				delete item->layout();
-			} else if (item->widget()) {
-				item->widget()->deleteLater();
+	auto build_value_widget =
+		[css_frame, paint_color_swatch](const QString &type, const QString &value,
+		                                const std::function<void()> &on_change)
+			-> std::pair<QWidget *, std::function<QString()>> {
+			if (type == QLatin1String("num")) {
+				auto *row = new QWidget(css_frame);
+				auto *hl = new QHBoxLayout(row);
+				hl->setContentsMargins(0, 0, 0, 0);
+				hl->setSpacing(6);
+				auto *slider = new QSlider(Qt::Horizontal, row);
+				row->setMinimumWidth(96);
+				slider->setRange(0, 255);
+				bool ok = false;
+				const int v = value.toInt(&ok);
+				slider->setValue(ok ? std::clamp(v, 0, 255) : 255);
+				auto *val = new QLabel(QString::number(slider->value()), row);
+				val->setObjectName(QStringLiteral("lpFieldLabel"));
+				val->setMinimumWidth(36);
+				val->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
+				hl->addWidget(slider, 1);
+				hl->addWidget(val);
+				QObject::connect(slider, &QSlider::valueChanged, row,
+				                 [val, on_change](int s) {
+				                 val->setText(QString::number(s));
+				                 on_change();
+			                 });
+				return {row, [slider]() { return QString::number(slider->value()); }};
 			}
-			delete item;
-		}
-		css_name_edits->clear();
-		css_value_edits->clear();
-		const LiedplanCard *c = find_card_mut(card_id);
-		if (!c)
-			return;
-		for (const auto &rule : c->style) {
+			if (type == QLatin1String("hex")) {
+				const QString hex = value.startsWith(QLatin1String("#")) ? value
+				                                                         : QStringLiteral("#ffffff");
+				auto *btn = new QPushButton(hex.toUpper(), css_frame);
+				btn->setObjectName(QStringLiteral("lpTextColor"));
+				btn->setFixedHeight(32);
+				btn->setMinimumWidth(96);
+				paint_color_swatch(btn, hex);
+				QObject::connect(btn, &QPushButton::clicked, btn,
+				                 [btn, on_change, paint_color_swatch]() {
+				                 const QColor chosen = QColorDialog::getColor(QColor(btn->text()), btn);
+				                 if (chosen.isValid()) {
+				                 const QString h = chosen.name(QColor::HexRgb);
+				                 btn->setText(h.toUpper());
+				                 paint_color_swatch(btn, h);
+				                 on_change();
+			                 }
+		                 });
+				return {btn, [btn]() { return btn->text(); }};
+			}
+			if (type == QLatin1String("px")) {
+				auto *combo = new QComboBox(css_frame);
+				combo->setEditable(true);
+				for (const char *p : {"0px", "2px", "4px", "6px", "8px", "10px", "12px", "14px",
+				                     "16px", "20px", "24px", "28px", "32px", "40px", "48px", "60px"})
+					combo->addItem(QString::fromLatin1(p));
+				if (!value.isEmpty() && combo->findText(value, Qt::MatchFixedString) < 0)
+					combo->addItem(value);
+				combo->setCurrentText(value.isEmpty() ? QStringLiteral("8px") : value);
+				combo->setFixedHeight(32);
+				combo->setMinimumWidth(96);
+				QObject::connect(combo, &QComboBox::currentTextChanged, combo,
+				                 [on_change](const QString &) { on_change(); });
+				return {combo, [combo]() { return combo->currentText(); }};
+			}
+			if (type == QLatin1String("bool")) {
+				auto *cb = new QCheckBox(QStringLiteral("1 = an"), css_frame);
+				cb->setChecked(value == QLatin1String("1"));
+				QObject::connect(cb, &QCheckBox::toggled, cb,
+				                 [on_change](bool) { on_change(); });
+				return {cb, [cb]() { return cb->isChecked() ? QStringLiteral("1") : QStringLiteral("0"); }};
+			}
+			auto *edit = new QLineEdit(value, css_frame);
+			edit->setPlaceholderText(QStringLiteral("wert"));
+			edit->setFixedHeight(32);
+			QObject::connect(edit, &QLineEdit::textChanged, edit,
+			                 [on_change](const QString &) { on_change(); });
+			return {edit, [edit]() { return edit->text(); }};
+		};
+
+	auto make_rule_row =
+		[css_frame, css_layout, css_rows, css_var_model, build_value_widget, collect_css,
+		 schedule_save, css_collapsed](const QString &name, const QString &type,
+		                                const QString &value) {
 			auto *row = new QHBoxLayout();
 			row->setContentsMargins(0, 0, 0, 0);
 			row->setSpacing(6);
-			auto *nedit = new QLineEdit(QString::fromUtf8(rule.name.c_str()), css_frame);
+			auto *nedit = new QLineEdit(name, css_frame);
 			nedit->setPlaceholderText(QStringLiteral("--variable"));
-			nedit->setFixedWidth(110);
+			nedit->setMinimumWidth(100);
 			nedit->setFixedHeight(32);
 			auto *comp = new QCompleter(*css_var_model, css_frame);
 			comp->setCaseSensitivity(Qt::CaseInsensitive);
 			nedit->setCompleter(comp);
-			auto *vedit = new QLineEdit(QString::fromUtf8(rule.value.c_str()), css_frame);
-			vedit->setPlaceholderText(QStringLiteral("wert"));
-			vedit->setFixedHeight(32);
+			auto *tcombo = new QComboBox(css_frame);
+			tcombo->setFixedWidth(78);
+			tcombo->setFixedHeight(32);
+			tcombo->setToolTip(QStringLiteral(
+				"Wert-Eingarte: Text, Zahl 0-255 (Regler), HEX (Farbpicker), px (Dropdown), Bool"));
+			tcombo->addItem(QStringLiteral("Text"), QStringLiteral("text"));
+			tcombo->addItem(QStringLiteral("0-255"), QStringLiteral("num"));
+			tcombo->addItem(QStringLiteral("HEX"), QStringLiteral("hex"));
+			tcombo->addItem(QStringLiteral("px"), QStringLiteral("px"));
+			tcombo->addItem(QStringLiteral("Bool"), QStringLiteral("bool"));
+			const int ti = tcombo->findData(type);
+			tcombo->setCurrentIndex(ti >= 0 ? ti : 0);
+
+			CssRuleRow r;
+			r.name_edit = nedit;
+			r.type_combo = tcombo;
+			r.row_layout = row;
+			auto onchange = [collect_css, schedule_save]() {
+				if (collect_css())
+					schedule_save();
+			};
+			auto built = build_value_widget(tcombo->currentData().toString(), value, onchange);
+			r.value_widget = built.first;
+			r.getter = built.second;
 			if (*css_collapsed) {
-				nedit->setVisible(false);
-				vedit->setVisible(false);
+				r.name_edit->hide();
+				r.type_combo->hide();
+				r.value_widget->hide();
 			}
-			row->addWidget(nedit);
-			row->addWidget(vedit, 1);
+			row->addWidget(r.name_edit, 3);
+			row->addWidget(r.value_widget, 4);
+			row->addWidget(r.type_combo);
 			css_layout->addLayout(row);
-			css_name_edits->push_back(nedit);
-			css_value_edits->push_back(vedit);
-			connect(nedit, &QLineEdit::textChanged, css_frame, [collect_css, schedule_save](const QString &) {
-				if (collect_css())
-					schedule_save();
-			});
-			connect(vedit, &QLineEdit::textChanged, css_frame, [collect_css, schedule_save](const QString &) {
-				if (collect_css())
-					schedule_save();
-			});
+			css_rows->push_back(r);
+			const int idx = static_cast<int>(css_rows->size()) - 1;
+
+			QObject::connect(nedit, &QLineEdit::textChanged, css_frame,
+			                 [onchange](const QString &) { onchange(); });
+
+			// Typ-Wechsel: Wert-Widget neu aufbauen, bisherigen Wert übernehmen.
+			QObject::connect(tcombo, &QComboBox::textActivated, css_frame,
+			                 [css_rows, build_value_widget, collect_css, schedule_save, idx]() {
+			                 CssRuleRow &rr = css_rows->at(idx);
+			                 const QString old = rr.getter();
+			                 QWidget *oldw = rr.value_widget;
+			                 QHBoxLayout *lay = rr.row_layout;
+			                 const int pos = lay ? lay->indexOf(oldw) : -1;
+			                 auto oc = [collect_css, schedule_save]() {
+				                 if (collect_css())
+					                 schedule_save();
+			                 };
+			                 auto built2 = build_value_widget(
+				                 rr.type_combo->currentData().toString(), old, oc);
+			                 rr.value_widget = built2.first;
+			                 rr.getter = built2.second;
+			                 rr.value_widget->setVisible(rr.name_edit->isVisible());
+			                 if (lay && pos >= 0)
+				                 lay->insertWidget(pos, built2.first);
+			                 oldw->deleteLater();
+		                 });
+		};
+
+	auto rebuild_css_rows = [this, card_id, css_layout, css_frame, css_rows, make_rule_row,
+	                         css_collapsed]() {
+		while (css_layout->count() > 1) {
+			QLayoutItem *it = css_layout->takeAt(1);
+			if (QWidget *w = it->widget())
+				w->deleteLater();
+			delete it;
 		}
+		css_rows->clear();
+		LiedplanCard *c = find_card_mut(card_id);
+		if (!c)
+			return;
+		for (const auto &rule : c->style) {
+			QString type = QString::fromUtf8(rule.type.c_str());
+			if (type.isEmpty())
+				type = QString::fromUtf8(infer_style_type(rule.value).c_str());
+			make_rule_row(QString::fromUtf8(rule.name.c_str()), type,
+			              QString::fromUtf8(rule.value.c_str()));
+		}
+		// Bekannte Farb-/Deckkraft-Variablen als Regelzeilen seedieren,
+		// damit Farben/Deckkraft/Rainbow immer als generelle Regeln sichtbar sind.
+		auto has_var = [&](const char *n) {
+			for (auto &r : *css_rows)
+				if (r.name_edit->text() == QString::fromLatin1(n))
+					return true;
+			return false;
+		};
+		auto seed = [&](const char *n, const QString &type, const QString &v) {
+			if (!has_var(n))
+				make_rule_row(QString::fromLatin1(n), type, v);
+		};
+		seed("--lp-color-text", "hex",
+		     QString::fromUtf8((c->text_color.empty() ? "#000000" : c->text_color).c_str()));
+		seed("--lp-color-box", "hex",
+		     QString::fromUtf8((c->box_color.empty() ? "#ffffff" : c->box_color).c_str()));
+		seed("--lp-corner-color-a", "hex",
+		     QString::fromUtf8((c->corner_color_a.empty() ? "#fce647" : c->corner_color_a).c_str()));
+		seed("--lp-corner-color-b", "hex",
+		     QString::fromUtf8((c->corner_color_b.empty() ? "#fce647" : c->corner_color_b).c_str()));
+		seed("--lp-corner-opacity-a", "num", QString::number(c->corner_opacity_a));
+		seed("--lp-corner-opacity-b", "num", QString::number(c->corner_opacity_b));
+		seed("--lp-text-opacity", "num", QString::number(c->text_opacity));
+		seed("--lp-box-opacity", "num", QString::number(c->box_opacity));
+		seed("--lp-rainbow", "bool", c->rainbow_corners ? QStringLiteral("1") : QStringLiteral("0"));
 	};
-
-	connect(css_add_btn, &QToolButton::clicked, this, [this, card_id, css_frame, css_layout, css_name_edits, css_value_edits, css_collapsed, css_var_model, collect_css, schedule_save]() {
-		if (css_name_edits->size() >= 24)
-			return;
-		auto *row = new QHBoxLayout();
-		row->setContentsMargins(0, 0, 0, 0);
-		row->setSpacing(6);
-		auto *nedit = new QLineEdit(QStringLiteral("--"), css_frame);
-		nedit->setPlaceholderText(QStringLiteral("--variable"));
-		nedit->setFixedWidth(110);
-		nedit->setFixedHeight(32);
-		auto *comp = new QCompleter(*css_var_model, css_frame);
-		comp->setCaseSensitivity(Qt::CaseInsensitive);
-		nedit->setCompleter(comp);
-		auto *vedit = new QLineEdit(css_frame);
-		vedit->setPlaceholderText(QStringLiteral("wert"));
-		vedit->setFixedHeight(32);
-		if (*css_collapsed) {
-			nedit->setVisible(false);
-			vedit->setVisible(false);
-		}
-		row->addWidget(nedit);
-		row->addWidget(vedit, 1);
-		css_layout->addLayout(row);
-		css_name_edits->push_back(nedit);
-		css_value_edits->push_back(vedit);
-		connect(nedit, &QLineEdit::textChanged, css_frame, [collect_css, schedule_save](const QString &) {
-			if (collect_css())
-				schedule_save();
-		});
-		connect(vedit, &QLineEdit::textChanged, css_frame, [collect_css, schedule_save](const QString &) {
-			if (collect_css())
-				schedule_save();
-		});
-		Q_UNUSED(card_id);
-	});
-
-	connect(css_del_btn, &QToolButton::clicked, this, [css_name_edits, css_value_edits, css_layout, collect_css, schedule_save]() {
-		if (css_name_edits->empty())
-			return;
-		QLayout *row_l = css_layout->itemAt(css_layout->count() - 1)->layout();
-		if (row_l) {
-			for (int k = row_l->count() - 1; k >= 0; --k) {
-				auto *item = row_l->takeAt(k);
-				if (item->widget())
-					item->widget()->deleteLater();
-				delete item;
-			}
-			delete row_l;
-		}
-		css_name_edits->pop_back();
-		css_value_edits->pop_back();
-		if (collect_css())
-			schedule_save();
-	});
 
 	rebuild_css_rows();
 
-	// M6-A8: Freie Text-/Box-Farbe (Color-Picker). PROFIL-Dropdown bleibt
-	// "Reset auf Profilsatz" und aktualisiert die Button-Labels (s. Connect unten).
-	const QString hex_text =
-		QString::fromUtf8((card.text_color.empty() ? "#000000" : card.text_color).c_str()).toUpper();
-	const QString hex_box =
-		QString::fromUtf8((card.box_color.empty() ? "#ffffff" : card.box_color).c_str()).toUpper();
+	connect(css_add_btn, &QToolButton::clicked, this,
+		[make_rule_row, collect_css, schedule_save]() {
+			make_rule_row(QStringLiteral("--"), QStringLiteral("text"), QString());
+			if (collect_css())
+				schedule_save();
+		});
 
-	auto *text_color_layout = new QVBoxLayout();
-	text_color_layout->setContentsMargins(0, 0, 0, 0);
-	text_color_layout->setSpacing(4);
-	auto *lbl_text_color = new QLabel(QStringLiteral("TEXT-FARBE"), style_section);
-	lbl_text_color->setObjectName(QStringLiteral("lpFieldLabel"));
-	auto *text_color_btn = new QPushButton(hex_text, style_section);
-	text_color_btn->setObjectName(QStringLiteral("lpTextColor"));
-	text_color_btn->setFixedHeight(34);
-	text_color_layout->addWidget(lbl_text_color);
-	text_color_layout->addWidget(text_color_btn);
-	style_layout->addLayout(text_color_layout);
-
-	auto *box_color_layout = new QVBoxLayout();
-	box_color_layout->setContentsMargins(0, 0, 0, 0);
-	box_color_layout->setSpacing(4);
-	auto *lbl_box_color = new QLabel(QStringLiteral("BOX-FARBE"), style_section);
-	lbl_box_color->setObjectName(QStringLiteral("lpFieldLabel"));
-	auto *box_color_btn = new QPushButton(hex_box, style_section);
-	box_color_btn->setObjectName(QStringLiteral("lpBoxColor"));
-	box_color_btn->setFixedHeight(34);
-	box_color_layout->addWidget(lbl_box_color);
-	box_color_layout->addWidget(box_color_btn);
-	style_layout->addLayout(box_color_layout);
-
-	// Wertelabel neben Slidern: zeigt den Zahlenwert und folgt valueChanged.
-	// Gibt das Label zurück, damit Profil-Resets es direkt synchronisieren.
-	auto attach_value_label = [](QHBoxLayout *row, QSlider *slider) -> QLabel * {
-		auto *val = new QLabel(QString::number(slider->value()), slider);
-		val->setObjectName(QStringLiteral("lpFieldLabel"));
-		val->setMinimumWidth(36);
-		val->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
-		row->addWidget(val);
-		QObject::connect(slider, &QSlider::valueChanged, val,
-		                 [val](int v) { val->setText(QString::number(v)); });
-		return val;
-	};
-
-	// Farb-Swatch: Button in der gewählten Farbe mit kontrastiertem Hex-Text.
-	auto paint_color_swatch = [](QPushButton *btn, const QString &hex) {
-		const QColor c(hex);
-		const bool light = c.isValid() && c.lightness() > 160;
-		btn->setStyleSheet(QStringLiteral(
-			"background-color: %1; color: %2; font-weight: bold;")
-			.arg(hex).arg(light ? QStringLiteral("#1a1a1a") : QStringLiteral("#ffffff")));
-	};
-
-	const QString hex_a =
-		QString::fromUtf8((card.corner_color_a.empty() ? "#fce647" : card.corner_color_a).c_str()).toUpper();
-	const QString hex_b =
-		QString::fromUtf8((card.corner_color_b.empty() ? "#fce647" : card.corner_color_b).c_str()).toUpper();
-
-	auto *corner_a_layout = new QVBoxLayout();
-	corner_a_layout->setContentsMargins(0, 0, 0, 0);
-	corner_a_layout->setSpacing(4);
-	auto *lbl_corner_a = new QLabel(QStringLiteral("ECKE A"), style_section);
-	lbl_corner_a->setObjectName(QStringLiteral("lpFieldLabel"));
-	auto *color_a_btn = new QPushButton(hex_a, style_section);
-	color_a_btn->setObjectName(QStringLiteral("lpColorA"));
-	color_a_btn->setFixedHeight(34);
-	corner_a_layout->addWidget(lbl_corner_a);
-	corner_a_layout->addWidget(color_a_btn);
-	style_layout->addLayout(corner_a_layout);
-
-	auto *corner_b_layout = new QVBoxLayout();
-	corner_b_layout->setContentsMargins(0, 0, 0, 0);
-	corner_b_layout->setSpacing(4);
-	auto *lbl_corner_b = new QLabel(QStringLiteral("ECKE B"), style_section);
-	lbl_corner_b->setObjectName(QStringLiteral("lpFieldLabel"));
-	auto *color_b_btn = new QPushButton(hex_b, style_section);
-	color_b_btn->setObjectName(QStringLiteral("lpColorB"));
-	color_b_btn->setFixedHeight(34);
-	corner_b_layout->addWidget(lbl_corner_b);
-	corner_b_layout->addWidget(color_b_btn);
-	style_layout->addLayout(corner_b_layout);
-
-	paint_color_swatch(text_color_btn, hex_text);
-	paint_color_swatch(box_color_btn, hex_box);
-	paint_color_swatch(color_a_btn, hex_a);
-	paint_color_swatch(color_b_btn, hex_b);
-
-	auto *opacity_layout = new QVBoxLayout();
-	opacity_layout->setContentsMargins(0, 0, 0, 0);
-	opacity_layout->setSpacing(4);
-	auto *lbl_opacity = new QLabel(QStringLiteral("ECKEN-DECKKRAFT"), style_section);
-	lbl_opacity->setObjectName(QStringLiteral("lpFieldLabel"));
-	opacity_layout->addWidget(lbl_opacity);
-
-	auto *opacity_a_row = new QHBoxLayout();
-	opacity_a_row->setContentsMargins(0, 0, 0, 0);
-	opacity_a_row->setSpacing(8);
-	auto *lbl_op_a = new QLabel(QStringLiteral("A"), style_section);
-	lbl_op_a->setObjectName(QStringLiteral("lpFieldLabel"));
-	auto *opacity_a_slider = new QSlider(Qt::Horizontal, style_section);
-	opacity_a_slider->setObjectName(QStringLiteral("lpOpacityA"));
-	opacity_a_slider->setRange(0, 255);
-	opacity_a_slider->setValue(std::clamp(card.corner_opacity_a, 0, 255));
-	opacity_a_row->addWidget(lbl_op_a);
-	opacity_a_row->addWidget(opacity_a_slider, 1);
-	QLabel *op_a_val = attach_value_label(opacity_a_row, opacity_a_slider);
-	opacity_layout->addLayout(opacity_a_row);
-
-	auto *opacity_b_row = new QHBoxLayout();
-	opacity_b_row->setContentsMargins(0, 0, 0, 0);
-	opacity_b_row->setSpacing(8);
-	auto *lbl_op_b = new QLabel(QStringLiteral("B"), style_section);
-	lbl_op_b->setObjectName(QStringLiteral("lpFieldLabel"));
-	auto *opacity_b_slider = new QSlider(Qt::Horizontal, style_section);
-	opacity_b_slider->setObjectName(QStringLiteral("lpOpacityB"));
-	opacity_b_slider->setRange(0, 255);
-	opacity_b_slider->setValue(std::clamp(card.corner_opacity_b, 0, 255));
-	opacity_b_row->addWidget(lbl_op_b);
-	opacity_b_row->addWidget(opacity_b_slider, 1);
-	QLabel *op_b_val = attach_value_label(opacity_b_row, opacity_b_slider);
-	opacity_layout->addLayout(opacity_b_row);
-
-	style_layout->addLayout(opacity_layout);
-
-	// M6-A7: Text-/Box-Deckkraft (0–255). Alpha wandert über die rgba()-Werte von
-	// --box-bg/--text-color in build_inject_css/push_update; --box-opacity (Show/Hide)
-	// bleibt has_any_text-gesteuert und wird HIER nicht verändert.
-	auto *textbox_opacity_layout = new QVBoxLayout();
-	textbox_opacity_layout->setContentsMargins(0, 0, 0, 0);
-	textbox_opacity_layout->setSpacing(4);
-	auto *lbl_textbox_opacity = new QLabel(QStringLiteral("TEXT-/BOX-DECKKRAFT"), style_section);
-	lbl_textbox_opacity->setObjectName(QStringLiteral("lpFieldLabel"));
-	textbox_opacity_layout->addWidget(lbl_textbox_opacity);
-
-	auto *text_opacity_row = new QHBoxLayout();
-	text_opacity_row->setContentsMargins(0, 0, 0, 0);
-	text_opacity_row->setSpacing(8);
-	auto *lbl_op_text = new QLabel(QStringLiteral("TEXT"), style_section);
-	lbl_op_text->setObjectName(QStringLiteral("lpFieldLabel"));
-	auto *text_opacity_slider = new QSlider(Qt::Horizontal, style_section);
-	text_opacity_slider->setObjectName(QStringLiteral("lpOpacityText"));
-	text_opacity_slider->setRange(0, 255);
-	text_opacity_slider->setValue(std::clamp(card.text_opacity, 0, 255));
-	text_opacity_row->addWidget(lbl_op_text);
-	text_opacity_row->addWidget(text_opacity_slider, 1);
-	QLabel *op_text_val = attach_value_label(text_opacity_row, text_opacity_slider);
-	textbox_opacity_layout->addLayout(text_opacity_row);
-
-	auto *box_opacity_row = new QHBoxLayout();
-	box_opacity_row->setContentsMargins(0, 0, 0, 0);
-	box_opacity_row->setSpacing(8);
-	auto *lbl_op_box = new QLabel(QStringLiteral("BOX"), style_section);
-	lbl_op_box->setObjectName(QStringLiteral("lpFieldLabel"));
-	auto *box_opacity_slider = new QSlider(Qt::Horizontal, style_section);
-	box_opacity_slider->setObjectName(QStringLiteral("lpOpacityBox"));
-	box_opacity_slider->setRange(0, 255);
-	box_opacity_slider->setValue(std::clamp(card.box_opacity, 0, 255));
-	box_opacity_slider->setToolTip(
-		QStringLiteral("0 = Box-Hintergrund unsichtbar (Text und Ecken bleiben sichtbar)"));
-	box_opacity_row->addWidget(lbl_op_box);
-	box_opacity_row->addWidget(box_opacity_slider, 1);
-	QLabel *op_box_val = attach_value_label(box_opacity_row, box_opacity_slider);
-	textbox_opacity_layout->addLayout(box_opacity_row);
-
-	style_layout->addLayout(textbox_opacity_layout);
-
-	auto *rainbow_cb = new QCheckBox(QStringLiteral("Regenbogen-Ecken"), style_section);
-	rainbow_cb->setObjectName(QStringLiteral("lpRainbow"));
-	rainbow_cb->setChecked(card.rainbow_corners);
-	style_layout->addWidget(rainbow_cb);
+	connect(css_del_btn, &QToolButton::clicked, this,
+		[this, card_id, css_layout, css_frame, css_rows, collect_css, schedule_save]() {
+			if (css_rows->empty())
+				return;
+			QLayoutItem *it = css_layout->takeAt(css_layout->count() - 1);
+			if (QWidget *w = it->widget())
+				w->deleteLater();
+			delete it;
+			css_rows->pop_back();
+			if (collect_css())
+				schedule_save();
+		});
 
 	// IMP-F (F2b): Karten-Vorlage (Template). "classic" = klassischer Weg
 	// (template_id leer); weitere Einträge = discovered .html-Vorlagen.
@@ -1530,52 +1491,14 @@ void LiedplanDock::create_row_widget(const LiedplanCard &card)
 	inner_layout->addLayout(actions_layout);
 
 	connect(profile_combo, &QComboBox::currentTextChanged, this,
-		[this, card_id, text_color_btn, box_color_btn, color_a_btn, color_b_btn,
-		 opacity_a_slider, opacity_b_slider, text_opacity_slider, box_opacity_slider,
-		 rainbow_cb, schedule_save, rebuild_css_rows, paint_color_swatch,
-		 op_a_val, op_b_val, op_text_val, op_box_val](const QString &profile_text) {
+		[this, card_id, schedule_save, rebuild_css_rows](const QString &profile_text) {
 			if (LiedplanCard *c = find_card_mut(card_id)) {
 				c->profile = profile_text.toUtf8().toStdString();
 				if (const LiedplanProfile *prof =
-					    liedplan_profile_lookup(c->profile, state_.color_profiles)) {
+					liedplan_profile_lookup(c->profile, state_.color_profiles))
 					profile_apply(*prof, *c);
-				}
-				// M6-A8 / F1: Profil-Dropdown = Reset auf kompletten Profilsatz →
-				// Button-Labels, Ecken, Deckkraft-Slider und Regenbogen aktualisieren.
-				text_color_btn->setText(QString::fromUtf8(
-					(c->text_color.empty() ? "#000000" : c->text_color).c_str()).toUpper());
-				paint_color_swatch(text_color_btn,
-					QString::fromUtf8((c->text_color.empty() ? "#000000" : c->text_color).c_str()));
-				box_color_btn->setText(QString::fromUtf8(
-					(c->box_color.empty() ? "#ffffff" : c->box_color).c_str()).toUpper());
-				paint_color_swatch(box_color_btn,
-					QString::fromUtf8((c->box_color.empty() ? "#ffffff" : c->box_color).c_str()));
-				color_a_btn->setText(QString::fromUtf8(
-					(c->corner_color_a.empty() ? "#fce647" : c->corner_color_a).c_str()).toUpper());
-				paint_color_swatch(color_a_btn,
-					QString::fromUtf8((c->corner_color_a.empty() ? "#fce647" : c->corner_color_a).c_str()));
-				color_b_btn->setText(QString::fromUtf8(
-					(c->corner_color_b.empty() ? "#fce647" : c->corner_color_b).c_str()).toUpper());
-				paint_color_swatch(color_b_btn,
-					QString::fromUtf8((c->corner_color_b.empty() ? "#fce647" : c->corner_color_b).c_str()));
-				{
-					const QSignalBlocker b1(opacity_a_slider);
-					const QSignalBlocker b2(opacity_b_slider);
-					const QSignalBlocker b3(text_opacity_slider);
-					const QSignalBlocker b4(box_opacity_slider);
-					const QSignalBlocker b5(rainbow_cb);
-					opacity_a_slider->setValue(std::clamp(c->corner_opacity_a, 0, 255));
-					opacity_b_slider->setValue(std::clamp(c->corner_opacity_b, 0, 255));
-					text_opacity_slider->setValue(std::clamp(c->text_opacity, 0, 255));
-					box_opacity_slider->setValue(std::clamp(c->box_opacity, 0, 255));
-					op_a_val->setText(QString::number(opacity_a_slider->value()));
-					op_b_val->setText(QString::number(opacity_b_slider->value()));
-					op_text_val->setText(QString::number(text_opacity_slider->value()));
-					op_box_val->setText(QString::number(box_opacity_slider->value()));
-					rainbow_cb->setChecked(c->rainbow_corners);
-					}
-					rebuild_css_rows(); // Profil-Regeln sind jetzt in c->style gemerged
-					schedule_save();
+				rebuild_css_rows(); // Profil-Werte + Karten-Regeln als Regelzeilen
+				schedule_save();
 			}
 		});
 
@@ -1634,108 +1557,6 @@ void LiedplanDock::create_row_widget(const LiedplanCard &card)
 		save_state();
 		rebuild_rows();
 		set_dock_status(QStringLiteral("Farbprofil \"%1\" gespeichert").arg(qname), false);
-	});
-
-	connect(color_a_btn, &QPushButton::clicked, this, [this, card_id, color_a_btn, schedule_save, paint_color_swatch]() {
-		if (LiedplanCard *c = find_card_mut(card_id)) {
-			const QString cur_hex = QString::fromUtf8(
-				(c->corner_color_a.empty() ? "#fce647" : c->corner_color_a).c_str());
-			const QColor chosen =
-				QColorDialog::getColor(QColor(cur_hex), this, QStringLiteral("Eckfarbe A"));
-			if (chosen.isValid()) {
-				const QString hex = chosen.name(QColor::HexRgb);
-				c->corner_color_a = hex.toUtf8().toStdString();
-				color_a_btn->setText(hex.toUpper());
-				paint_color_swatch(color_a_btn, hex);
-				schedule_save();
-			}
-		}
-	});
-
-	connect(color_b_btn, &QPushButton::clicked, this, [this, card_id, color_b_btn, schedule_save, paint_color_swatch]() {
-		if (LiedplanCard *c = find_card_mut(card_id)) {
-			const QString cur_hex = QString::fromUtf8(
-				(c->corner_color_b.empty() ? "#fce647" : c->corner_color_b).c_str());
-			const QColor chosen =
-				QColorDialog::getColor(QColor(cur_hex), this, QStringLiteral("Eckfarbe B"));
-			if (chosen.isValid()) {
-				const QString hex = chosen.name(QColor::HexRgb);
-				c->corner_color_b = hex.toUtf8().toStdString();
-				color_b_btn->setText(hex.toUpper());
-				paint_color_swatch(color_b_btn, hex);
-				schedule_save();
-			}
-		}
-	});
-
-	// M6-A8: Freie Text-/Box-Farbe (Color-Picker, Muster = ECKE A/B).
-	connect(text_color_btn, &QPushButton::clicked, this, [this, card_id, text_color_btn, schedule_save, paint_color_swatch]() {
-		if (LiedplanCard *c = find_card_mut(card_id)) {
-			const QString cur_hex = QString::fromUtf8(
-				(c->text_color.empty() ? "#000000" : c->text_color).c_str());
-			const QColor chosen =
-				QColorDialog::getColor(QColor(cur_hex), this, QStringLiteral("Textfarbe"));
-			if (chosen.isValid()) {
-				const QString hex = chosen.name(QColor::HexRgb);
-				c->text_color = hex.toUtf8().toStdString();
-				text_color_btn->setText(hex.toUpper());
-				paint_color_swatch(text_color_btn, hex);
-				schedule_save();
-			}
-		}
-	});
-
-	connect(box_color_btn, &QPushButton::clicked, this, [this, card_id, box_color_btn, schedule_save, paint_color_swatch]() {
-		if (LiedplanCard *c = find_card_mut(card_id)) {
-			const QString cur_hex = QString::fromUtf8(
-				(c->box_color.empty() ? "#ffffff" : c->box_color).c_str());
-			const QColor chosen =
-				QColorDialog::getColor(QColor(cur_hex), this, QStringLiteral("Boxfarbe"));
-			if (chosen.isValid()) {
-				const QString hex = chosen.name(QColor::HexRgb);
-				c->box_color = hex.toUtf8().toStdString();
-				box_color_btn->setText(hex.toUpper());
-				paint_color_swatch(box_color_btn, hex);
-				schedule_save();
-			}
-		}
-	});
-
-	connect(opacity_a_slider, &QSlider::valueChanged, this, [this, card_id, schedule_save](int val) {
-		if (LiedplanCard *c = find_card_mut(card_id)) {
-			c->corner_opacity_a = std::clamp(val, 0, 255);
-			schedule_save();
-		}
-	});
-
-	connect(opacity_b_slider, &QSlider::valueChanged, this, [this, card_id, schedule_save](int val) {
-		if (LiedplanCard *c = find_card_mut(card_id)) {
-			c->corner_opacity_b = std::clamp(val, 0, 255);
-			schedule_save();
-		}
-	});
-
-	// M6-A7: Text-/Box-Deckkraft (0–255 → Alpha von --text-color/--box-bg;
-	// --box-opacity (Show/Hide, has_any_text) bleibt davon unberührt).
-	connect(text_opacity_slider, &QSlider::valueChanged, this, [this, card_id, schedule_save](int val) {
-		if (LiedplanCard *c = find_card_mut(card_id)) {
-			c->text_opacity = std::clamp(val, 0, 255);
-			schedule_save();
-		}
-	});
-
-	connect(box_opacity_slider, &QSlider::valueChanged, this, [this, card_id, schedule_save](int val) {
-		if (LiedplanCard *c = find_card_mut(card_id)) {
-			c->box_opacity = std::clamp(val, 0, 255);
-			schedule_save();
-		}
-	});
-
-	connect(rainbow_cb, &QCheckBox::toggled, this, [this, card_id, schedule_save](bool checked) {
-		if (LiedplanCard *c = find_card_mut(card_id)) {
-			c->rainbow_corners = checked;
-			schedule_save();
-		}
 	});
 
 	connect(anim_file_edit, &QLineEdit::textChanged, this,

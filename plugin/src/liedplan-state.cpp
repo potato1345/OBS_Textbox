@@ -80,6 +80,10 @@ LiedplanCard card_from_json(const nlohmann::json &item)
 				rule.name = s["name"].get<std::string>();
 			if (s.contains("value") && s["value"].is_string())
 				rule.value = s["value"].get<std::string>();
+			if (s.contains("type") && s["type"].is_string())
+				rule.type = s["type"].get<std::string>();
+			else
+				rule.type = infer_style_type(rule.value);
 			if (!rule.name.empty())
 				c.style.push_back(rule);
 		}
@@ -116,6 +120,8 @@ LiedplanCard card_from_json(const nlohmann::json &item)
 		c.anim_y = item["anim_y"].get<int>();
 	if (item.contains("template_id") && item["template_id"].is_string())
 		c.template_id = item["template_id"].get<std::string>();
+	// CSS-Regeln sind die authoritative Quelle für Farben/Deckkraft.
+	apply_style_rules(c);
 	return c;
 }
 
@@ -133,7 +139,7 @@ nlohmann::json card_to_json(const LiedplanCard &c)
 		rows.push_back({{"label", r.label}, {"value", r.value}});
 	nlohmann::json style = nlohmann::json::array();
 	for (const auto &s : c.style)
-		style.push_back({{"name", s.name}, {"value", s.value}});
+		style.push_back({{"name", s.name}, {"value", s.value}, {"type", s.type}});
 	return {
 		{"id", c.id},
 		{"zeile1", legacy_value(0)},
@@ -751,6 +757,7 @@ bool liedplan_yaml_to_profile(const std::string &text, LiedplanProfile &out, std
 				LiedplanStyleRule rule;
 				rule.name = trim_ws(line.substr(0, eq_idx));
 				rule.value = trim_ws(line.substr(eq_idx + 1));
+				rule.type = infer_style_type(rule.value);
 				if (!rule.name.empty())
 					parsed_style.push_back(rule);
 				continue;
