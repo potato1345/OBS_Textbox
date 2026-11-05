@@ -212,9 +212,24 @@ inline void apply_style_rules(CardT &card)
 			n = 255;
 		return n;
 	};
+	// Vorzeichen-behandelter Integer-Parse: leading '-', digits, stop at non-digit.
+	auto parse_int = [](const std::string &v) -> int {
+		size_t i = 0;
+		bool neg = false;
+		if (i < v.size() && v[i] == '-') { neg = true; ++i; }
+		int n = 0;
+		for (; i < v.size(); ++i) {
+			char ch = v[i];
+			if (ch >= '0' && ch <= '9')
+				n = n * 10 + (ch - '0');
+			else
+				break; // "3x", "-120px" → Ziffern vor der Einheit
+		}
+		return neg ? -n : n;
+	};
 	for (const auto &rule : card.style) {
-		if (rule.name == "--lp-color-text")
-			card.text_color = rule.value;
+	if (rule.name == "--lp-color-text")
+		card.text_color = rule.value;
 		else if (rule.name == "--lp-color-box")
 			card.box_color = rule.value;
 		else if (rule.name == "--lp-corner-color-a")
@@ -231,6 +246,21 @@ inline void apply_style_rules(CardT &card)
 			card.box_opacity = to_int(rule.value);
 		else if (rule.name == "--lp-rainbow")
 			card.rainbow_corners = rule.value == "1";
+		else if (rule.name == "--anim-show")
+			card.show_anim = rule.value == "1";
+		else if (rule.name == "--anim-file")
+			card.anim_file = rule.value;
+		else if (rule.name == "--anim-scale") {
+			const int s = parse_int(rule.value);
+			if (s > 0)
+				card.anim_scale = s;
+		} else if (rule.name == "--anim-x") {
+			const int v = parse_int(rule.value);
+			card.anim_x = v < -1200 ? -1200 : (v > 1200 ? 1200 : v);
+		} else if (rule.name == "--anim-y") {
+			const int v = parse_int(rule.value);
+			card.anim_y = v < -1200 ? -1200 : (v > 1200 ? 1200 : v);
+		}
 	}
 }
 

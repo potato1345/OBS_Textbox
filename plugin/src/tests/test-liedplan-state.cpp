@@ -685,6 +685,15 @@ colors:
 		      ss2.color_profiles[0].style.size() == 1 &&
 		      ss2.color_profiles[0].style[0].type == "px" && ss2.profiles_seeded,
 		      "22f. IMP-H5 Profil-Stil (typisiert) + profiles_seeded JSON-Roundtrip");
+
+		// 22g (IMP-H6): Animations-CSS-Regeln mappen auf Kartenfelder.
+		LiedplanCard ac;
+		ac.style = {{"--anim-show", "1", "bool"}, {"--anim-file", "spin.gif", "file"},
+			{"--anim-scale", "4x", "enum"}, {"--anim-x", "-120px", "px"}, {"--anim-y", "40px", "px"}};
+		apply_style_rules(ac);
+		check(ac.show_anim && ac.anim_file == "spin.gif" && ac.anim_scale == 4 &&
+		      ac.anim_x == -120 && ac.anim_y == 40,
+		      "22g. IMP-H6 Anim-Regeln (--anim-show/file/scale/x/y) mappen auf Felder");
 	}
 
 	// 23. (M6-B2 #6) State-Seriale: 2 Custom-Profile -> save -> load -> identisch; JSON ohne Key -> leer; reset() -> leer

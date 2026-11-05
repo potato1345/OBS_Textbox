@@ -1067,7 +1067,8 @@ void LiedplanDock::create_row_widget(const LiedplanCard &card)
 	                      "--lp-font-rest", "--lp-font-rest-weight", "--lp-corner-size",
 	                      "--lp-color-text", "--lp-color-box", "--lp-corner-color-a", "--lp-corner-color-b",
 	                      "--lp-corner-opacity-a", "--lp-corner-opacity-b", "--lp-text-opacity",
-	                      "--lp-box-opacity", "--lp-rainbow"})
+	                      "--lp-box-opacity", "--lp-rainbow",
+	                      "--anim-show", "--anim-file", "--anim-scale", "--anim-x", "--anim-y"})
 		css_var_model->append(QString::fromLatin1(v));
 
 	auto paint_color_swatch = [](QPushButton *btn, const QString &hex) {
@@ -1123,7 +1124,7 @@ void LiedplanDock::create_row_widget(const LiedplanCard &card)
 	};
 
 	auto build_value_widget =
-		[css_frame, paint_color_swatch](const QString &type, const QString &value,
+		[css_frame, paint_color_swatch, this](const QString &type, const QString &value,
 		                                const std::function<void()> &on_change)
 			-> std::pair<QWidget *, std::function<QString()>> {
 			if (type == QLatin1String("num")) {
@@ -1192,6 +1193,55 @@ void LiedplanDock::create_row_widget(const LiedplanCard &card)
 				                 [on_change](bool) { on_change(); });
 				return {cb, [cb]() { return cb->isChecked() ? QStringLiteral("1") : QStringLiteral("0"); }};
 			}
+			if (type == QLatin1String("enum")) {
+				// Skalierungs-Dropdown: 1x..12x, Wert als nackte Zahl.
+				auto *combo = new QComboBox(css_frame);
+				combo->setFixedHeight(32);
+				combo->setMinimumWidth(96);
+				const int kScaleValues[] = {1, 2, 3, 4, 6, 8, 10, 12};
+				int sidx = 2; // Default "3x"
+				for (int si = 0; si < 8; ++si) {
+					combo->addItem(QStringLiteral("%1x").arg(kScaleValues[si]), kScaleValues[si]);
+					if (kScaleValues[si] == value.toInt())
+						sidx = si;
+				}
+				combo->setCurrentIndex(sidx);
+				QObject::connect(combo, QOverload<int>::of(&QComboBox::currentIndexChanged), combo,
+				                 [on_change](int) { on_change(); });
+				return {combo, [combo]() { return QString::number(combo->currentData().toInt()); }};
+			}
+			if (type == QLatin1String("file")) {
+				auto *row = new QWidget(css_frame);
+				auto *hl = new QHBoxLayout(row);
+				hl->setContentsMargins(0, 0, 0, 0);
+				hl->setSpacing(6);
+				auto *edit = new QLineEdit(value, row);
+				edit->setPlaceholderText(QStringLiteral("Dateiname, Pfad oder URL"));
+				edit->setFixedHeight(32);
+				auto *pick = new QPushButton(row);
+				pick->setFixedSize(34, 34);
+				pick->setIcon(theme_icon("download.svg"));
+				pick->setIconSize(QSize(16, 16));
+				pick->setToolTip(QStringLiteral("Animationsdatei auswählen"));
+				hl->addWidget(edit, 1);
+				hl->addWidget(pick);
+				QObject::connect(edit, &QLineEdit::textChanged, edit,
+				                 [on_change](const QString &) { on_change(); });
+				QObject::connect(pick, &QPushButton::clicked, row,
+				                 [this, edit, on_change]() {
+				                 const QString start_dir =
+				                     QString::fromUtf8(state_.settings.animation_dir.c_str());
+				                 const QString chosen = QFileDialog::getOpenFileName(
+				                     this, QStringLiteral("Animationsdatei wählen"), start_dir,
+				                     QStringLiteral(
+				                         "Animationen (*.gif *.webm *.mp4 *.mov *.m4v);;Bilder (*.png *.jpg *.jpeg);;Alle Dateien (*.*)"));
+				                 if (!chosen.isEmpty()) {
+				                     edit->setText(chosen);
+				                     on_change();
+				                 }
+				                 });
+				return {row, [edit]() { return edit->text(); }};
+			}
 			auto *edit = new QLineEdit(value, css_frame);
 			edit->setPlaceholderText(QStringLiteral("wert"));
 			edit->setFixedHeight(32);
@@ -1218,12 +1268,14 @@ void LiedplanDock::create_row_widget(const LiedplanCard &card)
 			tcombo->setFixedWidth(78);
 			tcombo->setFixedHeight(32);
 			tcombo->setToolTip(QStringLiteral(
-				"Wert-Eingarte: Text, Zahl 0-255 (Regler), HEX (Farbpicker), px (Dropdown), Bool"));
+				"Wert-Eingarte: Text, Zahl 0-255 (Regler), HEX (Farbpicker), px (Dropdown), Bool, Enum (Dropdown), Datei (Picker)"));
 			tcombo->addItem(QStringLiteral("Text"), QStringLiteral("text"));
 			tcombo->addItem(QStringLiteral("0-255"), QStringLiteral("num"));
 			tcombo->addItem(QStringLiteral("HEX"), QStringLiteral("hex"));
 			tcombo->addItem(QStringLiteral("px"), QStringLiteral("px"));
 			tcombo->addItem(QStringLiteral("Bool"), QStringLiteral("bool"));
+			tcombo->addItem(QStringLiteral("Enum"), QStringLiteral("enum"));
+			tcombo->addItem(QStringLiteral("Datei"), QStringLiteral("file"));
 			const int ti = tcombo->findData(type);
 			tcombo->setCurrentIndex(ti >= 0 ? ti : 0);
 
@@ -1320,6 +1372,12 @@ void LiedplanDock::create_row_widget(const LiedplanCard &card)
 		seed("--lp-text-opacity", "num", QString::number(c->text_opacity));
 		seed("--lp-box-opacity", "num", QString::number(c->box_opacity));
 		seed("--lp-rainbow", "bool", c->rainbow_corners ? QStringLiteral("1") : QStringLiteral("0"));
+		// IMP-H6: Animation als generelle CSS-Regelzeilen (Template nutzt --anim-*).
+		seed("--anim-show", "bool", c->show_anim ? QStringLiteral("1") : QStringLiteral("0"));
+		seed("--anim-file", "file", QString::fromUtf8(c->anim_file.c_str()));
+		seed("--anim-scale", "enum", QString::number(c->anim_scale));
+		seed("--anim-x", "px", QString::number(c->anim_x) + QStringLiteral("px"));
+		seed("--anim-y", "px", QString::number(c->anim_y) + QStringLiteral("px"));
 	};
 
 	rebuild_css_rows();
@@ -1378,114 +1436,6 @@ void LiedplanDock::create_row_widget(const LiedplanCard &card)
 	// Für refresh_templates_ui() (Vorlagen-Ordner geändert) am Row erreichbar.
 	row_widget->setProperty("lpHasTemplate", true);
 
-	auto *anim_group = new QGroupBox(style_section);
-	anim_group->setObjectName(QStringLiteral("lpAnimGroup"));
-	anim_group->setTitle(QStringLiteral("Animation"));
-	anim_group->setCheckable(true);
-	anim_group->setChecked(false);
-
-	auto *anim_group_layout = new QVBoxLayout(anim_group);
-	anim_group_layout->setContentsMargins(10, 8, 10, 10);
-	anim_group_layout->setSpacing(6);
-
-	auto *anim_body = new QWidget(anim_group);
-	auto *anim_body_layout = new QVBoxLayout(anim_body);
-	anim_body_layout->setContentsMargins(0, 0, 0, 0);
-	anim_body_layout->setSpacing(8);
-
-	// 1. Datei + Icon-Picker
-	auto *anim_file_lbl = new QLabel(QStringLiteral("DATEI"), anim_body);
-	anim_file_lbl->setObjectName(QStringLiteral("lpFieldLabel"));
-	auto *anim_file_row = new QHBoxLayout();
-	anim_file_row->setContentsMargins(0, 0, 0, 0);
-	anim_file_row->setSpacing(6);
-	auto *anim_file_edit =
-		new QLineEdit(QString::fromUtf8(card.anim_file.c_str()), anim_body);
-	anim_file_edit->setObjectName(QStringLiteral("lpAnimFile"));
-	anim_file_edit->setReadOnly(false);
-	anim_file_edit->setPlaceholderText(QStringLiteral("Dateiname, Pfad oder URL"));
-	anim_file_edit->setFixedHeight(34);
-	auto *anim_file_pick = new QPushButton(anim_body);
-	anim_file_pick->setObjectName(QStringLiteral("lpAnimFilePick"));
-	anim_file_pick->setFixedSize(34, 34); /* Ui4: Icon-only-Button, OBS-„…“-Format */
-	anim_file_pick->setIcon(theme_icon("download.svg"));
-	anim_file_pick->setIconSize(QSize(16, 16));
-	anim_file_pick->setToolTip(QStringLiteral("Animationsdatei auswählen"));
-	anim_file_row->addWidget(anim_file_edit, 1);
-	anim_file_row->addWidget(anim_file_pick);
-	anim_body_layout->addWidget(anim_file_lbl);
-	anim_body_layout->addLayout(anim_file_row);
-
-	// 2. Skalierung (1x, 2x, 3x, 4x, 6x, 8x, 10x, 12x)
-	auto *anim_scale_lbl = new QLabel(QStringLiteral("SKALIERUNG"), anim_body);
-	anim_scale_lbl->setObjectName(QStringLiteral("lpFieldLabel"));
-	auto *anim_scale_combo = new QComboBox(anim_body);
-	anim_scale_combo->setObjectName(QStringLiteral("lpAnimScale"));
-	anim_scale_combo->setFixedHeight(34);
-	constexpr int kScaleValues[] = {1, 2, 3, 4, 6, 8, 10, 12};
-	int anim_scale_idx = 2; // Default "3x"
-	for (int si = 0; si < 8; ++si) {
-		const int sv = kScaleValues[si];
-		anim_scale_combo->addItem(QStringLiteral("%1x").arg(sv), sv);
-		if (sv == card.anim_scale)
-			anim_scale_idx = si;
-	}
-	anim_scale_combo->setCurrentIndex(anim_scale_idx);
-	anim_body_layout->addWidget(anim_scale_lbl);
-	anim_body_layout->addWidget(anim_scale_combo);
-
-	// 3. X-Versatz (-1200..1200, step 5)
-	const int init_anim_x = std::clamp(card.anim_x, -1200, 1200);
-	auto *anim_x_hdr = new QHBoxLayout();
-	anim_x_hdr->setContentsMargins(0, 0, 0, 0);
-	auto *anim_x_lbl = new QLabel(QStringLiteral("X-VERSATZ"), anim_body);
-	anim_x_lbl->setObjectName(QStringLiteral("lpFieldLabel"));
-	auto *anim_x_val =
-		new QLabel(QStringLiteral("%1px").arg(init_anim_x), anim_body);
-	anim_x_val->setObjectName(QStringLiteral("lpFieldLabel"));
-	anim_x_hdr->addWidget(anim_x_lbl);
-	anim_x_hdr->addStretch(1);
-	anim_x_hdr->addWidget(anim_x_val);
-	auto *anim_x_slider = new QSlider(Qt::Horizontal, anim_body);
-	anim_x_slider->setObjectName(QStringLiteral("lpAnimX"));
-	anim_x_slider->setRange(-1200, 1200);
-	anim_x_slider->setSingleStep(5);
-	anim_x_slider->setPageStep(25);
-	anim_x_slider->setValue(init_anim_x);
-	anim_body_layout->addLayout(anim_x_hdr);
-	anim_body_layout->addWidget(anim_x_slider);
-
-	// 4. Y-Versatz (-1200..1200, step 5)
-	const int init_anim_y = std::clamp(card.anim_y, -1200, 1200);
-	auto *anim_y_hdr = new QHBoxLayout();
-	anim_y_hdr->setContentsMargins(0, 0, 0, 0);
-	auto *anim_y_lbl = new QLabel(QStringLiteral("Y-VERSATZ"), anim_body);
-	anim_y_lbl->setObjectName(QStringLiteral("lpFieldLabel"));
-	auto *anim_y_val =
-		new QLabel(QStringLiteral("%1px").arg(init_anim_y), anim_body);
-	anim_y_val->setObjectName(QStringLiteral("lpFieldLabel"));
-	anim_y_hdr->addWidget(anim_y_lbl);
-	anim_y_hdr->addStretch(1);
-	anim_y_hdr->addWidget(anim_y_val);
-	auto *anim_y_slider = new QSlider(Qt::Horizontal, anim_body);
-	anim_y_slider->setObjectName(QStringLiteral("lpAnimY"));
-	anim_y_slider->setRange(-1200, 1200);
-	anim_y_slider->setSingleStep(5);
-	anim_y_slider->setPageStep(25);
-	anim_y_slider->setValue(init_anim_y);
-	anim_body_layout->addLayout(anim_y_hdr);
-	anim_body_layout->addWidget(anim_y_slider);
-
-	// 5. Aktiv-Checkbox
-	auto *anim_show_cb = new QCheckBox(QStringLiteral("Aktiv"), anim_body);
-	anim_show_cb->setObjectName(QStringLiteral("lpAnimShow"));
-	anim_show_cb->setChecked(card.show_anim);
-	anim_body_layout->addWidget(anim_show_cb);
-
-	anim_body->setVisible(false);
-	anim_group_layout->addWidget(anim_body);
-	connect(anim_group, &QGroupBox::toggled, anim_body, &QWidget::setVisible);
-	style_layout->addWidget(anim_group);
 
 	style_section->setVisible(true);
 	inner_layout->addWidget(style_section);
@@ -1653,62 +1603,6 @@ void LiedplanDock::create_row_widget(const LiedplanCard &card)
 			set_dock_status(QStringLiteral("Profil \"%1\" → \"%2\" umbenannt")
 				    .arg(old_name, qname), false);
 		});
-
-	connect(anim_file_edit, &QLineEdit::textChanged, this,
-		[this, card_id, schedule_save](const QString &text) {
-			if (LiedplanCard *c = find_card_mut(card_id)) {
-				c->anim_file = text.toUtf8().toStdString();
-				schedule_save();
-			}
-		});
-
-	connect(anim_file_pick, &QPushButton::clicked, this, [this, anim_file_edit]() {
-		const QString start_dir =
-			QString::fromUtf8(state_.settings.animation_dir.c_str());
-		const QString chosen = QFileDialog::getOpenFileName(
-			this, QStringLiteral("Animationsdatei wählen"), start_dir,
-			QStringLiteral(
-				"Animationen (*.gif *.webm *.mp4 *.mov *.m4v);;Bilder (*.png *.jpg *.jpeg);;Alle Dateien (*.*)"));
-		if (!chosen.isEmpty()) {
-			anim_file_edit->setText(chosen);
-		}
-	});
-
-	connect(anim_scale_combo, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
-		[this, card_id, anim_scale_combo, schedule_save](int idx) {
-			if (LiedplanCard *c = find_card_mut(card_id)) {
-				const int sc = anim_scale_combo->itemData(idx).toInt();
-				c->anim_scale = sc > 0 ? sc : 3;
-				schedule_save();
-			}
-		});
-
-	connect(anim_x_slider, &QSlider::valueChanged, this,
-		[this, card_id, anim_x_val, schedule_save](int val) {
-			const int clamped = std::clamp(val, -1200, 1200);
-			anim_x_val->setText(QStringLiteral("%1px").arg(clamped));
-			if (LiedplanCard *c = find_card_mut(card_id)) {
-				c->anim_x = clamped;
-				schedule_save();
-			}
-		});
-
-	connect(anim_y_slider, &QSlider::valueChanged, this,
-		[this, card_id, anim_y_val, schedule_save](int val) {
-			const int clamped = std::clamp(val, -1200, 1200);
-			anim_y_val->setText(QStringLiteral("%1px").arg(clamped));
-			if (LiedplanCard *c = find_card_mut(card_id)) {
-				c->anim_y = clamped;
-				schedule_save();
-			}
-		});
-
-	connect(anim_show_cb, &QCheckBox::toggled, this, [this, card_id, schedule_save](bool checked) {
-		if (LiedplanCard *c = find_card_mut(card_id)) {
-			c->show_anim = checked;
-			schedule_save();
-		}
-	});
 
 	connect(to_scene_btn, &QPushButton::clicked, this, [this, card_id]() {
 		if (LiedplanCard *c = find_card_mut(card_id)) {
