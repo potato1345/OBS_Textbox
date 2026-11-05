@@ -890,14 +890,25 @@ std::string render_template_html(const LiedplanCard &card, const std::string &te
 	if (template_id.empty())
 		return "";
 
-	// Suchpfad: user-Dir zuerst (überschreibt builtin), dann builtin-Examples.
+	// IMP-H7: template_id ist ein Vorlagen-Pfad (User-Eingabe). Kandidaten:
+	// 1) Pfad as-is (absolut oder relativ), 2) Legacy-ID-Schema <dir>/<id>.html
+	// (user-Dir zuerst, überschreibt builtin), 3) <dir>/<id> für Namen mit
+	// ".html"-Endung. Fehlender Pfad -> "" (write_card fällt auf classic).
 	const std::string user_dir = templates_dir();
 	const std::string builtin_dir = builtin_templates_dir();
+	const bool ends_html = template_id.size() >= 5 &&
+		template_id.compare(template_id.size() - 5, 5, ".html") == 0;
+	std::vector<std::string> candidates;
+	candidates.push_back(template_id);
 	const std::string dirs[] = {user_dir, builtin_dir};
 	for (const std::string &dir : dirs) {
 		if (dir.empty())
 			continue;
-		const std::string tpl_path = dir + "/" + template_id + ".html";
+		if (!ends_html)
+			candidates.push_back(dir + "/" + template_id + ".html");
+		candidates.push_back(dir + "/" + template_id);
+	}
+	for (const std::string &tpl_path : candidates) {
 		const std::string tpl_html = read_utf8_file(tpl_path.c_str());
 		if (!tpl_html.empty())
 			return substitute_tokens(card, tpl_html, clear, settings, copy_dir);

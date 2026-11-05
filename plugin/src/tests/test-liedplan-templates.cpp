@@ -195,6 +195,34 @@ int main()
 		std::filesystem::remove(tpl_file, ec);
 	}
 
+	// 4d/4e (IMP-H7): Vorlage per Pfad — voller Pfad as-is, Name mit ".html"
+	// im Vorlagen-Ordner, nicht existierender Pfad -> "" (classic-Fallback)
+	{
+		const std::string tdir = liedplan_html::templates_dir();
+		const std::filesystem::path pf = std::filesystem::u8path(tdir) / "path_test.html";
+		write_file_bytes(pf, "<!DOCTYPE html><html><body>{{zeile1}}</body></html>");
+
+		LiedplanCard c;
+		c.id = "box_path";
+		c.zeile1 = "Pfadvorlage";
+
+		const std::string as_path =
+			liedplan_html::render_template_html(c, pf.u8string(), false);
+		const std::string with_html =
+			liedplan_html::render_template_html(c, "path_test.html", false);
+		check(as_path.find("Pfadvorlage") != std::string::npos &&
+			      with_html.find("Pfadvorlage") != std::string::npos,
+		      "4d. IMP-H7: template_id als voller Pfad und als 'name.html' funktionieren",
+		      as_path);
+
+		const std::string bad =
+			liedplan_html::render_template_html(c, "C:/no/such/dir/tpl.html", false);
+		check(bad.empty(), "4e. IMP-H7: nicht existierender Vorlagen-Pfad liefert \"\"");
+
+		std::error_code ec;
+		std::filesystem::remove(pf, ec);
+	}
+
 	// 5. write_card mit template_id -> schreibt substituiertes Template (kein INJECT-Marker);
 	//    fehlendes Template -> Fallback auf classic-Weg (OBS_TEXTBOX_INJECT_START vorhanden)
 	{

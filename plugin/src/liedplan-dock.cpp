@@ -1402,38 +1402,39 @@ void LiedplanDock::create_row_widget(const LiedplanCard &card)
 				schedule_save();
 		});
 
-	// IMP-F (F2b): Karten-Vorlage (Template). "classic" = klassischer Weg
-	// (template_id leer); weitere Einträge = discovered .html-Vorlagen.
-	// Wechsel → write_card neu + Browser-Source-Reload (spec: Document-Neuerstellung).
+	// IMP-H7: Karten-Vorlage per Pfad-Eingabe (statt Dropdown). leer =
+	// klassischer Weg (template_id leer); einfacher Name = Vorlagen-Ordner;
+	// voller Pfad = direkte .html-Datei anywhere. Wechsel -> write_card neu +
+	// Browser-Source-Reload (spec: Document-Neuerstellung), gequetscht per Timer.
 	auto *tpl_layout = new QVBoxLayout();
 	tpl_layout->setContentsMargins(0, 0, 0, 0);
 	tpl_layout->setSpacing(4);
 	auto *lbl_tpl = new QLabel(QStringLiteral("VORLAGE"), style_section);
 	lbl_tpl->setObjectName(QStringLiteral("lpFieldLabel"));
 	lbl_tpl->setToolTip(QStringLiteral(
-		"Karten-Vorlage (HTML-Template). 'classic' = Standard. Weitere Vorlagen "
-		"sind .html-Dateien im Vorlagen-Ordner (Zahnrad-Menü → Vorlagen-Ordner öffnen)."));
-	auto *tpl_combo = new QComboBox(style_section);
-	tpl_combo->setObjectName(QStringLiteral("lpTemplate"));
-	tpl_combo->setToolTip(lbl_tpl->toolTip());
-	tpl_combo->setFixedHeight(34);
-	tpl_combo->addItem(QStringLiteral("classic"), QString());
-	for (const std::string &tid : liedplan_html::list_template_ids()) {
-		tpl_combo->addItem(QString::fromUtf8(tid.c_str()), QString::fromUtf8(tid.c_str()));
-	}
-	const QString cur_tid = QString::fromUtf8(card.template_id.c_str());
-	const int tid_idx = tpl_combo->findData(cur_tid);
-	tpl_combo->setCurrentIndex(tid_idx >= 0 ? tid_idx : 0);
-	// Vorlagen, die nicht (mehr) im Ordner liegen, trotzdem zeigen, damit der
-	// State-Wert nicht stumm auf "classic" fällt.
-	if (tid_idx < 0 && !card.template_id.empty()) {
-		tpl_combo->addItem(QStringLiteral("%1 (fehlt)").arg(cur_tid), cur_tid);
-		tpl_combo->setCurrentIndex(tpl_combo->count() - 1);
-	}
+		"Pfad zur Vorlagen-HTML. Leer = classic. Einfacher Name (z.B. minimal) = "
+		"Vorlagen-Ordner; voller Pfad = direkte Datei. Ordner-Icon wählt eine .html."));
+	auto *tpl_row = new QHBoxLayout();
+	tpl_row->setContentsMargins(0, 0, 0, 0);
+	tpl_row->setSpacing(6);
+	auto *tpl_edit = new QLineEdit(style_section);
+	tpl_edit->setObjectName(QStringLiteral("lpTemplatePath"));
+	tpl_edit->setPlaceholderText(QStringLiteral("classic (leer) oder Pfad zur Vorlage"));
+	tpl_edit->setToolTip(lbl_tpl->toolTip());
+	tpl_edit->setFixedHeight(32);
+	tpl_edit->setText(QString::fromUtf8(card.template_id.c_str()));
+	auto *tpl_pick = new QPushButton(style_section);
+	tpl_pick->setObjectName(QStringLiteral("lpTemplatePick"));
+	tpl_pick->setFixedSize(34, 32);
+	tpl_pick->setIcon(theme_icon("download.svg"));
+	tpl_pick->setIconSize(QSize(16, 16));
+	tpl_pick->setToolTip(QStringLiteral("Vorlagen-Datei (.html) auswählen"));
+	tpl_row->addWidget(tpl_edit, 1);
+	tpl_row->addWidget(tpl_pick);
 	tpl_layout->addWidget(lbl_tpl);
-	tpl_layout->addWidget(tpl_combo);
+	tpl_layout->addLayout(tpl_row);
 	style_layout->addLayout(tpl_layout);
-	// Für refresh_templates_ui() (Vorlagen-Ordner geändert) am Row erreichbar.
+	// Für refresh_templates_ui() (State-Änderung von außen) am Row erreichbar.
 	row_widget->setProperty("lpHasTemplate", true);
 
 
@@ -1483,10 +1484,30 @@ void LiedplanDock::create_row_widget(const LiedplanCard &card)
 			}
 		});
 
-	connect(tpl_combo, &QComboBox::activated, this, [this, card_id, tpl_combo]() {
-		const QVariant data = tpl_combo->currentData();
-		const QString tid = data.toString();
-		apply_template_id(card_id, tid.toUtf8().toStdString());
+	// IMP-H7: Pfad-Eingabe -> debounce (Tippen soll nicht jeden Character
+	// reloaden), Picker -> sofort übernehmen.
+	auto *tpl_timer = new QTimer(style_section);
+	tpl_timer->setSingleShot(true);
+	tpl_timer->setInterval(650);
+	connect(tpl_edit, &QLineEdit::textChanged, tpl_timer, [tpl_timer]() {
+		tpl_timer->start();
+	});
+	connect(tpl_timer, &QTimer::timeout, this, [this, card_id, tpl_edit]() {
+		const QString t = tpl_edit->text().trimmed();
+		LiedplanCard *c = find_card_mut(card_id);
+		if (!c || c->template_id == t.toUtf8().toStdString())
+			return;
+		apply_template_id(card_id, t.toUtf8().toStdString());
+	});
+	connect(tpl_pick, &QPushButton::clicked, this, [this, card_id, tpl_edit]() {
+		const QString start = QString::fromUtf8(liedplan_html::templates_dir().c_str());
+		const QString chosen = QFileDialog::getOpenFileName(
+			this, QStringLiteral("Vorlage wählen"), start,
+			QStringLiteral("Vorlagen (*.html);;Alle Dateien (*.*)"));
+		if (!chosen.isEmpty()) {
+			tpl_edit->setText(chosen);
+			apply_template_id(card_id, chosen.toUtf8().toStdString());
+		}
 	});
 
 	connect(new_prof_btn, &QPushButton::clicked, this, [this, card_id]() {
@@ -1753,29 +1774,20 @@ void LiedplanDock::apply_template_id(const std::string &card_id, const std::stri
 
 void LiedplanDock::refresh_templates_ui()
 {
-	const std::vector<std::string> ids = liedplan_html::list_template_ids();
+	// IMP-H7: Vorlagen sind Pfad-Eingaben — spiegle nur den State-Wert in die
+	// Felder (keine Ordner-Discovery mehr; der Pfad ist die Wahrheit).
 	for (QWidget *w : row_widgets_) {
 		if (!w || !w->property("lpHasTemplate").toBool())
 			continue;
-		QComboBox *combo = w->findChild<QComboBox *>(QStringLiteral("lpTemplate"));
-		if (!combo)
+		QLineEdit *edit = w->findChild<QLineEdit *>(QStringLiteral("lpTemplatePath"));
+		if (!edit)
 			continue;
 		const std::string card_id = w->property("lpCardId").toString().toUtf8().toStdString();
 		const LiedplanCard *card = find_card_mut(card_id);
-		const QString cur_tid = card ? QString::fromUtf8(card->template_id.c_str()) : QString();
-
-		const QSignalBlocker blocker(combo);
-		combo->clear();
-		combo->addItem(QStringLiteral("classic"), QString());
-		for (const std::string &tid : ids) {
-			combo->addItem(QString::fromUtf8(tid.c_str()), QString::fromUtf8(tid.c_str()));
-		}
-		int idx = combo->findData(cur_tid);
-		if (idx < 0 && !cur_tid.isEmpty()) {
-			combo->addItem(QStringLiteral("%1 (fehlt)").arg(cur_tid), cur_tid);
-			idx = combo->count() - 1;
-		}
-		combo->setCurrentIndex(idx >= 0 ? idx : 0);
+		const QString cur = card ? QString::fromUtf8(card->template_id.c_str()) : QString();
+		const QSignalBlocker blocker(edit);
+		if (edit->text() != cur)
+			edit->setText(cur);
 	}
 }
 
