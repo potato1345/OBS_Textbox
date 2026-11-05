@@ -1022,6 +1022,13 @@ void LiedplanDock::create_row_widget(const LiedplanCard &card)
 
 	auto css_name_edits = std::make_shared<std::vector<QLineEdit *>>();
 	auto css_value_edits = std::make_shared<std::vector<QLineEdit *>>();
+	// Übliche Template-Variablen als Autovervollständigung für Regel-Namen.
+	auto css_var_model = std::make_shared<QStringList>();
+	for (const char *v : {"--lp-radius", "--lp-padding", "--lp-padding-top", "--lp-padding-left",
+	                      "--lp-gap", "--lp-min-width", "--lp-max-width", "--lp-text-align",
+	                      "--lp-font-family", "--lp-font-first", "--lp-font-first-weight",
+	                      "--lp-font-rest", "--lp-font-rest-weight", "--lp-corner-size"})
+		css_var_model->append(QString::fromLatin1(v));
 
 	connect(lbl_css, &QToolButton::clicked, css_frame,
 	        [css_collapsed, css_name_edits, css_value_edits, lbl_css]() {
@@ -1053,7 +1060,7 @@ void LiedplanDock::create_row_widget(const LiedplanCard &card)
 		return true;
 	};
 
-	auto rebuild_css_rows = [this, card_id, css_frame, css_layout, css_name_edits, css_value_edits, css_collapsed, collect_css, schedule_save]() {
+	auto rebuild_css_rows = [this, card_id, css_frame, css_layout, css_name_edits, css_value_edits, css_collapsed, css_var_model, collect_css, schedule_save]() {
 		// Header-Layout (index 0) behalten, Regel-Zeilen neu aufbauen.
 		while (css_layout->count() > 1) {
 			QLayoutItem *item = css_layout->takeAt(1);
@@ -1083,6 +1090,9 @@ void LiedplanDock::create_row_widget(const LiedplanCard &card)
 			nedit->setPlaceholderText(QStringLiteral("--variable"));
 			nedit->setFixedWidth(110);
 			nedit->setFixedHeight(32);
+			auto *comp = new QCompleter(*css_var_model, css_frame);
+			comp->setCaseSensitivity(Qt::CaseInsensitive);
+			nedit->setCompleter(comp);
 			auto *vedit = new QLineEdit(QString::fromUtf8(rule.value.c_str()), css_frame);
 			vedit->setPlaceholderText(QStringLiteral("wert"));
 			vedit->setFixedHeight(32);
@@ -1106,7 +1116,7 @@ void LiedplanDock::create_row_widget(const LiedplanCard &card)
 		}
 	};
 
-	connect(css_add_btn, &QToolButton::clicked, this, [this, card_id, css_frame, css_layout, css_name_edits, css_value_edits, css_collapsed, collect_css, schedule_save]() {
+	connect(css_add_btn, &QToolButton::clicked, this, [this, card_id, css_frame, css_layout, css_name_edits, css_value_edits, css_collapsed, css_var_model, collect_css, schedule_save]() {
 		if (css_name_edits->size() >= 24)
 			return;
 		auto *row = new QHBoxLayout();
@@ -1116,6 +1126,9 @@ void LiedplanDock::create_row_widget(const LiedplanCard &card)
 		nedit->setPlaceholderText(QStringLiteral("--variable"));
 		nedit->setFixedWidth(110);
 		nedit->setFixedHeight(32);
+		auto *comp = new QCompleter(*css_var_model, css_frame);
+		comp->setCaseSensitivity(Qt::CaseInsensitive);
+		nedit->setCompleter(comp);
 		auto *vedit = new QLineEdit(css_frame);
 		vedit->setPlaceholderText(QStringLiteral("wert"));
 		vedit->setFixedHeight(32);
