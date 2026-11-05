@@ -24,6 +24,7 @@
 #include <util/bmem.h>
 
 #include <QByteArray>
+#include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QString>
@@ -133,9 +134,24 @@ std::string build_repo_listener_script()
 	     "    window.addEventListener(\"liedplan_card_update\", function (ev) {\n"
 	     "        var d = ev.detail;\n"
 	     "        if (!d) return;\n"
-	     "        if (d.zeile1 != null) setVar(\"--zeile-1\", '\"' + String(d.zeile1) + '\"');\n"
-	     "        if (d.zeile2 != null) setVar(\"--zeile-2\", '\"' + String(d.zeile2) + '\"');\n"
-	     "        if (d.zeile3 != null) setVar(\"--zeile-3\", '\"' + String(d.zeile3) + '\"');\n"
+	     "        if (d.zeilen != null) {\n"
+	     "            var n = 0;\n"
+	     "            for (var i = 0; i < d.zeilen.length && i < 8; i++) {\n"
+	     "                setVar(\"--zeile-\" + (i + 1), '\"' + String(d.zeilen[i]) + '\"');\n"
+	     "                n = i + 1;\n"
+	     "            }\n"
+	     "            setVar(\"--zeile-count\", String(n));\n"
+	     "        } else {\n"
+	     "            if (d.zeile1 != null) setVar(\"--zeile-1\", '\"' + String(d.zeile1) + '\"');\n"
+	     "            if (d.zeile2 != null) setVar(\"--zeile-2\", '\"' + String(d.zeile2) + '\"');\n"
+	     "            if (d.zeile3 != null) setVar(\"--zeile-3\", '\"' + String(d.zeile3) + '\"');\n"
+	     "        }\n"
+	     "        if (d.style != null) {\n"
+	     "            for (var j = 0; j < d.style.length; j++) {\n"
+	     "                var r = d.style[j];\n"
+	     "                if (r && r.name && r.value != null) setVar(r.name, String(r.value));\n"
+	     "            }\n"
+	     "        }\n"
 	     "        if (d.box_bg != null) setVar(\"--box-bg\", d.box_bg);\n"
 	     "        if (d.text_color != null) setVar(\"--text-color\", d.text_color);\n"
 	     "        if (d.box_opacity != null) setVar(\"--box-opacity\", String(d.box_opacity));\n"
@@ -244,8 +260,17 @@ std::string format_rgba(const std::string &hex, uint32_t fallback_rgb, int opaci
 
 bool has_any_text(const LiedplanCard &card)
 {
-	return !card.zeile1.empty() || !card.zeile2.empty() || !card.zeile3.empty();
+	if (!card.zeile1.empty() || !card.zeile2.empty() || !card.zeile3.empty())
+		return true;
+	for (const auto &r : card.rows) {
+		if (!r.value.empty())
+			return true;
+	}
+	return false;
 }
+
+// CSS-Var-Name aus frei eingegebenem Text: behält [A-Za-z0-9-], prefixt '--'. "" wenn leer.
+
 
 std::string read_utf8_file(const char *utf8_path)
 {
@@ -624,11 +649,12 @@ std::string build_inject_css(const LiedplanCard &card, const LiedplanSettings &s
 	std::ostringstream oss;
 	oss.imbue(std::locale::classic());
 	oss << "/* OBS_TEXTBOX_INJECT_START */\n"
-	    << ":root {\n"
-	    << "  --zeile-1: \"" << escape_css_string(card.zeile1) << "\";\n"
-	    << "  --zeile-2: \"" << escape_css_string(card.zeile2) << "\";\n"
-	    << "  --zeile-3: \"" << escape_css_string(card.zeile3) << "\";\n"
-	    << "  --anim-file: \"" << escape_css_string(norm_anim) << "\";\n"
+	    << ":root {\n";
+	const auto rows = effective_rows(card);
+	for (std::size_t i = 0; i < rows.size(); ++i)
+		oss << "  --zeile-" << (i + 1) << ": \"" << escape_css_string(rows[i].value) << "\";\n";
+	oss << "  --zeile-count: " << rows.size() << ";\n";
+	oss << "  --anim-file: \"" << escape_css_string(norm_anim) << "\";\n"
 	    << "  --show-anim: " << show_anim << ";\n"
 	    << "  --anim-scale: " << card.anim_scale << ";\n"
 	    << "  --anim-x: " << card.anim_x << "px;\n"
@@ -637,8 +663,16 @@ std::string build_inject_css(const LiedplanCard &card, const LiedplanSettings &s
 	    << "  --triangle-color-a: " << tri_col_a << ";\n"
 	    << "  --triangle-color-b: " << tri_col_b << ";\n"
 	    << "  --text-color: " << text_col << ";\n"
-	    << "  --box-opacity: " << box_opacity << ";\n"
-	    << "}\n"
+	    << "  --box-opacity: " << box_opacity << ";\n";
+	// Generelle CSS-Regeln (--name: value); ungültige Namen/Values werden gedroppt.
+	for (const auto &rule : card.style) {
+		const std::string var_name = sanitize_css_var_name(rule.name);
+		const std::string var_value = sanitize_css_value(rule.value);
+		if (var_name.empty() || var_value.empty())
+			continue;
+		oss << "  " << var_name << ": " << var_value << ";\n";
+	}
+	oss << "}\n"
 	    << "html, body { background-color: rgba(0, 0, 0, 0) !important; }\n"
 	    << "/* OBS_TEXTBOX_INJECT_END */";
 	return oss.str();
@@ -778,6 +812,26 @@ std::string substitute_tokens(const LiedplanCard &card, const std::string &templ
 	for (const auto &kv : tokens) {
 		const std::string key(kv.first);
 		const std::string &val = kv.second;
+		std::size_t pos = 0;
+		while ((pos = out.find(key, pos)) != std::string::npos) {
+			out.replace(pos, key.size(), val);
+			pos += val.size();
+		}
+	}
+	// Dynamische Zeilen-Tokens {{zeile-1}}..{{zeile-8}} + {{zeile-count}}.
+	const auto rows = effective_rows(card);
+	for (std::size_t i = 0; i < kMaxCardRows; ++i) {
+		const std::string key = "{{zeile-" + std::to_string(i + 1) + "}}";
+		const std::string val = (i < rows.size() && !clear) ? rows[i].value : std::string();
+		std::size_t pos = 0;
+		while ((pos = out.find(key, pos)) != std::string::npos) {
+			out.replace(pos, key.size(), val);
+			pos += val.size();
+		}
+	}
+	{
+		const std::string key = "{{zeile-count}}";
+		const std::string val = std::to_string(rows.size());
 		std::size_t pos = 0;
 		while ((pos = out.find(key, pos)) != std::string::npos) {
 			out.replace(pos, key.size(), val);
@@ -978,26 +1032,25 @@ std::string card_html(const LiedplanCard &card)
 		"\ttransition: opacity 0.3s ease;\n"
 		"}\n"
 		"#lines {\n"
-		"\tposition: relative;\n"
-		"\tz-index: 1;\n"
-		"\twidth: 800px;\n"
-		"\theight: 400px;\n"
-		"\tdisplay: flex;\n"
-		"\tflex-direction: column;\n"
-		"\talign-items: center;\n"
-		"\tjustify-content: center;\n"
-		"\ttext-align: center;\n"
-		"\tfont-family: 'Segoe UI', sans-serif;\n"
-		"\tline-height: 1.25;\n"
-		"\tbox-sizing: border-box;\n"
+		"	position: relative;\n"
+		"	z-index: 1;\n"
+		"	width: 800px;\n"
+		"	height: 400px;\n"
+		"	display: flex;\n"
+		"	flex-direction: column;\n"
+		"	align-items: center;\n"
+		"	justify-content: center;\n"
+		"	text-align: center;\n"
+		"	font-family: 'Segoe UI', sans-serif;\n"
+		"	line-height: 1.25;\n"
+		"	box-sizing: border-box;\n"
 		"}\n"
-		"#l1, #l2 {\n"
-		"\tfont-size: 44px;\n"
-		"\twidth: 100%;\n"
+		".lp-row {\n"
+		"	font-size: 44px;\n"
+		"	width: 100%;\n"
 		"}\n"
-		"#l3 {\n"
-		"\tfont-size: 60px;\n"
-		"\twidth: 100%;\n"
+		".lp-row.lp-last {\n"
+		"	font-size: 60px;\n"
 		"}\n"
 		".anim-wrapper {\n"
 		"\tposition: absolute;\n"
@@ -1030,9 +1083,18 @@ std::string card_html(const LiedplanCard &card)
 		"\t<div id=\"lines\" style=\"" +
 		lines_style + "\">\n";
 
-	html += render_line_div("l1", card.zeile1);
-	html += render_line_div("l2", card.zeile2);
-	html += render_line_div("l3", card.zeile3);
+	// Zeilen dynamisch: Anzahl = effective_rows(card) (1..8); letzte Zeile größer.
+	const auto rows = effective_rows(card);
+	for (std::size_t i = 0; i < rows.size(); ++i) {
+		std::string div = "		<div id=\"l" + std::to_string(i + 1) + "\"";
+		if (rows[i].value.empty())
+			div += " style=\"display:none;\"";
+		div += " class=\"lp-row";
+		if (i + 1 == rows.size())
+			div += " lp-last";
+		div += "\">" + escape_html(rows[i].value) + "</div>\n";
+		html += div;
+	}
 
 	html += "\t</div>\n"
 		"</div>\n"
@@ -1085,9 +1147,39 @@ std::string card_html(const LiedplanCard &card)
 		"\t\tif (currentAnimFile !== \"\") { currentAnimFile = \"\"; animWrapper.innerHTML = \"\"; }\n"
 		"\t}\n"
 		"}\n"
+		"function syncRows(count) {\n"
+		"	var linesEl = document.getElementById(\"lines\");\n"
+		"	if (!linesEl) return;\n"
+		"	var rows = linesEl.querySelectorAll(\".lp-row\");\n"
+		"	while (rows.length < count) {\n"
+		"		var el = document.createElement(\"div\");\n"
+		"		el.id = \"l\" + (rows.length + 1);\n"
+		"		el.className = \"lp-row\";\n"
+		"		linesEl.appendChild(el);\n"
+		"		rows = linesEl.querySelectorAll(\".lp-row\");\n"
+		"	}\n"
+		"	while (rows.length > count) {\n"
+		"		linesEl.removeChild(rows[rows.length - 1]);\n"
+		"		rows = linesEl.querySelectorAll(\".lp-row\");\n"
+		"	}\n"
+		"	for (var k = 0; k < rows.length; k++)\n"
+		"		rows[k].className = \"lp-row\" + (k + 1 === rows.length ? \" lp-last\" : \"\");\n"
+		"}\n"
 		"function applyCard(d) {\n"
-		"\tif (!d) return;\n"
-		"\tsetLine(\"l1\", d.zeile1); setLine(\"l2\", d.zeile2); setLine(\"l3\", d.zeile3);\n"
+		"	if (!d) return;\n"
+		"	if (d.zeilen != null) {\n"
+		"		var count = Math.min(d.zeilen.length, 8);\n"
+		"		syncRows(count);\n"
+		"		for (var i = 0; i < count; i++) setLine(\"l\" + (i + 1), d.zeilen[i]);\n"
+		"	} else {\n"
+		"		setLine(\"l1\", d.zeile1); setLine(\"l2\", d.zeile2); setLine(\"l3\", d.zeile3);\n"
+		"	}\n"
+		"	if (d.style != null) {\n"
+		"		for (var j = 0; j < d.style.length; j++) {\n"
+		"			var r = d.style[j];\n"
+		"			if (r && r.name && r.value != null) setVar(r.name, String(r.value));\n"
+		"		}\n"
+		"	}\n"
 		"\tvar box = document.getElementById(\"box\");\n"
 		"\tvar lines = document.getElementById(\"lines\");\n"
 		"\tif (box) {\n"
@@ -1197,6 +1289,23 @@ void push_update(obs_source_t *src, const LiedplanCard &card, bool clear,
 		   clear ? QStringLiteral("") : QString::fromUtf8(card.zeile2.c_str()));
 	obj.insert(QStringLiteral("zeile3"),
 		   clear ? QStringLiteral("") : QString::fromUtf8(card.zeile3.c_str()));
+	const auto rows = effective_rows(card);
+	QJsonArray zeilen;
+	for (const auto &r : rows)
+		zeilen.append(clear ? QStringLiteral("") : QString::fromUtf8(r.value.c_str()));
+	obj.insert(QStringLiteral("zeilen"), zeilen);
+	QJsonArray style_arr;
+	for (const auto &rule : card.style) {
+		const std::string name = sanitize_css_var_name(rule.name);
+		const std::string value = sanitize_css_value(rule.value);
+		if (name.empty() || value.empty())
+			continue;
+		QJsonObject r;
+		r.insert(QStringLiteral("name"), QString::fromUtf8(name.c_str()));
+		r.insert(QStringLiteral("value"), QString::fromUtf8(value.c_str()));
+		style_arr.append(r);
+	}
+	obj.insert(QStringLiteral("style"), style_arr);
 	obj.insert(QStringLiteral("box_bg"), QString::fromUtf8(box_bg.c_str()));
 	obj.insert(QStringLiteral("text_color"), QString::fromUtf8(text_col.c_str()));
 	obj.insert(QStringLiteral("box_opacity"), box_opacity);
@@ -1230,4 +1339,31 @@ void push_update(obs_source_t *src, const LiedplanCard &card, bool clear,
 #endif
 }
 
+std::string sanitize_css_var_name(const std::string &raw)
+{
+	std::string core;
+	for (char ch : raw) {
+		if ((ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') ||
+		    (ch >= '0' && ch <= '9') || ch == '-')
+			core.push_back(ch);
+	}
+	while (!core.empty() && core[0] == '-')
+		core.erase(core.begin());
+	if (core.empty())
+		return "";
+	return "--" + core;
+}
+
+// CSS-Value aus frei eingegebenem Text: dropt Struktur-/Injection-Zeichen (; { } < CR LF).
+std::string sanitize_css_value(const std::string &raw)
+{
+	std::string out;
+	for (char ch : raw) {
+		if (ch == ';' || ch == '{' || ch == '}' || ch == '<' ||
+		    ch == '\n' || ch == '\r')
+			continue;
+		out.push_back(ch);
+	}
+	return out;
+}
 } // namespace liedplan_html

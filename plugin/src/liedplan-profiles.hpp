@@ -13,8 +13,41 @@
 
 #include <algorithm>
 #include <cctype>
+#include <cstddef>
 #include <string>
 #include <vector>
+
+/**
+ * Eine frei benennbare Karten-Zeile (Label nur UI-Metadaten; Value wird gerendert).
+ * Max: kMaxCardRows Zeilen pro Karte.
+ */
+struct LiedplanRow {
+	std::string label;
+	std::string value;
+
+	bool operator==(const LiedplanRow &other) const
+	{
+		return label == other.label && value == other.value;
+	}
+};
+
+/**
+ * Generelle CSS-Regel: name (Variable-Name, ohne/ mit '--' Prefix) -> value.
+ */
+struct LiedplanStyleRule {
+	std::string name;
+	std::string value;
+
+	bool operator==(const LiedplanStyleRule &other) const
+	{
+		return name == other.name && value == other.value;
+	}
+};
+
+inline constexpr size_t kMaxCardRows = 8;
+
+// Standard-Labels der klassischen drei Zeilen.
+inline const char *kLiedplanRowLabels[3] = {"GL-Nummer", "Verse", "Liedtitel"};
 
 /**
  * Karten-Farbprofil mit Text-/Box-Farben, Eckfarben, Deckkräften und Regenbogen-Option.
@@ -30,6 +63,7 @@ struct LiedplanProfile {
 	int text_opacity = 255;
 	int box_opacity = 255;
 	bool rainbow = false;
+	std::vector<LiedplanStyleRule> style; // generelle CSS-Regeln des Profils
 
 	bool operator==(const LiedplanProfile &other) const
 	{
@@ -38,7 +72,8 @@ struct LiedplanProfile {
 		       corner_b == other.corner_b && corner_op_a == other.corner_op_a &&
 		       corner_op_b == other.corner_op_b &&
 		       text_opacity == other.text_opacity &&
-		       box_opacity == other.box_opacity && rainbow == other.rainbow;
+		       box_opacity == other.box_opacity && rainbow == other.rainbow &&
+		       style == other.style;
 	}
 
 	bool operator!=(const LiedplanProfile &other) const
@@ -133,6 +168,7 @@ inline bool liedplan_is_default_profile(const std::string &name)
 
 /**
  * Überträgt sämtliche Farb-, Ecken-, Deckkraft- und Regenbogen-Felder eines Profils auf eine Karte.
+ * Profil-CSS-Regeln werden ergänzt; Karten-Regeln mit gleichem Namen gewinnen.
  */
 template <typename CardT>
 inline void profile_apply(const LiedplanProfile &prof, CardT &card)
@@ -146,4 +182,15 @@ inline void profile_apply(const LiedplanProfile &prof, CardT &card)
 	card.corner_opacity_a = prof.corner_op_a;
 	card.corner_opacity_b = prof.corner_op_b;
 	card.rainbow_corners = prof.rainbow;
+	for (const auto &rule : prof.style) {
+		bool owned = false;
+		for (const auto &cr : card.style) {
+			if (cr.name == rule.name) {
+				owned = true;
+				break;
+			}
+		}
+		if (!owned)
+			card.style.push_back(rule);
+	}
 }

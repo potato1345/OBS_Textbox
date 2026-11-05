@@ -22,6 +22,10 @@
 
 #include <obs.h>
 
+#ifdef ENABLE_FRONTEND_API
+#include <obs-frontend-api.h>
+#endif
+
 #include <QAction>
 #include <QCheckBox>
 #include <QColor>
@@ -200,6 +204,34 @@ bool is_standard_card(const LiedplanCard &c, std::size_t i)
 }
 
 } // namespace
+
+#ifdef ENABLE_FRONTEND_API
+// Frontend-Event: heilt fehlende Karten-Sources nach dem Laden der
+// Szenensammlung und nach Szenenwechsel (die Quelle gehört pro Szene).
+void liedplan_self_heal_event(obs_frontend_event event, void *data)
+{
+	if (event != OBS_FRONTEND_EVENT_FINISHED_LOADING &&
+	    event != OBS_FRONTEND_EVENT_SCENE_CHANGED)
+		return;
+	auto *dock = static_cast<LiedplanDock *>(data);
+	if (dock)
+		dock->ensure_card_sources();
+}
+#endif
+
+void LiedplanDock::ensure_card_sources()
+{
+	for (const auto &card : state_.cards) {
+		if (cancel_ && *cancel_)
+			break;
+		bool has_text = false;
+		for (const auto &r : effective_rows(card))
+			if (!r.value.empty())
+				has_text = true;
+		if (has_text)
+			liedplan_scene::send_to_current_scene(card, state_.settings);
+	}
+}
 
 LiedplanDock::LiedplanDock(const std::string &state_path, QWidget *parent)
 	: QWidget(parent),
@@ -536,11 +568,21 @@ LiedplanDock::LiedplanDock(const std::string &state_path, QWidget *parent)
 		liedplan_scene::reload_everywhere(card, state_.settings);
 	}
 
+	// Self-healing: Karten mit Inhalt bekommen garantiert eine Browser-Quelle
+	// in der aktuellen Szene. Das Frontend lädt die Szenen erst nach dem
+	// Dock-Konstruktor, also läuft die Reparatur beim Frontend-Event.
+#ifdef ENABLE_FRONTEND_API
+	obs_frontend_add_event_callback(&liedplan_self_heal_event, this);
+#endif
+
 	setMinimumSize(360, 240);
 }
 
 LiedplanDock::~LiedplanDock()
 {
+#ifdef ENABLE_FRONTEND_API
+	obs_frontend_remove_event_callback(&liedplan_self_heal_event, this);
+#endif
 	// Kooperatives Abbruch-Flag vor sämtlichen weiteren Aufräumarbeiten setzen.
 	if (cancel_)
 		cancel_->store(true);
@@ -642,12 +684,184 @@ void LiedplanDock::create_row_widget(const LiedplanCard &card)
 		return edit;
 	};
 
-	auto *edit_zeile1 =
-		make_field_row(QStringLiteral("GL-NUMMER"), card.zeile1, QStringLiteral("GL-Nummer"), inner_layout);
-	auto *edit_zeile2 =
-		make_field_row(QStringLiteral("VERSE"), card.zeile2, QStringLiteral("Verse"), inner_layout);
-	auto *edit_zeile3 =
-		make_field_row(QStringLiteral("LIEDTITEL"), card.zeile3, QStringLiteral("Liedtitel"), inner_layout);
+	// IMP-G: Zeilen dynamisch (1..8) — Label + Wert, mit +/- Steuerung.
+	const std::string card_id = card.id;
+	auto schedule_save = [this, card_id]() {
+		if (const LiedplanCard *c = find_card_mut(card_id)) {
+			push_card_live(*c, state_.settings);
+		}
+		mark_card_dirty_and_schedule(this, card_id);
+	};
+
+	auto *rows_frame = new QFrame(card_inner);
+	auto *rows_layout = new QVBoxLayout(rows_frame);
+	rows_layout->setContentsMargins(0, 0, 0, 0);
+	rows_layout->setSpacing(4);
+
+	auto *rows_bar = new QHBoxLayout();
+	rows_bar->setContentsMargins(0, 0, 0, 0);
+	rows_bar->setSpacing(6);
+	auto rows_collapsed = std::make_shared<bool>(false);
+	auto *lbl_rows = new QToolButton(rows_frame);
+	lbl_rows->setObjectName(QStringLiteral("lpFieldLabel"));
+	lbl_rows->setAutoRaise(true);
+	lbl_rows->setText(QStringLiteral("▼ ZEILEN"));
+	lbl_rows->setToolTip(QStringLiteral("ZEILEN ein-/ausklappen"));
+	auto *row_add_btn = new QToolButton(rows_frame);
+	row_add_btn->setObjectName(QStringLiteral("lpStyleToggle"));
+	row_add_btn->setFixedSize(28, 28);
+	row_add_btn->setAutoRaise(true);
+	row_add_btn->setIcon(theme_icon("plus.svg"));
+	row_add_btn->setIconSize(QSize(16, 16));
+	row_add_btn->setToolTip(QStringLiteral("Zeile hinzufügen (max 8)"));
+	auto *row_del_btn = new QToolButton(rows_frame);
+	row_del_btn->setObjectName(QStringLiteral("lpStyleToggle"));
+	row_del_btn->setFixedSize(28, 28);
+	row_del_btn->setAutoRaise(true);
+	row_del_btn->setIcon(theme_icon("trash.svg"));
+	row_del_btn->setIconSize(QSize(16, 16));
+	row_del_btn->setToolTip(QStringLiteral("Letzte Zeile entfernen (min 1)"));
+	rows_bar->addWidget(lbl_rows);
+	rows_bar->addStretch(1);
+	rows_bar->addWidget(row_add_btn);
+	rows_bar->addWidget(row_del_btn);
+	rows_layout->addLayout(rows_bar);
+	inner_layout->addWidget(rows_frame);
+
+	// shared_ptr: die connect-Lambdas leben nach Funktionsende weiter.
+	auto label_edits = std::make_shared<std::vector<QLineEdit *>>();
+	auto value_edits = std::make_shared<std::vector<QLineEdit *>>();
+
+	connect(lbl_rows, &QToolButton::clicked, rows_frame,
+	        [rows_collapsed, label_edits, value_edits, lbl_rows]() {
+		        *rows_collapsed = !*rows_collapsed;
+		        lbl_rows->setText(*rows_collapsed ? QStringLiteral("▶ ZEILEN")
+		                                          : QStringLiteral("▼ ZEILEN"));
+		        for (auto *e : *label_edits)
+			        e->setVisible(!*rows_collapsed);
+		        for (auto *e : *value_edits)
+			        e->setVisible(!*rows_collapsed);
+	        });
+
+	auto add_row_edit = [card_inner, rows_layout, rows_collapsed](const QString &label, const QString &value) {
+		auto *row = new QHBoxLayout();
+		row->setContentsMargins(0, 0, 0, 0);
+		row->setSpacing(6);
+		auto *ledit = new QLineEdit(label, card_inner);
+		ledit->setPlaceholderText(QStringLiteral("Beschriftung"));
+		ledit->setFixedWidth(110);
+		ledit->setFixedHeight(34);
+		auto *vedit = new QLineEdit(value, card_inner);
+		vedit->setPlaceholderText(QStringLiteral("Text dieser Zeile"));
+		vedit->setFixedHeight(34);
+		if (*rows_collapsed) {
+			ledit->setVisible(false);
+			vedit->setVisible(false);
+		}
+		row->addWidget(ledit);
+		row->addWidget(vedit, 1);
+		rows_layout->addLayout(row);
+		return std::make_pair(ledit, vedit);
+	};
+
+	auto collect_rows = [this, card_id, label_edits, value_edits]() -> bool {
+		LiedplanCard *c = find_card_mut(card_id);
+		if (!c)
+			return false;
+		std::vector<LiedplanRow> new_rows;
+		for (size_t i = 0; i < label_edits->size(); ++i) {
+			LiedplanRow r;
+			r.label = label_edits->at(i)->text().toUtf8().toStdString();
+			r.value = value_edits->at(i)->text().toUtf8().toStdString();
+			new_rows.push_back(r);
+		}
+		c->rows = std::move(new_rows);
+		// Legacy-Mirror synchron halten (Import-Check liest zeile1).
+		c->zeile1 = c->rows.size() > 0 ? c->rows[0].value : std::string();
+		c->zeile2 = c->rows.size() > 1 ? c->rows[1].value : std::string();
+		c->zeile3 = c->rows.size() > 2 ? c->rows[2].value : std::string();
+		return true;
+	};
+
+	auto update_search_entry = [this, card_id](const QString &text) {
+		if (!card_search_)
+			return;
+		const QSignalBlocker blocker(card_search_);
+		const QString prev_text = card_search_->currentText();
+		const QString id_q = QString::fromUtf8(card_id.c_str());
+		for (int j = 0; j < card_search_->count(); ++j) {
+			if (card_search_->itemData(j).toString() == id_q) {
+				QString t = text.trimmed();
+				if (t.size() > 20)
+					t = t.left(20);
+				card_search_->setItemText(
+					j, t.isEmpty() ? id_q
+				   : QStringLiteral("%1 · %2").arg(id_q, t));
+				break;
+			}
+		}
+		if (card_search_->lineEdit())
+			card_search_->lineEdit()->setText(prev_text);
+	};
+
+	auto wire_row_edits = [this, label_edits, value_edits, schedule_save, collect_rows, update_search_entry](
+			      QLineEdit *ledit, QLineEdit *vedit) {
+		connect(ledit, &QLineEdit::textChanged, this, [schedule_save, collect_rows](const QString &) {
+			if (collect_rows())
+				schedule_save();
+		});
+		connect(vedit, &QLineEdit::textChanged, this, [schedule_save, collect_rows, update_search_entry](const QString &text) {
+			if (!collect_rows())
+				return;
+			schedule_save();
+			update_search_entry(text);
+		});
+	};
+
+	const auto init_rows = effective_rows(card);
+	for (size_t i = 0; i < init_rows.size(); ++i) {
+		const QString lbl = !init_rows[i].label.empty()
+			       ? QString::fromUtf8(init_rows[i].label.c_str())
+			       : QString::fromUtf8(kLiedplanRowLabels[std::min(i, size_t(2))]);
+		auto pr = add_row_edit(lbl, QString::fromUtf8(init_rows[i].value.c_str()));
+		label_edits->push_back(pr.first);
+		value_edits->push_back(pr.second);
+		wire_row_edits(pr.first, pr.second);
+	}
+
+	connect(row_add_btn, &QToolButton::clicked, this, [this, label_edits, value_edits, add_row_edit, wire_row_edits, collect_rows, schedule_save]() {
+		if (label_edits->size() >= kMaxCardRows)
+			return;
+		const size_t idx = label_edits->size();
+		const QString lbl = QString::fromUtf8(
+			idx < 3 ? kLiedplanRowLabels[idx] : "Zeile");
+		auto pr = add_row_edit(lbl, QString());
+		label_edits->push_back(pr.first);
+		value_edits->push_back(pr.second);
+		wire_row_edits(pr.first, pr.second);
+		if (collect_rows())
+			schedule_save();
+	});
+
+	connect(row_del_btn, &QToolButton::clicked, this, [label_edits, value_edits, rows_layout, collect_rows, schedule_save]() {
+		if (label_edits->size() <= 1)
+			return;
+		// Letzte Zeilen-HLayout entfernen (Header-Layout bleibt index 0).
+		QLayout *row_l = rows_layout->itemAt(rows_layout->count() - 1)->layout();
+		if (row_l) {
+			for (int k = row_l->count() - 1; k >= 0; --k) {
+				auto *item = row_l->takeAt(k);
+				if (item->widget())
+					item->widget()->deleteLater();
+				delete item;
+			}
+			delete row_l;
+		}
+		label_edits->pop_back();
+		value_edits->pop_back();
+		if (collect_rows())
+			schedule_save();
+	});
 
 	auto *style_section = new QFrame(card_inner);
 	style_section->setObjectName(QStringLiteral("lpStyleSection"));
@@ -706,6 +920,182 @@ void LiedplanDock::create_row_widget(const LiedplanCard &card)
 	prof_layout->addWidget(lbl_prof);
 	prof_layout->addLayout(prof_row);
 	style_layout->addLayout(prof_layout);
+
+	// IMP-G: generelle CSS-Regeln (--variable = wert), einklappbar im Styling-Block.
+	auto *css_frame = new QFrame(style_section);
+	css_frame->setObjectName(QStringLiteral("lpCssRules"));
+	auto *css_layout = new QVBoxLayout(css_frame);
+	css_layout->setContentsMargins(0, 4, 0, 0);
+	css_layout->setSpacing(4);
+	auto *css_bar = new QHBoxLayout();
+	css_bar->setContentsMargins(0, 0, 0, 0);
+	css_bar->setSpacing(6);
+	auto css_collapsed = std::make_shared<bool>(false);
+	auto *lbl_css = new QToolButton(css_frame);
+	lbl_css->setObjectName(QStringLiteral("lpFieldLabel"));
+	lbl_css->setAutoRaise(true);
+	lbl_css->setText(QStringLiteral("▼ GENERELLE CSS-REGELN"));
+	lbl_css->setToolTip(QStringLiteral("CSS-Regeln ein-/ausklappen"));
+	auto *css_add_btn = new QToolButton(css_frame);
+	css_add_btn->setObjectName(QStringLiteral("lpStyleToggle"));
+	css_add_btn->setFixedSize(28, 28);
+	css_add_btn->setAutoRaise(true);
+	css_add_btn->setIcon(theme_icon("plus.svg"));
+	css_add_btn->setIconSize(QSize(16, 16));
+	css_add_btn->setToolTip(QStringLiteral("CSS-Regel hinzufügen (--variable = wert)"));
+	auto *css_del_btn = new QToolButton(css_frame);
+	css_del_btn->setObjectName(QStringLiteral("lpStyleToggle"));
+	css_del_btn->setFixedSize(28, 28);
+	css_del_btn->setAutoRaise(true);
+	css_del_btn->setIcon(theme_icon("trash.svg"));
+	css_del_btn->setIconSize(QSize(16, 16));
+	css_del_btn->setToolTip(QStringLiteral("Letzte CSS-Regel entfernen"));
+	css_bar->addWidget(lbl_css);
+	css_bar->addStretch(1);
+	css_bar->addWidget(css_add_btn);
+	css_bar->addWidget(css_del_btn);
+	css_layout->addLayout(css_bar);
+	style_layout->addWidget(css_frame);
+
+	auto css_name_edits = std::make_shared<std::vector<QLineEdit *>>();
+	auto css_value_edits = std::make_shared<std::vector<QLineEdit *>>();
+
+	connect(lbl_css, &QToolButton::clicked, css_frame,
+	        [css_collapsed, css_name_edits, css_value_edits, lbl_css]() {
+		        *css_collapsed = !*css_collapsed;
+		        lbl_css->setText(*css_collapsed ? QStringLiteral("▶ GENERELLE CSS-REGELN")
+		                                          : QStringLiteral("▼ GENERELLE CSS-REGELN"));
+		        for (auto *e : *css_name_edits)
+			        e->setVisible(!*css_collapsed);
+		        for (auto *e : *css_value_edits)
+			        e->setVisible(!*css_collapsed);
+	        });
+
+	auto collect_css = [this, card_id, css_name_edits, css_value_edits]() -> bool {
+		LiedplanCard *c = find_card_mut(card_id);
+		if (!c)
+			return false;
+		std::vector<LiedplanStyleRule> rules;
+		for (size_t i = 0; i < css_name_edits->size(); ++i) {
+			LiedplanStyleRule r;
+			r.name = liedplan_html::sanitize_css_var_name(
+				css_name_edits->at(i)->text().toUtf8().toStdString());
+			r.value = liedplan_html::sanitize_css_value(
+				css_value_edits->at(i)->text().toUtf8().toStdString());
+			if (r.name.empty())
+				continue;
+			rules.push_back(r);
+		}
+		c->style = std::move(rules);
+		return true;
+	};
+
+	auto rebuild_css_rows = [this, card_id, css_frame, css_layout, css_name_edits, css_value_edits, css_collapsed, collect_css, schedule_save]() {
+		// Header-Layout (index 0) behalten, Regel-Zeilen neu aufbauen.
+		while (css_layout->count() > 1) {
+			QLayoutItem *item = css_layout->takeAt(1);
+			if (item->layout()) {
+				for (int k = item->layout()->count() - 1; k >= 0; --k) {
+					auto *sub = item->layout()->takeAt(k);
+					if (sub->widget())
+						sub->widget()->deleteLater();
+					delete sub;
+				}
+				delete item->layout();
+			} else if (item->widget()) {
+				item->widget()->deleteLater();
+			}
+			delete item;
+		}
+		css_name_edits->clear();
+		css_value_edits->clear();
+		const LiedplanCard *c = find_card_mut(card_id);
+		if (!c)
+			return;
+		for (const auto &rule : c->style) {
+			auto *row = new QHBoxLayout();
+			row->setContentsMargins(0, 0, 0, 0);
+			row->setSpacing(6);
+			auto *nedit = new QLineEdit(QString::fromUtf8(rule.name.c_str()), css_frame);
+			nedit->setPlaceholderText(QStringLiteral("--variable"));
+			nedit->setFixedWidth(110);
+			nedit->setFixedHeight(32);
+			auto *vedit = new QLineEdit(QString::fromUtf8(rule.value.c_str()), css_frame);
+			vedit->setPlaceholderText(QStringLiteral("wert"));
+			vedit->setFixedHeight(32);
+			if (*css_collapsed) {
+				nedit->setVisible(false);
+				vedit->setVisible(false);
+			}
+			row->addWidget(nedit);
+			row->addWidget(vedit, 1);
+			css_layout->addLayout(row);
+			css_name_edits->push_back(nedit);
+			css_value_edits->push_back(vedit);
+			connect(nedit, &QLineEdit::textChanged, css_frame, [collect_css, schedule_save](const QString &) {
+				if (collect_css())
+					schedule_save();
+			});
+			connect(vedit, &QLineEdit::textChanged, css_frame, [collect_css, schedule_save](const QString &) {
+				if (collect_css())
+					schedule_save();
+			});
+		}
+	};
+
+	connect(css_add_btn, &QToolButton::clicked, this, [this, card_id, css_frame, css_layout, css_name_edits, css_value_edits, css_collapsed, collect_css, schedule_save]() {
+		if (css_name_edits->size() >= 24)
+			return;
+		auto *row = new QHBoxLayout();
+		row->setContentsMargins(0, 0, 0, 0);
+		row->setSpacing(6);
+		auto *nedit = new QLineEdit(QStringLiteral("--"), css_frame);
+		nedit->setPlaceholderText(QStringLiteral("--variable"));
+		nedit->setFixedWidth(110);
+		nedit->setFixedHeight(32);
+		auto *vedit = new QLineEdit(css_frame);
+		vedit->setPlaceholderText(QStringLiteral("wert"));
+		vedit->setFixedHeight(32);
+		if (*css_collapsed) {
+			nedit->setVisible(false);
+			vedit->setVisible(false);
+		}
+		row->addWidget(nedit);
+		row->addWidget(vedit, 1);
+		css_layout->addLayout(row);
+		css_name_edits->push_back(nedit);
+		css_value_edits->push_back(vedit);
+		connect(nedit, &QLineEdit::textChanged, css_frame, [collect_css, schedule_save](const QString &) {
+			if (collect_css())
+				schedule_save();
+		});
+		connect(vedit, &QLineEdit::textChanged, css_frame, [collect_css, schedule_save](const QString &) {
+			if (collect_css())
+				schedule_save();
+		});
+		Q_UNUSED(card_id);
+	});
+
+	connect(css_del_btn, &QToolButton::clicked, this, [css_name_edits, css_value_edits, css_layout, collect_css, schedule_save]() {
+		if (css_name_edits->empty())
+			return;
+		QLayout *row_l = css_layout->itemAt(css_layout->count() - 1)->layout();
+		if (row_l) {
+			for (int k = row_l->count() - 1; k >= 0; --k) {
+				auto *item = row_l->takeAt(k);
+				if (item->widget())
+					item->widget()->deleteLater();
+				delete item;
+			}
+			delete row_l;
+		}
+		css_name_edits->pop_back();
+		css_value_edits->pop_back();
+		if (collect_css())
+			schedule_save();
+	});
+
+	rebuild_css_rows();
 
 	// M6-A8: Freie Text-/Box-Farbe (Color-Picker). PROFIL-Dropdown bleibt
 	// "Reset auf Profilsatz" und aktualisiert die Button-Labels (s. Connect unten).
@@ -1022,58 +1412,10 @@ void LiedplanDock::create_row_widget(const LiedplanCard &card)
 	actions_layout->addWidget(clear_src_btn, 1);
 	inner_layout->addLayout(actions_layout);
 
-	const std::string card_id = card.id;
-	auto schedule_save = [this, card_id]() {
-		if (const LiedplanCard *c = find_card_mut(card_id)) {
-			push_card_live(*c, state_.settings);
-		}
-		mark_card_dirty_and_schedule(this, card_id);
-	};
-
-	connect(edit_zeile1, &QLineEdit::textChanged, this, [this, card_id, schedule_save](const QString &text) {
-		if (LiedplanCard *c = find_card_mut(card_id)) {
-			c->zeile1 = text.toUtf8().toStdString();
-			schedule_save();
-		}
-	});
-
-	connect(edit_zeile2, &QLineEdit::textChanged, this, [this, card_id, schedule_save](const QString &text) {
-		if (LiedplanCard *c = find_card_mut(card_id)) {
-			c->zeile2 = text.toUtf8().toStdString();
-			schedule_save();
-		}
-	});
-
-	connect(edit_zeile3, &QLineEdit::textChanged, this, [this, card_id, schedule_save](const QString &text) {
-		if (LiedplanCard *c = find_card_mut(card_id)) {
-			c->zeile3 = text.toUtf8().toStdString();
-			schedule_save();
-		}
-		if (card_search_) {
-			const QSignalBlocker blocker(card_search_);
-			const QString prev_text = card_search_->currentText();
-			const QString id_q = QString::fromUtf8(card_id.c_str());
-			for (int i = 0; i < card_search_->count(); ++i) {
-				if (card_search_->itemData(i).toString() == id_q) {
-					QString t3 = text.trimmed();
-					if (t3.size() > 20)
-						t3 = t3.left(20);
-					card_search_->setItemText(
-						i, t3.isEmpty()
-							   ? id_q
-							   : QStringLiteral("%1 · %2").arg(id_q, t3));
-					break;
-				}
-			}
-			if (card_search_->lineEdit())
-				card_search_->lineEdit()->setText(prev_text);
-		}
-	});
-
 	connect(profile_combo, &QComboBox::currentTextChanged, this,
 		[this, card_id, text_color_btn, box_color_btn, color_a_btn, color_b_btn,
 		 opacity_a_slider, opacity_b_slider, text_opacity_slider, box_opacity_slider,
-		 rainbow_cb, schedule_save](const QString &profile_text) {
+		 rainbow_cb, schedule_save, rebuild_css_rows](const QString &profile_text) {
 			if (LiedplanCard *c = find_card_mut(card_id)) {
 				c->profile = profile_text.toUtf8().toStdString();
 				if (const LiedplanProfile *prof =
@@ -1101,8 +1443,9 @@ void LiedplanDock::create_row_widget(const LiedplanCard &card)
 					text_opacity_slider->setValue(std::clamp(c->text_opacity, 0, 255));
 					box_opacity_slider->setValue(std::clamp(c->box_opacity, 0, 255));
 					rainbow_cb->setChecked(c->rainbow_corners);
-				}
-				schedule_save();
+					}
+					rebuild_css_rows(); // Profil-Regeln sind jetzt in c->style gemerged
+					schedule_save();
 			}
 		});
 

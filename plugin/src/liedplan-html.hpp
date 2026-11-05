@@ -93,6 +93,12 @@ std::string card_html(const LiedplanCard &card);
 // Formatiert "#RRGGBB" + Opacity (0..255) als "rgba(r,g,b,a)".
 std::string hex_to_rgba(const std::string &hex, int opacity_0_255);
 
+// Normalisiert frei eingegebenen CSS-Var-Namen: behält [A-Za-z0-9-], prefixt '--'; "" wenn leer.
+std::string sanitize_css_var_name(const std::string &raw);
+
+// Sanisiert einen CSS-Value: entfernt Struktur-/Injection-Zeichen ; { } < CR LF.
+std::string sanitize_css_value(const std::string &raw);
+
 // Wandelt den rohen anim_file-Wert in einen für CEF ladbaren src-Wert um:
 // - "" → ""
 // - beginnt mit "http://" / "https://" / "file://" → unverändert

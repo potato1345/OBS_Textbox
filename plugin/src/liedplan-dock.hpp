@@ -53,6 +53,10 @@ public:
 	explicit LiedplanDock(const std::string &state_path, QWidget *parent = nullptr);
 	~LiedplanDock() override;
 
+	// Self-healing: Karten mit Inhalt garantiert eine Browser-Quelle in der
+	// aktuellen Szene haben (läuft, sobald das Frontend geladen ist).
+	void ensure_card_sources();
+
 private:
 	LiedplanCard *find_card_mut(const std::string &id);
 	void create_row_widget(const LiedplanCard &card);

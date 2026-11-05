@@ -10,16 +10,17 @@
             /* BOX-ID: Wird in OBS im "Benutzerdefiniertes CSS" Feld pro Quelle gesetzt */
             --box-id: "default";
 
-            /* TEXTZEILEN (CSS-Eingabe / Fallback) */
+            /* TEXTZEILEN (CSS-Eingabe / Fallback); --zeile-count = Anzahl 1..8 (Default 3) */
             --zeile-1: "";
             --zeile-2: "";
-            --zeile-3: ""; 
+            --zeile-3: "";
+            --zeile-count: 3;
 
             /* Design-Einstellungen */
-            --box-bg: rgba(255, 255, 255, 0.75);    
-            --box-border: rgba(0, 0, 0, 0.7);       
-            --triangle-color-a: #fce647;            
-            --triangle-color-b: #fce647;            
+            --box-bg: rgba(255, 255, 255, 0.75);
+            --box-border: rgba(0, 0, 0, 0.7);
+            --triangle-color-a: #fce647;
+            --triangle-color-b: #fce647;
             --triangle-background: linear-gradient(135deg, var(--triangle-color-a) 50%, transparent 50%), linear-gradient(315deg, var(--triangle-color-b) 50%, transparent 50%);
             --text-color: #000000;
         }
@@ -40,10 +41,10 @@
         body {
             background-color: rgba(0, 0, 0, 0);
             margin: 0;
-            padding: 20px; 
-            padding-top: 350px; /* Großzügiger Platz nach oben für große Animationen */
-            padding-left: 250px; /* Platz nach links, damit Animationen nicht abschneiden */
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            padding: 20px;
+            padding-top: var(--lp-padding-top, 350px); /* Großzügiger Platz nach oben für große Animationen */
+            padding-left: var(--lp-padding-left, 250px); /* Platz nach links, damit Animationen nicht abschneiden */
+            font-family: var(--lp-font-family, 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif);
         }
 
       /* generelles Styling */
@@ -54,25 +55,27 @@
             /* Ecken /(Dreiecke) */
             background-image: var(--triangle-background);
             background-position: top left, bottom right;
-            background-size: 50px 50px, 50px 50px;
+            background-size: var(--lp-corner-size, 50px) var(--lp-corner-size, 50px), var(--lp-corner-size, 50px) var(--lp-corner-size, 50px);
             background-repeat: no-repeat;
             /* Rand */
             border: 0px solid var(--box-border);
             /* Ecken abrundungen */
-            border-radius: 4px 4px 4px 4px;
+            border-radius: var(--lp-radius, 4px);
 
             /* Größen und Abstände */
-            min-width: 300px;
+            min-width: var(--lp-min-width, 300px);
             width: max-content; /* Passt sich der Textlänge an */
-            max-width: 800px;
+            max-width: var(--lp-max-width, 800px);
             min-height: 1.5em;  /* Schrumpft auf Minimum eine Zeile */
-            
+
             /* Padding: Textabstand zum Rand bzw. den Dreiecken */
-            padding: 15px 60px 20px 50px; 
-            
+            padding: 15px 60px 20px 50px;
+            padding: var(--lp-padding, 15px 60px 20px 50px);
+
             display: flex;
             flex-direction: column;
             justify-content: center;
+            text-align: var(--lp-text-align, left);
 
             /* Sichtbarkeit: 1 = sichtbar (Default), wird von OBS/Control-Dashboard
                auf 0 gesetzt, wenn die Box geleert werden soll */
@@ -80,41 +83,26 @@
             transition: opacity 0.3s ease;
         }
 
-        /* Styling der Textzeilen */
+        /* Styling der Textzeilen (Anzahl dynamisch; Script erzeugt/entfernt sie) */
         .text-line {
             line-height: 1.2;
             color: var(--text-color);
         }
 
-        /* CSS Elemente um Text einzufügen */
+        /* CSS Elemente um Text einzufügen; --line-content wird vom Script gesetzt */
         .text-line::before {
+            content: var(--line-content, "");
             display: inline-block;
-            white-space: pre-wrap; 
-            font-size: 32px;       
+            white-space: pre-wrap;
+            font-size: var(--lp-font-rest, 32px);
+            font-weight: var(--lp-font-rest-weight, 400);
         }
 
-        /* Zuweisung der CSS-Variablen zu den Zeilen */
-        .line1::before { content: var(--zeile-1); }
-        .line2::before { content: var(--zeile-2); }
-        .line3::before { content: var(--zeile-3); }
-
-        /* Styling der ersten Zeile */
-        .line1::before {
-            font-size: 38px;       
-            font-weight: 500;     
-            margin-bottom: 5px;
-        }
-        
-        /* Styling der zweiten Zeile */
-        .line2::before {
-            font-size: 32px;
-            font-weight: 400;
-        }
-
-        /* Styling der dritten Zeile */
-        .line3::before {
-            font-size: 32px;
-            font-weight: 400;
+        /* Erste Zeile hervorgehoben (GL-Nummer / Titel) */
+        .text-line.lp-first::before {
+            font-size: var(--lp-font-first, 38px);
+            font-weight: var(--lp-font-first-weight, 500);
+            margin-bottom: var(--lp-gap, 5px);
         }
 
         /* Animation Container */
@@ -140,34 +128,60 @@
     <!-- HTML Struktur ohne Leerzeichen zwischen den Divs -->
     <div class="textbox-container" id="box-container">
         <div class="anim-wrapper" id="anim-wrapper" style="display: none;"></div>
-        <div class="text-line line1"></div>
-        <div class="text-line line2"></div>
-        <div class="text-line line3"></div>
+        <div class="text-line lp-first"></div>
+        <div class="text-line"></div>
+        <div class="text-line"></div>
     </div>
 
     <script>
         // Auto-verbirgt leere Textzeilen, damit sich die Box auf den
         // tatsächlichen Inhalt schrumpft. Prüft alle 150ms, weil OBS
         // die CSS-Variablen erst zur Laufzeit injiziert.
+        // Zeilenzahl dynamisch über --zeile-count (1..8, Default 3).
         (function () {
             let currentAnimFile = '';
-            
+            const container = document.getElementById('box-container');
+            let lineEls = [];
+
+            function syncLines(count) {
+                while (lineEls.length < count) {
+                    const el = document.createElement('div');
+                    el.className = 'text-line';
+                    container.appendChild(el);
+                    lineEls.push(el);
+                }
+                while (lineEls.length > count) {
+                    const el = lineEls.pop();
+                    el.remove();
+                }
+                lineEls.forEach(function (el, i) {
+                    el.className = 'text-line' + (i === 0 ? ' lp-first' : '');
+                });
+            }
+
             function updateLines() {
                 const cs = getComputedStyle(document.documentElement);
-                for (let n = 1; n <= 3; n++) {
+                let count = parseInt((cs.getPropertyValue('--zeile-count') || '').trim(), 10);
+                if (!Number.isFinite(count)) count = 3;
+                count = Math.max(1, Math.min(8, count));
+                syncLines(count);
+                for (let n = 1; n <= count; n++) {
                     const raw = (cs.getPropertyValue('--zeile-' + n) || '').trim();
                     // Umgebende Anführungszeichen des CSS-Strings entfernen
                     const text = raw.replace(/^["']|["']$/g, '');
-                    const line = document.querySelector('.line' + n);
-                    if (line) line.style.display = text ? '' : 'none';
+                    const line = lineEls[n - 1];
+                    if (line) {
+                        line.style.setProperty('--line-content', '"' + text + '"');
+                        line.style.display = text ? '' : 'none';
+                    }
                 }
-                
+
                 // Animation Logic
                 const showAnimRaw = (cs.getPropertyValue('--show-anim') || '').trim();
                 const animFileRaw = (cs.getPropertyValue('--anim-file') || '').trim();
                 const animFile = animFileRaw.replace(/^["']|["']$/g, '');
                 const animWrapper = document.getElementById('anim-wrapper');
-                
+
                 if (showAnimRaw === '1' && animFile) {
                     animWrapper.style.display = 'block';
                     if (animFile !== currentAnimFile) {
@@ -175,10 +189,7 @@
                         animWrapper.innerHTML = ''; // clear old
                         if (animFile.toLowerCase().endsWith('.webm') || animFile.toLowerCase().endsWith('.mp4')) {
                             const vid = document.createElement('video');
-                            vid.src = animFile;
-                            vid.autoplay = true;
-                            vid.loop = true;
-                            vid.muted = true;
+                            vid.src = animFile; vid.autoplay = true; vid.loop = true; vid.muted = true;
                             animWrapper.appendChild(vid);
                         } else {
                             const img = document.createElement('img');

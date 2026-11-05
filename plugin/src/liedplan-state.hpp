@@ -43,6 +43,8 @@ struct LiedplanCard {
 	int anim_x = 0; // -1200..1200 px
 	int anim_y = 0; // -1200..1200 px
 	std::string template_id = ""; // "" = classic (CSS-Injektion in textbox.html)
+	std::vector<LiedplanRow> rows; // dynamische Zeilen (max kMaxCardRows); leer = Legacy zeile1..3
+	std::vector<LiedplanStyleRule> style; // generelle CSS-Regeln (--name: value)
 
 	bool operator==(const LiedplanCard &other) const
 	{
@@ -57,9 +59,16 @@ struct LiedplanCard {
 		       rainbow_corners == other.rainbow_corners &&
 		       anim_file == other.anim_file && show_anim == other.show_anim &&
 		       anim_scale == other.anim_scale && anim_x == other.anim_x &&
-		       anim_y == other.anim_y && template_id == other.template_id;
+		       anim_y == other.anim_y && template_id == other.template_id &&
+		       rows == other.rows && style == other.style;
 	}
 };
+/**
+ * Karten-Zeilen: rows wenn gesetzt, sonst Legacy-Fallback aus zeile1..3 mit
+ * Standard-Labels (immer genau 3 Zeilen). Immer nicht-empty für Render/UI.
+ */
+std::vector<LiedplanRow> effective_rows(const LiedplanCard &card);
+
 
 // Ermittelt den Standardpfad für google_token.json über %LOCALAPPDATA%/hermes/google_token.json
 // mit Fallback auf den bestehenden Entwickler-Pfad.

@@ -53,6 +53,37 @@ LiedplanCard card_from_json(const nlohmann::json &item)
 		c.zeile2 = item["zeile2"].get<std::string>();
 	if (item.contains("zeile3") && item["zeile3"].is_string())
 		c.zeile3 = item["zeile3"].get<std::string>();
+	if (item.contains("rows") && item["rows"].is_array()) {
+		for (const auto &r : item["rows"]) {
+			if (c.rows.size() >= kMaxCardRows)
+				break;
+			LiedplanRow row;
+			if (r.is_object()) {
+				if (r.contains("label") && r["label"].is_string())
+					row.label = r["label"].get<std::string>();
+				if (r.contains("value") && r["value"].is_string())
+					row.value = r["value"].get<std::string>();
+			} else if (r.is_string()) {
+				row.value = r.get<std::string>();
+			} else {
+				continue;
+			}
+			c.rows.push_back(row);
+		}
+	}
+	if (item.contains("style") && item["style"].is_array()) {
+		for (const auto &s : item["style"]) {
+			if (!s.is_object())
+				continue;
+			LiedplanStyleRule rule;
+			if (s.contains("name") && s["name"].is_string())
+				rule.name = s["name"].get<std::string>();
+			if (s.contains("value") && s["value"].is_string())
+				rule.value = s["value"].get<std::string>();
+			if (!rule.name.empty())
+				c.style.push_back(rule);
+		}
+	}
 	if (item.contains("profile") && item["profile"].is_string())
 		c.profile = profile_name_canonical(item["profile"].get<std::string>());
 	if (item.contains("text_color") && item["text_color"].is_string())
@@ -88,13 +119,28 @@ LiedplanCard card_from_json(const nlohmann::json &item)
 	return c;
 }
 
+
+
 nlohmann::json card_to_json(const LiedplanCard &c)
 {
+	// Legacy-Key zeile1..3 = Mirror der ersten drei Zeilen-Werte (Kompatibilität).
+	auto legacy_value = [&](size_t i) -> std::string {
+		const auto rows = effective_rows(c);
+		return i < rows.size() ? rows[i].value : std::string();
+	};
+	nlohmann::json rows = nlohmann::json::array();
+	for (const auto &r : c.rows)
+		rows.push_back({{"label", r.label}, {"value", r.value}});
+	nlohmann::json style = nlohmann::json::array();
+	for (const auto &s : c.style)
+		style.push_back({{"name", s.name}, {"value", s.value}});
 	return {
 		{"id", c.id},
-		{"zeile1", c.zeile1},
-		{"zeile2", c.zeile2},
-		{"zeile3", c.zeile3},
+		{"zeile1", legacy_value(0)},
+		{"zeile2", legacy_value(1)},
+		{"zeile3", legacy_value(2)},
+		{"rows", rows},
+		{"style", style},
 		{"profile", c.profile},
 		{"text_color", c.text_color},
 		{"text_opacity", c.text_opacity},
@@ -626,6 +672,11 @@ std::string liedplan_profile_to_yaml(const LiedplanProfile &p)
 		yaml += "  boxOp: " + std::to_string(p.box_opacity) + "\n";
 	if (p.rainbow)
 		yaml += "  rainbow: true\n";
+	if (!p.style.empty()) {
+		yaml += "styles:\n";
+		for (const auto &s : p.style)
+			yaml += "  " + s.name + "=" + s.value + "\n";
+	}
 	return yaml;
 }
 
@@ -644,6 +695,8 @@ bool liedplan_yaml_to_profile(const std::string &text, LiedplanProfile &out, std
 	bool has_text_op = false;
 	bool has_box_op = false;
 	bool has_rainbow = false;
+	bool in_styles = false;
+	std::vector<LiedplanStyleRule> parsed_style;
 	std::string raw_text_color;
 	std::string raw_box_color;
 	std::string raw_corner_a;
@@ -683,6 +736,25 @@ bool liedplan_yaml_to_profile(const std::string &text, LiedplanProfile &out, std
 			const std::string val = trim_ws(line.substr(7));
 			parsed_name = trim_ws(unquote(val));
 			continue;
+		}
+
+		if (line == "styles:") {
+			in_styles = true;
+			continue;
+		}
+
+		if (in_styles) {
+			const auto eq_idx = line.find('=');
+			if (eq_idx == std::string::npos) {
+				in_styles = false;
+			} else {
+				LiedplanStyleRule rule;
+				rule.name = trim_ws(line.substr(0, eq_idx));
+				rule.value = trim_ws(line.substr(eq_idx + 1));
+				if (!rule.name.empty())
+					parsed_style.push_back(rule);
+				continue;
+			}
 		}
 
 		if (line == "colors:") {
@@ -765,6 +837,7 @@ bool liedplan_yaml_to_profile(const std::string &text, LiedplanProfile &out, std
 
 	out = LiedplanProfile{};
 	out.name = std::move(parsed_name);
+	out.style = std::move(parsed_style);
 	out.text_color = has_text_color ? std::move(raw_text_color) : "#000000";
 	out.box_color = has_box_color ? std::move(raw_box_color) : "#ffffff";
 	if (has_corner_a)
@@ -783,4 +856,15 @@ bool liedplan_yaml_to_profile(const std::string &text, LiedplanProfile &out, std
 		out.rainbow = parsed_rainbow;
 	err.clear();
 	return true;
+}
+
+std::vector<LiedplanRow> effective_rows(const LiedplanCard &card)
+{
+	if (!card.rows.empty())
+		return card.rows;
+	std::vector<LiedplanRow> rows;
+	rows.push_back({kLiedplanRowLabels[0], card.zeile1});
+	rows.push_back({kLiedplanRowLabels[1], card.zeile2});
+	rows.push_back({kLiedplanRowLabels[2], card.zeile3});
+	return rows;
 }
