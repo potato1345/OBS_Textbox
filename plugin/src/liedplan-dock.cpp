@@ -71,6 +71,7 @@
 #include <QDesktopServices>
 
 #include <algorithm>
+#include <functional>
 #include <cstring>
 #include <filesystem>
 #include <fstream>
@@ -731,9 +732,11 @@ void LiedplanDock::create_row_widget(const LiedplanCard &card)
 	// shared_ptr: die connect-Lambdas leben nach Funktionsende weiter.
 	auto label_edits = std::make_shared<std::vector<QLineEdit *>>();
 	auto value_edits = std::make_shared<std::vector<QLineEdit *>>();
+	auto move_btns = std::make_shared<std::vector<QToolButton *>>();
+	auto move_row = std::make_shared<std::function<void(QLineEdit *, int)>>();
 
 	connect(lbl_rows, &QToolButton::clicked, rows_frame,
-	        [rows_collapsed, label_edits, value_edits, lbl_rows]() {
+	        [rows_collapsed, label_edits, value_edits, move_btns, lbl_rows]() {
 		        *rows_collapsed = !*rows_collapsed;
 		        lbl_rows->setText(*rows_collapsed ? QStringLiteral("▶ ZEILEN")
 		                                          : QStringLiteral("▼ ZEILEN"));
@@ -741,9 +744,11 @@ void LiedplanDock::create_row_widget(const LiedplanCard &card)
 			        e->setVisible(!*rows_collapsed);
 		        for (auto *e : *value_edits)
 			        e->setVisible(!*rows_collapsed);
+		        for (auto *b : *move_btns)
+			        b->setVisible(!*rows_collapsed);
 	        });
 
-	auto add_row_edit = [card_inner, rows_layout, rows_collapsed](const QString &label, const QString &value) {
+	auto add_row_edit = [card_inner, rows_layout, rows_collapsed, move_row, move_btns](const QString &label, const QString &value) {
 		auto *row = new QHBoxLayout();
 		row->setContentsMargins(0, 0, 0, 0);
 		row->setSpacing(6);
@@ -754,13 +759,35 @@ void LiedplanDock::create_row_widget(const LiedplanCard &card)
 		auto *vedit = new QLineEdit(value, card_inner);
 		vedit->setPlaceholderText(QStringLiteral("Text dieser Zeile"));
 		vedit->setFixedHeight(34);
+		auto *up_btn = new QToolButton(card_inner);
+		up_btn->setObjectName(QStringLiteral("lpStyleToggle"));
+		up_btn->setFixedSize(24, 34);
+		up_btn->setAutoRaise(true);
+		up_btn->setText(QStringLiteral("▲"));
+		up_btn->setToolTip(QStringLiteral("Zeile nach oben verschieben"));
+		auto *down_btn = new QToolButton(card_inner);
+		down_btn->setObjectName(QStringLiteral("lpStyleToggle"));
+		down_btn->setFixedSize(24, 34);
+		down_btn->setAutoRaise(true);
+		down_btn->setText(QStringLiteral("▼"));
+		down_btn->setToolTip(QStringLiteral("Zeile nach unten verschieben"));
+		QObject::connect(up_btn, &QToolButton::clicked, card_inner,
+		                 [move_row, ledit]() { (*move_row)(ledit, -1); });
+		QObject::connect(down_btn, &QToolButton::clicked, card_inner,
+		                 [move_row, ledit]() { (*move_row)(ledit, +1); });
 		if (*rows_collapsed) {
 			ledit->setVisible(false);
 			vedit->setVisible(false);
+			up_btn->setVisible(false);
+			down_btn->setVisible(false);
 		}
 		row->addWidget(ledit);
 		row->addWidget(vedit, 1);
+		row->addWidget(up_btn);
+		row->addWidget(down_btn);
 		rows_layout->addLayout(row);
+		move_btns->push_back(up_btn);
+		move_btns->push_back(down_btn);
 		return std::make_pair(ledit, vedit);
 	};
 
@@ -843,7 +870,7 @@ void LiedplanDock::create_row_widget(const LiedplanCard &card)
 			schedule_save();
 	});
 
-	connect(row_del_btn, &QToolButton::clicked, this, [label_edits, value_edits, rows_layout, collect_rows, schedule_save]() {
+	connect(row_del_btn, &QToolButton::clicked, this, [label_edits, value_edits, move_btns, rows_layout, collect_rows, schedule_save]() {
 		if (label_edits->size() <= 1)
 			return;
 		// Letzte Zeilen-HLayout entfernen (Header-Layout bleibt index 0).
@@ -859,9 +886,45 @@ void LiedplanDock::create_row_widget(const LiedplanCard &card)
 		}
 		label_edits->pop_back();
 		value_edits->pop_back();
+		if (move_btns->size() >= 2) {
+			move_btns->pop_back();
+			move_btns->pop_back();
+		}
 		if (collect_rows())
 			schedule_save();
 	});
+
+	// Zeilen-Umordnung: vertauscht Inhalte zweier Reihen und die Edit-Pointer.
+	*move_row = [this, card_id, label_edits, value_edits, schedule_save, collect_rows](
+		    QLineEdit *ledit, int dir) {
+		auto &labs = *label_edits;
+		auto &vals = *value_edits;
+		size_t i = 0;
+		bool found = false;
+		for (; i < labs.size(); ++i)
+			if (labs[i] == ledit) { found = true; break; }
+		if (!found)
+			return;
+		const int j = int(i) + dir;
+		if (j < 0 || j >= int(labs.size()))
+			return;
+		{
+			const QSignalBlocker b1(labs[i]);
+			const QSignalBlocker b2(labs[j]);
+			const QSignalBlocker b3(vals[i]);
+			const QSignalBlocker b4(vals[j]);
+			const QString tl = labs[i]->text();
+			const QString tv = vals[i]->text();
+			labs[i]->setText(labs[j]->text());
+			vals[i]->setText(vals[j]->text());
+			labs[j]->setText(tl);
+			vals[j]->setText(tv);
+		}
+		std::swap(labs[i], labs[j]);
+		std::swap(vals[i], vals[j]);
+		if (collect_rows())
+			schedule_save();
+	};
 
 	auto *style_section = new QFrame(card_inner);
 	style_section->setObjectName(QStringLiteral("lpStyleSection"));
@@ -930,11 +993,11 @@ void LiedplanDock::create_row_widget(const LiedplanCard &card)
 	auto *css_bar = new QHBoxLayout();
 	css_bar->setContentsMargins(0, 0, 0, 0);
 	css_bar->setSpacing(6);
-	auto css_collapsed = std::make_shared<bool>(false);
+	auto css_collapsed = std::make_shared<bool>(true);
 	auto *lbl_css = new QToolButton(css_frame);
 	lbl_css->setObjectName(QStringLiteral("lpFieldLabel"));
 	lbl_css->setAutoRaise(true);
-	lbl_css->setText(QStringLiteral("▼ GENERELLE CSS-REGELN"));
+	lbl_css->setText(QStringLiteral("▶ GENERELLE CSS-REGELN"));
 	lbl_css->setToolTip(QStringLiteral("CSS-Regeln ein-/ausklappen"));
 	auto *css_add_btn = new QToolButton(css_frame);
 	css_add_btn->setObjectName(QStringLiteral("lpStyleToggle"));
@@ -1128,6 +1191,28 @@ void LiedplanDock::create_row_widget(const LiedplanCard &card)
 	box_color_layout->addWidget(box_color_btn);
 	style_layout->addLayout(box_color_layout);
 
+	// Wertelabel neben Slidern: zeigt den Zahlenwert und folgt valueChanged.
+	// Gibt das Label zurück, damit Profil-Resets es direkt synchronisieren.
+	auto attach_value_label = [](QHBoxLayout *row, QSlider *slider) -> QLabel * {
+		auto *val = new QLabel(QString::number(slider->value()), slider);
+		val->setObjectName(QStringLiteral("lpFieldLabel"));
+		val->setMinimumWidth(36);
+		val->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
+		row->addWidget(val);
+		QObject::connect(slider, &QSlider::valueChanged, val,
+		                 [val](int v) { val->setText(QString::number(v)); });
+		return val;
+	};
+
+	// Farb-Swatch: Button in der gewählten Farbe mit kontrastiertem Hex-Text.
+	auto paint_color_swatch = [](QPushButton *btn, const QString &hex) {
+		const QColor c(hex);
+		const bool light = c.isValid() && c.lightness() > 160;
+		btn->setStyleSheet(QStringLiteral(
+			"background-color: %1; color: %2; font-weight: bold;")
+			.arg(hex).arg(light ? QStringLiteral("#1a1a1a") : QStringLiteral("#ffffff")));
+	};
+
 	const QString hex_a =
 		QString::fromUtf8((card.corner_color_a.empty() ? "#fce647" : card.corner_color_a).c_str()).toUpper();
 	const QString hex_b =
@@ -1157,6 +1242,11 @@ void LiedplanDock::create_row_widget(const LiedplanCard &card)
 	corner_b_layout->addWidget(color_b_btn);
 	style_layout->addLayout(corner_b_layout);
 
+	paint_color_swatch(text_color_btn, hex_text);
+	paint_color_swatch(box_color_btn, hex_box);
+	paint_color_swatch(color_a_btn, hex_a);
+	paint_color_swatch(color_b_btn, hex_b);
+
 	auto *opacity_layout = new QVBoxLayout();
 	opacity_layout->setContentsMargins(0, 0, 0, 0);
 	opacity_layout->setSpacing(4);
@@ -1175,6 +1265,7 @@ void LiedplanDock::create_row_widget(const LiedplanCard &card)
 	opacity_a_slider->setValue(std::clamp(card.corner_opacity_a, 0, 255));
 	opacity_a_row->addWidget(lbl_op_a);
 	opacity_a_row->addWidget(opacity_a_slider, 1);
+	QLabel *op_a_val = attach_value_label(opacity_a_row, opacity_a_slider);
 	opacity_layout->addLayout(opacity_a_row);
 
 	auto *opacity_b_row = new QHBoxLayout();
@@ -1188,6 +1279,7 @@ void LiedplanDock::create_row_widget(const LiedplanCard &card)
 	opacity_b_slider->setValue(std::clamp(card.corner_opacity_b, 0, 255));
 	opacity_b_row->addWidget(lbl_op_b);
 	opacity_b_row->addWidget(opacity_b_slider, 1);
+	QLabel *op_b_val = attach_value_label(opacity_b_row, opacity_b_slider);
 	opacity_layout->addLayout(opacity_b_row);
 
 	style_layout->addLayout(opacity_layout);
@@ -1213,6 +1305,7 @@ void LiedplanDock::create_row_widget(const LiedplanCard &card)
 	text_opacity_slider->setValue(std::clamp(card.text_opacity, 0, 255));
 	text_opacity_row->addWidget(lbl_op_text);
 	text_opacity_row->addWidget(text_opacity_slider, 1);
+	QLabel *op_text_val = attach_value_label(text_opacity_row, text_opacity_slider);
 	textbox_opacity_layout->addLayout(text_opacity_row);
 
 	auto *box_opacity_row = new QHBoxLayout();
@@ -1228,6 +1321,7 @@ void LiedplanDock::create_row_widget(const LiedplanCard &card)
 		QStringLiteral("0 = Box-Hintergrund unsichtbar (Text und Ecken bleiben sichtbar)"));
 	box_opacity_row->addWidget(lbl_op_box);
 	box_opacity_row->addWidget(box_opacity_slider, 1);
+	QLabel *op_box_val = attach_value_label(box_opacity_row, box_opacity_slider);
 	textbox_opacity_layout->addLayout(box_opacity_row);
 
 	style_layout->addLayout(textbox_opacity_layout);
@@ -1415,7 +1509,8 @@ void LiedplanDock::create_row_widget(const LiedplanCard &card)
 	connect(profile_combo, &QComboBox::currentTextChanged, this,
 		[this, card_id, text_color_btn, box_color_btn, color_a_btn, color_b_btn,
 		 opacity_a_slider, opacity_b_slider, text_opacity_slider, box_opacity_slider,
-		 rainbow_cb, schedule_save, rebuild_css_rows](const QString &profile_text) {
+		 rainbow_cb, schedule_save, rebuild_css_rows, paint_color_swatch,
+		 op_a_val, op_b_val, op_text_val, op_box_val](const QString &profile_text) {
 			if (LiedplanCard *c = find_card_mut(card_id)) {
 				c->profile = profile_text.toUtf8().toStdString();
 				if (const LiedplanProfile *prof =
@@ -1426,12 +1521,20 @@ void LiedplanDock::create_row_widget(const LiedplanCard &card)
 				// Button-Labels, Ecken, Deckkraft-Slider und Regenbogen aktualisieren.
 				text_color_btn->setText(QString::fromUtf8(
 					(c->text_color.empty() ? "#000000" : c->text_color).c_str()).toUpper());
+				paint_color_swatch(text_color_btn,
+					QString::fromUtf8((c->text_color.empty() ? "#000000" : c->text_color).c_str()));
 				box_color_btn->setText(QString::fromUtf8(
 					(c->box_color.empty() ? "#ffffff" : c->box_color).c_str()).toUpper());
+				paint_color_swatch(box_color_btn,
+					QString::fromUtf8((c->box_color.empty() ? "#ffffff" : c->box_color).c_str()));
 				color_a_btn->setText(QString::fromUtf8(
 					(c->corner_color_a.empty() ? "#fce647" : c->corner_color_a).c_str()).toUpper());
+				paint_color_swatch(color_a_btn,
+					QString::fromUtf8((c->corner_color_a.empty() ? "#fce647" : c->corner_color_a).c_str()));
 				color_b_btn->setText(QString::fromUtf8(
 					(c->corner_color_b.empty() ? "#fce647" : c->corner_color_b).c_str()).toUpper());
+				paint_color_swatch(color_b_btn,
+					QString::fromUtf8((c->corner_color_b.empty() ? "#fce647" : c->corner_color_b).c_str()));
 				{
 					const QSignalBlocker b1(opacity_a_slider);
 					const QSignalBlocker b2(opacity_b_slider);
@@ -1442,6 +1545,10 @@ void LiedplanDock::create_row_widget(const LiedplanCard &card)
 					opacity_b_slider->setValue(std::clamp(c->corner_opacity_b, 0, 255));
 					text_opacity_slider->setValue(std::clamp(c->text_opacity, 0, 255));
 					box_opacity_slider->setValue(std::clamp(c->box_opacity, 0, 255));
+					op_a_val->setText(QString::number(opacity_a_slider->value()));
+					op_b_val->setText(QString::number(opacity_b_slider->value()));
+					op_text_val->setText(QString::number(text_opacity_slider->value()));
+					op_box_val->setText(QString::number(box_opacity_slider->value()));
 					rainbow_cb->setChecked(c->rainbow_corners);
 					}
 					rebuild_css_rows(); // Profil-Regeln sind jetzt in c->style gemerged
@@ -1506,7 +1613,7 @@ void LiedplanDock::create_row_widget(const LiedplanCard &card)
 		set_dock_status(QStringLiteral("Farbprofil \"%1\" gespeichert").arg(qname), false);
 	});
 
-	connect(color_a_btn, &QPushButton::clicked, this, [this, card_id, color_a_btn, schedule_save]() {
+	connect(color_a_btn, &QPushButton::clicked, this, [this, card_id, color_a_btn, schedule_save, paint_color_swatch]() {
 		if (LiedplanCard *c = find_card_mut(card_id)) {
 			const QString cur_hex = QString::fromUtf8(
 				(c->corner_color_a.empty() ? "#fce647" : c->corner_color_a).c_str());
@@ -1516,12 +1623,13 @@ void LiedplanDock::create_row_widget(const LiedplanCard &card)
 				const QString hex = chosen.name(QColor::HexRgb);
 				c->corner_color_a = hex.toUtf8().toStdString();
 				color_a_btn->setText(hex.toUpper());
+				paint_color_swatch(color_a_btn, hex);
 				schedule_save();
 			}
 		}
 	});
 
-	connect(color_b_btn, &QPushButton::clicked, this, [this, card_id, color_b_btn, schedule_save]() {
+	connect(color_b_btn, &QPushButton::clicked, this, [this, card_id, color_b_btn, schedule_save, paint_color_swatch]() {
 		if (LiedplanCard *c = find_card_mut(card_id)) {
 			const QString cur_hex = QString::fromUtf8(
 				(c->corner_color_b.empty() ? "#fce647" : c->corner_color_b).c_str());
@@ -1531,13 +1639,14 @@ void LiedplanDock::create_row_widget(const LiedplanCard &card)
 				const QString hex = chosen.name(QColor::HexRgb);
 				c->corner_color_b = hex.toUtf8().toStdString();
 				color_b_btn->setText(hex.toUpper());
+				paint_color_swatch(color_b_btn, hex);
 				schedule_save();
 			}
 		}
 	});
 
 	// M6-A8: Freie Text-/Box-Farbe (Color-Picker, Muster = ECKE A/B).
-	connect(text_color_btn, &QPushButton::clicked, this, [this, card_id, text_color_btn, schedule_save]() {
+	connect(text_color_btn, &QPushButton::clicked, this, [this, card_id, text_color_btn, schedule_save, paint_color_swatch]() {
 		if (LiedplanCard *c = find_card_mut(card_id)) {
 			const QString cur_hex = QString::fromUtf8(
 				(c->text_color.empty() ? "#000000" : c->text_color).c_str());
@@ -1547,12 +1656,13 @@ void LiedplanDock::create_row_widget(const LiedplanCard &card)
 				const QString hex = chosen.name(QColor::HexRgb);
 				c->text_color = hex.toUtf8().toStdString();
 				text_color_btn->setText(hex.toUpper());
+				paint_color_swatch(text_color_btn, hex);
 				schedule_save();
 			}
 		}
 	});
 
-	connect(box_color_btn, &QPushButton::clicked, this, [this, card_id, box_color_btn, schedule_save]() {
+	connect(box_color_btn, &QPushButton::clicked, this, [this, card_id, box_color_btn, schedule_save, paint_color_swatch]() {
 		if (LiedplanCard *c = find_card_mut(card_id)) {
 			const QString cur_hex = QString::fromUtf8(
 				(c->box_color.empty() ? "#ffffff" : c->box_color).c_str());
@@ -1562,6 +1672,7 @@ void LiedplanDock::create_row_widget(const LiedplanCard &card)
 				const QString hex = chosen.name(QColor::HexRgb);
 				c->box_color = hex.toUtf8().toStdString();
 				box_color_btn->setText(hex.toUpper());
+				paint_color_swatch(box_color_btn, hex);
 				schedule_save();
 			}
 		}
