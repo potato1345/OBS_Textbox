@@ -48,7 +48,7 @@ struct LiedplanStyleRule {
 inline constexpr size_t kMaxCardRows = 8;
 
 // Standard-Labels der klassischen drei Zeilen.
-inline const char *kLiedplanRowLabels[3] = {"GL-Nummer", "Verse", "Liedtitel"};
+inline const char *kLiedplanRowLabels[3] = {"--zeile-1", "--zeile-2", "--zeile-3"};
 
 /**
  * Karten-Farbprofil mit Text-/Box-Farben, Eckfarben, Deckkräften und Regenbogen-Option.

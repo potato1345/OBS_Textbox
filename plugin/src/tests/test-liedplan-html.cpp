@@ -89,9 +89,19 @@ int main()
 			      css.find("/* OBS_TEXTBOX_INJECT_END */") != std::string::npos,
 		      "1a. build_inject_css: enthält INJECT_START und INJECT_END Marker");
 		check(css.find("--zeile-1: \"Eröffnung\";") != std::string::npos &&
-			      css.find("--zeile-2: \"144, 1+4+6\";") != std::string::npos &&
-			      css.find("--zeile-3: \"Nun jauchzt dem Herren\";") != std::string::npos,
-		      "1b. build_inject_css: enthält alle 3 Textzeilen");
+			css.find("--zeile-2: \"144, 1+4+6\";") != std::string::npos &&
+			css.find("--zeile-3: \"Nun jauchzt dem Herren\";") != std::string::npos,
+		    "1b. build_inject_css: enthält alle 3 Textzeilen");
+		// 1b2. Zeilen-Labels als CSS-Variablen-Namen: "--"-Label wird Variablenname,
+		// sonst Fallback --zeile-N.
+		LiedplanCard rc;
+		rc.id = "varrows";
+		rc.rows = {{"--lp-gl", "GL 12"}, {"Alt", "text alt"}, {"--sauber 1", "clean"}};
+		const std::string css2 = liedplan_html::build_inject_css(rc);
+		check(css2.find("--lp-gl: \"GL 12\";") != std::string::npos &&
+			css2.find("--zeile-2: \"text alt\";") != std::string::npos &&
+			css2.find("--sauber1: \"clean\";") != std::string::npos,
+		    "1b2. Zeilen-Labels: -- Präfix => Variablenname (sanisiert), sonst --zeile-N");
 		check(css.find("--box-bg: rgba(60,64,77,0.501961);") != std::string::npos &&
 			      css.find("--box-opacity: 1;") != std::string::npos,
 		      "1c. build_inject_css (#7): --box-bg trägt Alpha aus box_opacity (128), --box-opacity ist 1 bei Text");
@@ -265,10 +275,13 @@ int main()
 		liedplan_html::push_update(dummy_src, c, true);
 		const nlohmann::json jt2 =
 			nlohmann::json::parse(liedplan_html::last_push_update_json(), nullptr, false);
-		check(jt1.is_object() && jt1.size() == 17 &&
-			jt1.value("template_id", "") == "rounded" && jt2.is_object() &&
-			jt2.size() == 17 && jt2.value("template_id", "") == "rounded",
-			"4d. push_update (IMP-G): JSON hat 17 Schlüssel inkl. template_id + zeilen/style (auch bei clear=true)");
+		check(jt1.is_object() && jt1.size() == 18 &&
+			jt1.value("template_id", "") == "rounded" &&
+			jt1.contains("vn") &&
+			jt1.value("vn", nlohmann::json::array()).size() >= 1 &&
+			jt1.value("vn", nlohmann::json::array())[0].get<std::string>() == "--zeile-1" && jt2.is_object() &&
+			jt2.size() == 18 && jt2.value("template_id", "") == "rounded",
+			"4d. push_update (IMP-G): JSON hat 18 Schlüssel inkl. template_id + zeilen/style/vn (auch bei clear=true)");
 	}
 
 	// 5. normalize_anim_src: Data-URI, relativ + Traversal-Guard, http/https, portable Absolutpfade

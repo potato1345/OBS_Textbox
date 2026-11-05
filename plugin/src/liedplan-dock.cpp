@@ -784,7 +784,9 @@ void LiedplanDock::create_row_widget(const LiedplanCard &card)
 		row->setContentsMargins(0, 0, 0, 0);
 		row->setSpacing(6);
 		auto *ledit = new QLineEdit(label, card_inner);
-		ledit->setPlaceholderText(QStringLiteral("Beschriftung"));
+		ledit->setPlaceholderText(QStringLiteral("--zeile-N"));
+		ledit->setToolTip(QStringLiteral(
+			"CSS-Variablenname dieser Zeile (mit -- Präfix). Im gerenderten HTML als var(--…) referenzierbar; leer/ohne -- => --zeile-N."));
 		ledit->setFixedWidth(110);
 		ledit->setFixedHeight(34);
 		auto *vedit = new QLineEdit(value, card_inner);
@@ -891,8 +893,7 @@ void LiedplanDock::create_row_widget(const LiedplanCard &card)
 		if (label_edits->size() >= kMaxCardRows)
 			return;
 		const size_t idx = label_edits->size();
-		const QString lbl = QString::fromUtf8(
-			idx < 3 ? kLiedplanRowLabels[idx] : "Zeile");
+		const QString lbl = QStringLiteral("--zeile-%1").arg(idx + 1);
 		auto pr = add_row_edit(lbl, QString());
 		label_edits->push_back(pr.first);
 		value_edits->push_back(pr.second);

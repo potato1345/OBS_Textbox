@@ -138,6 +138,7 @@ std::string build_repo_listener_script()
 	     "            var n = 0;\n"
 	     "            for (var i = 0; i < d.zeilen.length && i < 8; i++) {\n"
 	     "                setVar(\"--zeile-\" + (i + 1), '\"' + String(d.zeilen[i]) + '\"');\n"
+     "                if (d.vn && d.vn[i]) setVar(d.vn[i], '\"' + String(d.zeilen[i]) + '\"');\n"
 	     "                n = i + 1;\n"
 	     "            }\n"
 	     "            setVar(\"--zeile-count\", String(n));\n"
@@ -203,6 +204,25 @@ std::string escape_html(const std::string &input)
 
 // Escaped einen String für CSS-Variablen in einem <style>-Block:
 // Rückwärtsschrägstrich, doppelte Anführungszeichen und < > & escapen (Steuerzeichen ignorieren).
+/**
+ * Zeilen-Labels sind CSS-Variablen-Namen: Label mit "--" Präfix (sanisiert auf
+ * [A-Za-z0-9_-]) wird als Variablenname verwendet; sonst Fallback "--zeile-N".
+ */
+std::string row_var_name(const std::string &label, std::size_t index)
+{
+	if (label.size() > 2 && label[0] == '-' && label[1] == '-') {
+		std::string out;
+		for (char c : label) {
+			if ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
+			    (c >= '0' && c <= '9') || c == '-' || c == '_')
+				out += c;
+		}
+		if (out.size() > 2)
+			return out;
+	}
+	return "--zeile-" + std::to_string(index + 1);
+}
+
 std::string escape_css_string(const std::string &input)
 {
 	std::string out;
@@ -652,7 +672,7 @@ std::string build_inject_css(const LiedplanCard &card, const LiedplanSettings &s
 	    << ":root {\n";
 	const auto rows = effective_rows(card);
 	for (std::size_t i = 0; i < rows.size(); ++i)
-		oss << "  --zeile-" << (i + 1) << ": \"" << escape_css_string(rows[i].value) << "\";\n";
+	oss << "  " << row_var_name(rows[i].label, i) << ": \"" << escape_css_string(rows[i].value) << "\";\n";
 	oss << "  --zeile-count: " << rows.size() << ";\n";
 	oss << "  --anim-file: \"" << escape_css_string(norm_anim) << "\";\n"
 	    << "  --show-anim: " << show_anim << ";\n"
@@ -1305,6 +1325,10 @@ void push_update(obs_source_t *src, const LiedplanCard &card, bool clear,
 	for (const auto &r : rows)
 		zeilen.append(clear ? QStringLiteral("") : QString::fromUtf8(r.value.c_str()));
 	obj.insert(QStringLiteral("zeilen"), zeilen);
+	QJsonArray vn;
+	for (std::size_t i = 0; i < rows.size(); ++i)
+		vn.append(QString::fromUtf8(row_var_name(rows[i].label, i).c_str()));
+	obj.insert(QStringLiteral("vn"), vn);
 	QJsonArray style_arr;
 	for (const auto &rule : card.style) {
 		const std::string name = sanitize_css_var_name(rule.name);

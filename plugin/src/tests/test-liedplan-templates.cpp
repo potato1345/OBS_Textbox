@@ -353,7 +353,7 @@ int main()
 		const nlohmann::json j = nlohmann::json::parse(raw, nullptr, false);
 
 		const bool ok =
-			!j.is_discarded() && j.is_object() && j.size() == 17 &&
+			!j.is_discarded() && j.is_object() && j.size() == 18 &&
 			j.contains("zeilen") && j.contains("style") &&
 			j.value("zeile1", "") == "Sanctus" &&
 			j.value("zeile2", "") == "198, 1" &&
