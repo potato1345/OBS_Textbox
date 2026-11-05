@@ -951,8 +951,9 @@ void LiedplanDock::create_row_widget(const LiedplanCard &card)
 			labs[j]->setText(tl);
 			vals[j]->setText(tv);
 		}
-		std::swap(labs[i], labs[j]);
-		std::swap(vals[i], vals[j]);
+		// Nur die Texte werden vertauscht (die Edit-Widgets bleiben an ihrer
+		// Position); ein zusätzliches Tauschen der Zeiger würde die
+		// Text-Vertauschung in collect_rows wieder aufheben.
 		if (collect_rows())
 			schedule_save();
 	};
@@ -1475,6 +1476,7 @@ void LiedplanDock::create_row_widget(const LiedplanCard &card)
 	connect(profile_combo, QOverload<int>::of(&QComboBox::activated), this,
 		[this, card_id, schedule_save, rebuild_css_rows, profile_combo](int) {
 			if (LiedplanCard *c = find_card_mut(card_id)) {
+				capture_undo_snapshot(this, state_); // vor der Mutation: Undo stellt alt wieder her
 				c->profile = profile_combo->currentText().toUtf8().toStdString();
 				if (const LiedplanProfile *prof =
 					liedplan_profile_lookup(c->profile, state_.color_profiles))

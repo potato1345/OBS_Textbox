@@ -40,6 +40,7 @@ OBS_DECLARE_MODULE()
 #include <QDockWidget>
 #include <QEvent>
 #include <QRect>
+#include <QTimer>
 #include <string>
 
 /*
@@ -130,6 +131,17 @@ bool obs_module_load(void)
 			/* Registrierung fehlgeschlagen: Widget nicht hängen lassen */
 			delete g_dock;
 			g_dock = nullptr;
+		} else {
+			/* IMP-H8: OBS 32 versteckt Custom-QDockWidget per Default und
+			 * legt keinen Docks-Menueeintrag an. Floating-Zustand wieder
+			 * herstellen (Dock ist als schwebendes Fenster registriert). */
+			g_dock->setFloating(true);
+			g_dock->show();
+			g_dock->raise();
+			/* OBS versteckt Custom-Docks evtl. verzoegert nach dem Load;
+			 * Show erneut nach 1s und 3s erzwingen. */
+			QTimer::singleShot(1000, g_dock, [d = g_dock] { d->show(); d->raise(); });
+			QTimer::singleShot(3000, g_dock, [d = g_dock] { d->show(); d->raise(); });
 		}
 		blog(LOG_INFO, "[liedplan] Liedplan-Dock registriert (Erfolg=%s)", ok ? "ja" : "nein");
 	}
