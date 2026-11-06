@@ -243,10 +243,10 @@ int main()
 		const std::string html_tpl =
 			wrote_tpl ? read_file_utf8(std::filesystem::u8path(out_path)) : "";
 		check(wrote_tpl &&
-			      html_tpl.find("<div id=\"tpl-custom\">box_tpl_ok:Eröffnung:Grüße 1+4</div>") !=
-				      std::string::npos &&
-			      html_tpl.find("OBS_TEXTBOX_INJECT_START") == std::string::npos,
-		      "5a. write_card mit gültiger template_id: schreibt Template-HTML ohne CSS-Injektionsblock",
+		      html_tpl.find("<div id=\"tpl-custom\">box_tpl_ok:Eröffnung:Grüße 1+4</div>") !=
+			      std::string::npos &&
+		      html_tpl.find("OBS_TEXTBOX_INJECT_START") != std::string::npos,
+		      "5a. write_card mit gültiger template_id: Template-HTML + CSS-Injektionsblock (IMP-L6)",
 		      html_tpl);
 
 		// Fehlendes Template -> Fallback auf classic-Pfad (mit settings.textbox_path Override)
@@ -441,7 +441,8 @@ int main()
 		check(tpl_raw.find("liedplan_card_update") != std::string::npos,
 		      "9e. standard.html enthält liedplan_card_update-Listener (reload-free push)", builtin_dir);
 
-		// write_card(template_id="display"): frisches Template, keine INJECT-Marker.
+		// write_card(template_id="display"): frisches Template + INJECT-Marker
+		// (IMP-L6: CSS-Regeln und Zeilen-Custom-Vars sind im written HTML baked).
 		c.template_id = "display";
 		std::string out_path;
 		const bool wrote = liedplan_html::write_card(c, out_path);
@@ -449,8 +450,8 @@ int main()
 			wrote ? read_file_utf8(std::filesystem::u8path(out_path)) : "";
 		check(wrote &&
 		      html_disp.find("LIEDPLAN_TEMPLATE: display") != std::string::npos &&
-		      html_disp.find("OBS_TEXTBOX_INJECT_START") == std::string::npos,
-		      "9f. write_card(template_id=\"display\"): Template-HTML ohne CSS-Injektion");
+		      html_disp.find("OBS_TEXTBOX_INJECT_START") != std::string::npos,
+		      "9f. write_card(template_id=\"display\"): Template-HTML mit CSS-Injektion (IMP-L6)");
 
 		// Fehlende Vorlage -> classic-Fallback (INJECT-Marker), kein Crash.
 		c.template_id = "gibt-es-nicht";
@@ -465,8 +466,10 @@ int main()
 		write_file_bytes(std::filesystem::u8path(user_dir) / "standard.html",
 				 "<!DOCTYPE html><html><body>{{zeile1}}</body></html>");
 		const std::string html_override = liedplan_html::render_template_html(c, "standard");
-		check(html_override == "<!DOCTYPE html><html><body>Vorgehen</body></html>",
-		      "9h. user-Vorlage überschreibt builtin-Vorlage gleicher id", html_override);
+		check(html_override.find("<body>Vorgehen") != std::string::npos &&
+		      html_override.find("OBS_TEXTBOX_INJECT_START") != std::string::npos,
+		      "9h. user-Vorlage überschreibt builtin-Vorlage gleicher id (IMP-L6: + Injektion)",
+		      html_override);
 		std::filesystem::remove(std::filesystem::u8path(user_dir) / "standard.html", ec);
 	}
 

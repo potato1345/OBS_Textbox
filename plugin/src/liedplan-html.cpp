@@ -959,8 +959,29 @@ std::string render_template_html(const LiedplanCard &card, const std::string &te
 	}
 	for (const std::string &tpl_path : candidates) {
 		const std::string tpl_html = read_utf8_file(tpl_path.c_str());
-		if (!tpl_html.empty())
-			return substitute_tokens(card, tpl_html, clear, settings, copy_dir);
+		if (!tpl_html.empty()) {
+			std::string out = substitute_tokens(card, tpl_html, clear, settings, copy_dir);
+			// IMP-L6: Templates bekamen nur Token-baked Werte — generelle
+			// CSS-Regeln (--name) und Zeilen-Custom-Variablen fehlten im
+			// written HTML und wirkten erst nach einem Live-Push. Derselbe
+			// :root-Inject-Block wie im Classic-Pfad, direkt hinter dem
+			// Template-Style (letzte Definition gewinnt).
+			if (!clear) {
+				// Insertion vor </head>; minimalistische Templates ohne
+				// </head> bekommen den Block vor </body>.
+				std::size_t insert_pos = out.rfind("</head>");
+				if (insert_pos == std::string::npos)
+					insert_pos = out.rfind("</body>");
+				if (insert_pos != std::string::npos) {
+					const std::string style_block =
+						"<style>\n" + build_inject_css(card, settings, copy_dir) + "\n</style>\n";
+					const std::string rainbow_block = std::string("<style id=\"lp-rainbow\">") +
+						(card.rainbow_corners ? kRainbowCssRepo : "") + "</style>\n";
+					out.insert(insert_pos, style_block + rainbow_block);
+				}
+			}
+			return out;
+		}
 	}
 	return "";
 }

@@ -436,6 +436,14 @@ LiedplanDock::LiedplanDock(const std::string &state_path, QWidget *parent)
 		save_state();
 		rebuild_rows();
 		sync_all_cards_live(prev_ids);
+		// IMP-L5: Undo kann Karten wieder entfernen — deren Karten-HTML wäre
+		// sonst ein Orphan in cards/. Nach dem Sync dieselben Orphan-Reste
+		// wegwerfen wie beim Startup-Prune.
+		std::vector<std::string> live_ids;
+		live_ids.reserve(state_.cards.size());
+		for (const auto &c : state_.cards)
+			live_ids.push_back(c.id);
+		liedplan_html::prune_orphan_card_html(live_ids);
 		state_.undo_available_ = false;
 		tool_undo->setEnabled(false);
 		set_dock_status(QStringLiteral("Vorheriger Zustand wiederhergestellt"), false);
