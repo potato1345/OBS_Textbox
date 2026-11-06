@@ -1703,6 +1703,7 @@ void LiedplanDock::create_row_widget(const LiedplanCard &card)
 
 	connect(clear_src_btn, &QPushButton::clicked, this, [this, card_id]() {
 		if (LiedplanCard *c = find_card_mut(card_id)) {
+			capture_undo_snapshot(this, state_); // IMP-Q: Undo stellt den Text wieder her
 			liedplan_scene::update_everywhere(*c, true, state_.settings);
 		}
 	});
