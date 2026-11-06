@@ -334,3 +334,19 @@ inline void profile_switch(const LiedplanProfile &prof, CardT &card)
 		upsert(rule);
 	profile_apply(prof, card);
 }
+
+/**
+ * IMP-N: Nach dem Löschen des letzten Farbprofils wären keine Profile mehr
+ * wählbar (State-Seeding verhindert Nachsaat). Diese Funktion säat die
+ * Standardprofile nach, wenn die Liste leer ist, und liefert true, wenn
+ * nachgesät wurde. Damit bleibt die Profilfunktion nach vollständiger
+ * Löschung nutzbar.
+ */
+inline bool liedplan_ensure_profiles_available(std::vector<LiedplanProfile> &profiles)
+{
+	if (!profiles.empty())
+		return false;
+	for (const auto &bp : liedplan_profiles())
+		profiles.push_back(bp);
+	return true;
+}

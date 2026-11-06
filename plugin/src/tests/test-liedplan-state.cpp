@@ -216,6 +216,18 @@ int main()
 		check(ok, "8. profile_by_name(\"nicht da\") -> nullptr");
 	}
 
+	// 8b. IMP-N: liedplan_ensure_profiles_available() — leere Profilliste
+	//     wird mit den 6 Standardprofilen nachgesät; nicht-leere bleibt unverändert.
+	{
+		std::vector<LiedplanProfile> empty;
+		bool reseeded = liedplan_ensure_profiles_available(empty);
+		bool ok = reseeded && empty.size() == 6 && empty[0].name == "Karte Dunkel";
+		std::vector<LiedplanProfile> custom = {{"Nur Eins", "#112233", "#445566"}};
+		ok = ok && !liedplan_ensure_profiles_available(custom) &&
+		     custom.size() == 1 && custom[0].name == "Nur Eins";
+		check(ok, "8b. Profil-Nachsaat: leer -> 6 Defaults, gefüllt -> unverändert");
+	}
+
 	// 9. LiedplanState::find() für vorhandene und nicht vorhandene IDs
 	{
 		LiedplanState s;

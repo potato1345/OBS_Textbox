@@ -214,6 +214,23 @@ bool is_standard_card(const LiedplanCard &c, std::size_t i)
 	       c.zeile1 == liedplan_import::PROGRAM_POINTS[i];
 }
 
+// IMP-N: Nach dem Löschen eines Farbprofils referencieren Karten evtl. einen
+// nicht mehr existierenden Namen und das Combo wäre dauerhaft leer (seeded
+// verhindert Nachsaat). Defaults nachsaaten, damit die Profilfunktion nicht
+// tot ist; Karten mit dangling-Profilreferenz auf "" setzen (baked Farben
+// bleiben sichtbar). Liefert true, wenn Defaults nachgesät wurden.
+bool reconcile_profiles_after_delete(LiedplanState &state)
+{
+	const bool reseeded = liedplan_ensure_profiles_available(state.color_profiles);
+	for (auto &c : state.cards) {
+		if (!c.profile.empty() && !liedplan_profile_lookup(c.profile, state.color_profiles))
+			c.profile = "";
+	}
+	if (!state.active_profile.empty() && !liedplan_profile_lookup(state.active_profile, state.color_profiles))
+		state.active_profile.clear();
+	return reseeded;
+}
+
 } // namespace
 
 #ifdef ENABLE_FRONTEND_API
@@ -604,7 +621,17 @@ LiedplanDock::LiedplanDock(const std::string &state_path, QWidget *parent)
 		}
 		state_.profiles_seeded = true;
 		save_state();
+	} else if (state_.color_profiles.empty()) {
+		// IMP-N: seeded, aber Liste leer (alle Profile gelöscht) -> Defaults
+		// nachsaaten; sonst wäre das Profil-Combo dauerhaft leer und die
+		// Profilfunktion tot. seed-Flag bleibt true (einzelne gelöschte
+		// Profiles kommen bewusst nicht zurück).
+		liedplan_ensure_profiles_available(state_.color_profiles);
+		save_state();
 	}
+	// IMP-N: dangling Profilreferenzen (profil/active_profile zeigen auf
+	// einen gelöschten Namen) beim Start bereinigen.
+	reconcile_profiles_after_delete(state_);
 
 	rebuild_rows();
 
@@ -1608,9 +1635,15 @@ void LiedplanDock::create_row_widget(const LiedplanCard &card)
 			state_.color_profiles.erase(it);
 			if (LiedplanCard *c = find_card_mut(card_id))
 				c->profile = ""; // baked Farben bleiben (kein Auto-Reset)
+			// IMP-N: letzte Profile gelöscht -> Defaults nachsaaten, sonst ist
+			// das Profil-Combo dauerhaft leer; dangling Kartenreferenzen bereinigen.
+			const bool reseeded = reconcile_profiles_after_delete(state_);
 			save_state();
 			rebuild_rows();
-			set_dock_status(QStringLiteral("Profil \"%1\" gelöscht").arg(qname), false);
+			set_dock_status(reseeded
+				? QStringLiteral("Profil \"%1\" gelöscht — Standardprofile nachgesät").arg(qname)
+				: QStringLiteral("Profil \"%1\" gelöscht").arg(qname),
+				false);
 		});
 
 	// IMP-H5: Profil umbenennen; Karten mit altem Namen folgen dem neuen.
@@ -3420,10 +3453,15 @@ void LiedplanDock::on_open_settings_dialog()
 			state_.color_profiles.erase(
 				state_.color_profiles.begin() +
 				static_cast<std::ptrdiff_t>(row));
+			// IMP-N: letztes Profil gelöscht -> Standardprofile nachsaaten,
+			// sonst bleiben Karten ohne wählbares Profil (Combo leer).
+			const bool reseeded = reconcile_profiles_after_delete(state_);
 			save_state();
 			rebuild_rows();
 			refresh_profiles_ui();
-			const QString msg = QStringLiteral("Farbprofil \"%1\" gelöscht").arg(qname);
+			const QString msg = reseeded
+				? QStringLiteral("Farbprofil \"%1\" gelöscht — Standardprofile nachgesät").arg(qname)
+				: QStringLiteral("Farbprofil \"%1\" gelöscht").arg(qname);
 			status_lbl->setText(msg);
 			set_dock_status(msg, false);
 		});
