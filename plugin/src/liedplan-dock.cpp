@@ -84,6 +84,16 @@ namespace {
 
 constexpr int kDefaultCardCount = 12;
 
+// IMP-L4: Dialog-Optionen. LIEDPLAN_NO_NATIVE_DIALOG=1 -> Qt-eigene Dialogen
+// (UIA-automatisierbar, auch für Skripte/Tests). Default: native Dialogen.
+QFileDialog::Options dialog_options()
+{
+	const QByteArray no_native = qgetenv("LIEDPLAN_NO_NATIVE_DIALOG");
+	if (no_native == "1" || no_native == "true")
+		return QFileDialog::DontUseNativeDialog;
+	return QFileDialog::Options();
+}
+
 // RAII-Wächter zum Zählen laufender Hintergrund-Threads für den sauberen Modul-Shutdown.
 struct ActiveJobGuard {
 	ActiveJobGuard() { ++g_active_jobs; }
@@ -1245,7 +1255,8 @@ void LiedplanDock::create_row_widget(const LiedplanCard &card)
 				                 const QString chosen = QFileDialog::getOpenFileName(
 				                     this, QStringLiteral("Animationsdatei wählen"), start_dir,
 				                     QStringLiteral(
-				                         "Animationen (*.gif *.webm *.mp4 *.mov *.m4v);;Bilder (*.png *.jpg *.jpeg);;Alle Dateien (*.*)"));
+				                         "Animationen (*.gif *.webm *.mp4 *.mov *.m4v);;Bilder (*.png *.jpg *.jpeg);;Alle Dateien (*.*)"),
+				                     nullptr, dialog_options());
 				                 if (!chosen.isEmpty()) {
 				                     edit->setText(chosen);
 				                     on_change();
@@ -1515,7 +1526,8 @@ void LiedplanDock::create_row_widget(const LiedplanCard &card)
 		const QString start = QString::fromUtf8(liedplan_html::templates_dir().c_str());
 		const QString chosen = QFileDialog::getOpenFileName(
 			this, QStringLiteral("Vorlage wählen"), start,
-			QStringLiteral("Vorlagen (*.html);;Alle Dateien (*.*)"));
+			QStringLiteral("Vorlagen (*.html);;Alle Dateien (*.*)"),
+			nullptr, dialog_options());
 		if (!chosen.isEmpty()) {
 			tpl_edit->setText(chosen);
 			apply_template_id(card_id, chosen.toUtf8().toStdString());
@@ -2042,6 +2054,13 @@ void LiedplanDock::sync_all_cards_live(const std::vector<std::string> &previous_
 	for (const auto &card : state_.cards) {
 		if (cancel_ && *cancel_)
 			return;
+		// IMP-L3: Nach Undo eines Löschens existiert die Browser-Quelle nicht
+		// mehr — update_everywhere würde sie nie reanlegen. Fehlende Quelle
+		// wird in der aktuellen Szene reangelegt (write_card + obs_scene_add).
+		if (!liedplan_scene::source_exists(card.id)) {
+			liedplan_scene::send_to_current_scene(card, state_.settings);
+			continue;
+		}
 		liedplan_scene::update_everywhere(card, false, state_.settings);
 	}
 }
@@ -2436,7 +2455,8 @@ void LiedplanDock::on_open_import_dialog()
 		const QString chosen = QFileDialog::getOpenFileName(
 			&dlg, QStringLiteral("Liedplan-Dokument auswählen"),
 			ai_file_edit->text(),
-			QStringLiteral("Dokumente (*.pdf *.docx);;Alle Dateien (*.*)"));
+			QStringLiteral("Dokumente (*.pdf *.docx);;Alle Dateien (*.*)"),
+			nullptr, dialog_options());
 		if (!chosen.isEmpty()) {
 			ai_file_edit->setText(chosen);
 		}
@@ -2536,7 +2556,8 @@ void LiedplanDock::on_open_import_dialog()
 					&dlg, QStringLiteral("Liedplan-Dokument auswählen"),
 					QString(),
 					QStringLiteral(
-						"Dokumente (*.pdf *.docx);;Alle Dateien (*.*)"));
+						"Dokumente (*.pdf *.docx);;Alle Dateien (*.*)"),
+					nullptr, dialog_options());
 				if (doc_file.isEmpty())
 					return;
 				ai_file_edit->setText(doc_file);
@@ -2851,7 +2872,8 @@ void LiedplanDock::on_open_import_dialog()
 			const QString file_name = QFileDialog::getOpenFileName(
 				&dlg, QStringLiteral("Liedplan-Datei importieren"), QString(),
 				QStringLiteral(
-					"CSV-Dateien (*.csv);;Excel-Dateien (*.xlsx);;ZIP-Archive (*.zip);;Alle Dateien (*.*)"));
+					"CSV-Dateien (*.csv);;Excel-Dateien (*.xlsx);;ZIP-Archive (*.zip);;Alle Dateien (*.*)"),
+				nullptr, dialog_options());
 			if (file_name.isEmpty())
 				return;
 
@@ -3047,7 +3069,8 @@ void LiedplanDock::on_backup_state()
 	const QString file_name = QFileDialog::getSaveFileName(
 		this, QStringLiteral("JSON-Backup speichern"),
 		QStringLiteral("liedplan-backup.json"),
-		QStringLiteral("JSON-Backup (*.json)"));
+		QStringLiteral("JSON-Backup (*.json)"),
+		nullptr, dialog_options());
 	if (file_name.isEmpty())
 		return;
 
@@ -3088,7 +3111,8 @@ void LiedplanDock::on_restore_state()
 {
 	const QString file_name = QFileDialog::getOpenFileName(
 		this, QStringLiteral("JSON-Backup wiederherstellen"), QString(),
-		QStringLiteral("JSON-Backup (*.json)"));
+		QStringLiteral("JSON-Backup (*.json)"),
+		nullptr, dialog_options());
 	if (file_name.isEmpty())
 		return;
 
@@ -3405,7 +3429,8 @@ void LiedplanDock::on_open_settings_dialog()
 				QStringLiteral("farbprofil_%1.yaml").arg(sanitized);
 			const QString out_file = QFileDialog::getSaveFileName(
 				&dlg, QStringLiteral("Farbprofil als YAML exportieren"),
-				default_file, QStringLiteral("YAML-Dateien (*.yaml *.yml)"));
+				default_file, QStringLiteral("YAML-Dateien (*.yaml *.yml)"),
+				nullptr, dialog_options());
 			if (out_file.isEmpty())
 				return;
 
@@ -3439,7 +3464,8 @@ void LiedplanDock::on_open_settings_dialog()
 		[this, &dlg, yaml_combo, status_lbl, refresh_profiles_ui]() {
 			const QString in_file = QFileDialog::getOpenFileName(
 				&dlg, QStringLiteral("Farbprofil aus YAML importieren"),
-				QString(), QStringLiteral("YAML-Dateien (*.yaml *.yml)"));
+				QString(), QStringLiteral("YAML-Dateien (*.yaml *.yml)"),
+				nullptr, dialog_options());
 			if (in_file.isEmpty())
 				return;
 
@@ -3506,7 +3532,8 @@ void LiedplanDock::on_open_settings_dialog()
 	connect(browse_btn, &QPushButton::clicked, &dlg, [&dlg, edit_token]() {
 		const QString chosen = QFileDialog::getOpenFileName(
 			&dlg, QStringLiteral("Google-OAuth-Token-Datei wählen"),
-			edit_token->text(), QStringLiteral("JSON-Dateien (*.json);;Alle Dateien (*.*)"));
+			edit_token->text(), QStringLiteral("JSON-Dateien (*.json);;Alle Dateien (*.*)"),
+			nullptr, dialog_options());
 		if (!chosen.isEmpty())
 			edit_token->setText(chosen);
 	});
@@ -3514,7 +3541,8 @@ void LiedplanDock::on_open_settings_dialog()
 	connect(browse_key_btn, &QPushButton::clicked, &dlg, [&dlg, edit_key_path]() {
 		const QString chosen = QFileDialog::getOpenFileName(
 			&dlg, QStringLiteral("OpenRouter-Key-Datei (api.env) wählen"),
-			edit_key_path->text(), QStringLiteral("Env-Dateien (*.env);;Alle Dateien (*.*)"));
+			edit_key_path->text(), QStringLiteral("Env-Dateien (*.env);;Alle Dateien (*.*)"),
+			nullptr, dialog_options());
 		if (!chosen.isEmpty())
 			edit_key_path->setText(chosen);
 	});
@@ -3523,7 +3551,8 @@ void LiedplanDock::on_open_settings_dialog()
 		const QString chosen = QFileDialog::getOpenFileName(
 			&dlg, QStringLiteral("MarkItDown-Python-Executable wählen"),
 			edit_py_path->text(),
-			QStringLiteral("Ausführbare Dateien (*.exe);;Alle Dateien (*.*)"));
+			QStringLiteral("Ausführbare Dateien (*.exe);;Alle Dateien (*.*)"),
+			nullptr, dialog_options());
 		if (!chosen.isEmpty())
 			edit_py_path->setText(chosen);
 	});
@@ -3531,7 +3560,7 @@ void LiedplanDock::on_open_settings_dialog()
 	connect(browse_anim_btn, &QPushButton::clicked, &dlg, [&dlg, edit_anim_dir]() {
 		const QString chosen = QFileDialog::getExistingDirectory(
 			&dlg, QStringLiteral("Animations-Ordner wählen"),
-			edit_anim_dir->text());
+			edit_anim_dir->text(), dialog_options());
 		if (!chosen.isEmpty())
 			edit_anim_dir->setText(chosen);
 	});

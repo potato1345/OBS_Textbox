@@ -39,4 +39,7 @@ void reload_everywhere(const LiedplanCard &card,
 /** Entfernt alle Szenen-Items dieser Karte aus allen Szenen und gibt die Source frei. */
 void remove_everywhere(const std::string &card_id);
 
+/** True, wenn mindestens eine Browser-Quelle "Liedplan <card_id>" in irgendeiner Szene existiert. */
+bool source_exists(const std::string &card_id);
+
 } // namespace liedplan_scene

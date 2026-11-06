@@ -237,4 +237,16 @@ void remove_everywhere(const std::string &card_id)
 	}
 }
 
+bool source_exists(const std::string &card_id)
+{
+	const std::string name = source_name(card_id);
+	const std::vector<obs_scene_t *> scenes = collect_all_scenes();
+	for (obs_scene_t *scene : scenes) {
+		obs_sceneitem_t *item = obs_scene_find_source(scene, name.c_str());
+		if (item && is_browser_source(obs_sceneitem_get_source(item)))
+			return true;
+	}
+	return false;
+}
+
 } // namespace liedplan_scene

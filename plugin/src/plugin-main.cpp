@@ -39,7 +39,9 @@ OBS_DECLARE_MODULE()
 #include "liedplan-dock.hpp"
 #include <QDockWidget>
 #include <QEvent>
+#include <QGuiApplication>
 #include <QRect>
+#include <QScreen>
 #include <QTimer>
 #include <string>
 
@@ -136,12 +138,46 @@ bool obs_module_load(void)
 			 * legt keinen Docks-Menueeintrag an. Floating-Zustand wieder
 			 * herstellen (Dock ist als schwebendes Fenster registriert). */
 			g_dock->setFloating(true);
+			/* IMP-L: geschlossene Docks brauchen einen Wiederoeffnungs-
+			 * weg; OBS legt fuer custom-Docks keinen Menueeintrag an. */
+			obs_frontend_add_tools_menu_item(
+				"Liedplan-Dock anzeigen",
+				[](void *param) {
+					auto *d = static_cast<QDockWidget *>(param);
+					d->show();
+					d->raise();
+					d->activateWindow();
+				},
+				g_dock);
 			g_dock->show();
 			g_dock->raise();
+			/* IMP-L2: schwebende Docks koennen hoeher als der Bildschirm
+			 * werden; dann liegt die untere Werkzeugleiste (Gear/Undo/
+			 * Export) unterhalb des Viewports und ist unerreichbar.
+			 * Auf die sichtbare Screen-Hoehe beschneiden. */
+			if (g_dock->isFloating()) {
+				const QRect avail = QGuiApplication::primaryScreen()->availableGeometry();
+				QRect geom = g_dock->geometry();
+				if (geom.bottom() > avail.bottom()) {
+					geom.setBottom(avail.bottom());
+					g_dock->setGeometry(geom);
+				}
+			}
 			/* OBS versteckt Custom-Docks evtl. verzoegert nach dem Load;
 			 * Show erneut nach 1s und 3s erzwingen. */
 			QTimer::singleShot(1000, g_dock, [d = g_dock] { d->show(); d->raise(); });
-			QTimer::singleShot(3000, g_dock, [d = g_dock] { d->show(); d->raise(); });
+			QTimer::singleShot(3000, g_dock, [d = g_dock] {
+				d->show();
+				d->raise();
+				if (d->isFloating()) {
+					const QRect avail = QGuiApplication::primaryScreen()->availableGeometry();
+					QRect geom = d->geometry();
+					if (geom.bottom() > avail.bottom()) {
+						geom.setBottom(avail.bottom());
+						d->setGeometry(geom);
+					}
+				}
+			});
 		}
 		blog(LOG_INFO, "[liedplan] Liedplan-Dock registriert (Erfolg=%s)", ok ? "ja" : "nein");
 	}
