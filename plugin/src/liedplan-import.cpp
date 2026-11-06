@@ -15,6 +15,7 @@
 #endif
 
 #include "liedplan-import.hpp"
+#include "liedplan-state.hpp"
 
 #include <algorithm>
 #include <chrono>
@@ -1163,9 +1164,14 @@ std::vector<std::string> parse_shared_strings_xml(std::string_view xml)
 
 int parse_col_index_from_ref(std::string_view r_attr)
 {
+	// IMP-T: Excel-Referenzen haben max. 3 Buchstaben; längere refs in präparierten
+	// XLSX liefen in signed-Overflow -> riesige/negative col_idx -> bad_alloc.
 	int col = 0;
 	bool has_letters = false;
+	int letters = 0;
 	for (char c : r_attr) {
+		if (letters >= 3)
+			return -1; // unreferenzierte/defekte Ref -> Zellblock wird verworfen
 		if (c >= 'A' && c <= 'Z') {
 			col = col * 26 + (c - 'A' + 1);
 			has_letters = true;
@@ -1175,8 +1181,13 @@ int parse_col_index_from_ref(std::string_view r_attr)
 		} else {
 			break;
 		}
+		letters++;
 	}
-	return has_letters ? (col - 1) : -1;
+	if (!has_letters)
+		return -1;
+	if (col > 16384) // Excel-Spaltenlimit
+		return 16383;
+	return col - 1;
 }
 
 std::vector<std::vector<std::string>> parse_sheet_xml(
@@ -1851,8 +1862,7 @@ std::optional<std::string> get_access_token(const std::filesystem::path &token_p
 
 	// Fallback für client_id / client_secret (NUR LESEN)
 	if (client_id.empty() || client_secret.empty()) {
-		const std::filesystem::path fb_path =
-			std::filesystem::u8path(kFallbackClientSecretPath);
+		const std::filesystem::path fb_path = default_client_secret_path();
 		std::ifstream fb_in(fb_path, std::ios::binary);
 		if (fb_in) {
 			const nlohmann::json fbj = nlohmann::json::parse(fb_in, nullptr, false);

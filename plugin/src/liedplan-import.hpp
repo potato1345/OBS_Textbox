@@ -12,6 +12,7 @@
 #pragma once
 
 #include <array>
+#include "liedplan-state.hpp"
 #include <filesystem>
 #include <map>
 #include <nlohmann/json.hpp>
@@ -28,10 +29,33 @@ inline constexpr std::array<std::string_view, 12> PROGRAM_POINTS = {
 	"Gabenbereitung", "Heilig", "Agnus Dei", "Kommunion",      "Danklied",  "Schlusslied",
 };
 
-inline constexpr const char *kDefaultTokenPath =
-	"C:\\Users\\Johann\\AppData\\Local\\hermes\\google_token.json";
-inline constexpr const char *kFallbackClientSecretPath =
-	"C:\\Users\\Johann\\AppData\\Local\\hermes\\google_client_secret.json";
+// IMP-T: Laufzeit-Defaults statt hartkodierter Johann-Pfade (Portabilität);
+// dieselbe Auflösung wie liedplan-state.hpp.
+inline std::filesystem::path default_token_path()
+{
+	return std::filesystem::u8path(default_google_token_path());
+}
+inline std::string default_token_path_str()
+{
+	return default_google_token_path();
+}
+inline std::filesystem::path default_client_secret_path()
+{
+	const char *env = std::getenv("LOCALAPPDATA");
+	if (env && env[0] != '\0') {
+		std::string val(env);
+		while (!val.empty() && (val.back() == '\\' || val.back() == '/'))
+			val.pop_back();
+		if (!val.empty()) {
+#ifdef _WIN32
+			return std::filesystem::u8path(val + "\\hermes\\google_client_secret.json");
+#else
+			return std::filesystem::u8path(val + "/hermes/google_client_secret.json");
+#endif
+		}
+	}
+	return std::filesystem::path();
+}
 inline constexpr const char *kDefaultFormId =
 	"1jreAuzd-jt1x48WDmjaP7v0OusdVO2lb55Kt4JrhEgY";
 
@@ -157,7 +181,7 @@ Record api_response_to_record(const nlohmann::json &response,
 
 // Google-Forms-API (WinHTTP)
 std::optional<std::string> get_access_token(
-	const std::filesystem::path &token_path = std::filesystem::u8path(kDefaultTokenPath),
+	const std::filesystem::path &token_path = default_token_path(),
 	const std::filesystem::path &cache_path = {},
 	std::string *out_error = nullptr);
 
@@ -172,7 +196,7 @@ std::optional<std::vector<nlohmann::json>> fetch_responses(const std::string &fo
 std::optional<LiedplanImportResult> import_from_api(
 	std::string *out_error = nullptr,
 	const std::filesystem::path &cache_path = {},
-	const std::filesystem::path &token_path = std::filesystem::u8path(kDefaultTokenPath),
+	const std::filesystem::path &token_path = default_token_path(),
 	const std::string &form_id = kDefaultFormId);
 
 } // namespace liedplan_import

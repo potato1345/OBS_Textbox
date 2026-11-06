@@ -2147,7 +2147,7 @@ void LiedplanDock::apply_import_result(const liedplan_import::LiedplanImportResu
 	blog(LOG_INFO, "[liedplan] Import übernommen: %zu Programmpunkte", punkte.size());
 	const std::size_t total_items = punkte.size();
 	while (state_.cards.size() < total_items) {
-		state_.cards.push_back(make_default_card(state_.cards.size()));
+		state_.add_card(); // IMP-T: next_id-vergabene IDs — indexbasierte IDs kollidierten mit bestehenden Karten nach Löschungen
 	}
 	if (static_cast<int>(state_.cards.size()) + 1 > state_.next_id)
 		state_.next_id = static_cast<int>(state_.cards.size()) + 1;
@@ -2223,11 +2223,11 @@ void LiedplanDock::on_open_import_dialog()
 	auto *lbl_token_path = new QLabel(QStringLiteral("TOKEN-PFAD"), google_group);
 	lbl_token_path->setObjectName(QStringLiteral("lpFieldLabel"));
 	const std::string init_token_path = state_.settings.token_path.empty()
-						    ? liedplan_import::kDefaultTokenPath
+						    ? liedplan_import::default_token_path_str()
 						    : state_.settings.token_path;
 	auto *edit_token_path =
 		new QLineEdit(QString::fromUtf8(init_token_path.c_str()), google_group);
-	edit_token_path->setPlaceholderText(QString::fromUtf8(liedplan_import::kDefaultTokenPath));
+	edit_token_path->setPlaceholderText(QString::fromUtf8(liedplan_import::default_token_path_str()));
 
 	connect(edit_form_id, &QLineEdit::editingFinished, this, [this, edit_form_id]() {
 		state_.settings.google_form_id = edit_form_id->text().trimmed().toUtf8().toStdString();
@@ -2239,7 +2239,7 @@ void LiedplanDock::on_open_import_dialog()
 	connect(edit_token_path, &QLineEdit::editingFinished, this, [this, edit_token_path]() {
 		state_.settings.token_path = edit_token_path->text().trimmed().toUtf8().toStdString();
 		if (state_.settings.token_path.empty())
-			state_.settings.token_path = liedplan_import::kDefaultTokenPath;
+			state_.settings.token_path = liedplan_import::default_token_path_str();
 		save_state();
 	});
 
@@ -2831,7 +2831,7 @@ void LiedplanDock::on_open_import_dialog()
 
 			const std::size_t total_items = pending_ai_res->items.size();
 			while (state_.cards.size() < total_items) {
-				state_.cards.push_back(make_default_card(state_.cards.size()));
+				state_.add_card(); // IMP-T: next_id-vergabene IDs — indexbasierte IDs kollidierten mit bestehenden Karten nach Löschungen
 			}
 			if (static_cast<int>(state_.cards.size()) + 1 > state_.next_id)
 				state_.next_id = static_cast<int>(state_.cards.size()) + 1;
@@ -2901,7 +2901,7 @@ void LiedplanDock::on_open_import_dialog()
 					: state_.settings.google_form_id;
 			const std::filesystem::path token_path = std::filesystem::u8path(
 				state_.settings.token_path.empty()
-					? liedplan_import::kDefaultTokenPath
+					? liedplan_import::default_token_path_str()
 					: state_.settings.token_path);
 
 			// Hintergrund-Thread erfasst nur die Kopie von cancel_ (kein this).
@@ -3269,12 +3269,12 @@ void LiedplanDock::on_open_settings_dialog()
 	auto *lbl_token = new QLabel(QStringLiteral("OAUTH-TOKEN-PFAD"), oauth_group);
 	lbl_token->setObjectName(QStringLiteral("lpFieldLabel"));
 	const std::string cur_token = state_.settings.token_path.empty()
-					      ? liedplan_import::kDefaultTokenPath
+					      ? liedplan_import::default_token_path_str()
 					      : state_.settings.token_path;
 	auto *token_row = new QHBoxLayout();
 	token_row->setSpacing(8);
 	auto *edit_token = new QLineEdit(QString::fromUtf8(cur_token.c_str()), oauth_group);
-	edit_token->setPlaceholderText(QString::fromUtf8(liedplan_import::kDefaultTokenPath));
+	edit_token->setPlaceholderText(QString::fromUtf8(liedplan_import::default_token_path_str()));
 	/* Ui4: „…“ = natives OBS-Browse-Button-Idiom (Properties-Panel). */
 	auto *browse_btn = new QPushButton(QStringLiteral("…"), oauth_group);
 	browse_btn->setObjectName(QStringLiteral("lpBtn"));
@@ -3654,7 +3654,7 @@ void LiedplanDock::on_open_settings_dialog()
 		[edit_form, edit_token, edit_key_path, edit_py_path, edit_anim_dir,
 		 edit_lieder_path, def_settings]() {
 			edit_form->setText(QString::fromUtf8(liedplan_import::kDefaultFormId));
-			edit_token->setText(QString::fromUtf8(liedplan_import::kDefaultTokenPath));
+			edit_token->setText(QString::fromUtf8(liedplan_import::default_token_path_str()));
 			edit_key_path->setText(
 				QString::fromUtf8(def_settings.openrouter_key_path.c_str()));
 			edit_py_path->setText(
@@ -3683,7 +3683,7 @@ void LiedplanDock::on_open_settings_dialog()
 			state_.settings.google_form_id =
 				fid.empty() ? liedplan_import::kDefaultFormId : fid;
 			state_.settings.token_path =
-				tpath.empty() ? liedplan_import::kDefaultTokenPath : tpath;
+				tpath.empty() ? liedplan_import::default_token_path_str() : tpath;
 			state_.settings.openrouter_key_path =
 				kpath.empty() ? def_settings.openrouter_key_path : kpath;
 			state_.settings.markitdown_python =

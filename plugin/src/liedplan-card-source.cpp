@@ -19,6 +19,7 @@
 
 #include <algorithm>
 #include <cstdarg>
+#include <atomic>
 #include <cstdio>
 
 namespace {
@@ -47,6 +48,10 @@ struct LiedplanCardSource {
 	LiedplanCard card;
 	int render_calls = 0;
 	int tick_calls = 0;
+	// IMP-T: Texture-Rebuild wird in den Video-Thread verschoben — rebuild im
+	// update-Pfad (UI-Thread) zerstörte eine Textur, die video_render parallel
+	// zeichnete (Use-after-free bei Settings-Update während Wiedergabe).
+	std::atomic<bool> tex_dirty{false};
 };
 
 /**
@@ -172,7 +177,7 @@ void liedplan_card_update(void *data, obs_data_t *settings)
 
 	ctx->card = settings_to_card(settings);
 	lp_log("Kartenquelle aktualisiert (ID='" + ctx->card.id + "')");
-	rebuild_texture(ctx);
+	ctx->tex_dirty = true; // Rebuild geschieht im video_tick (Render-Thread)
 }
 
 // --- Temporäre E2E-Debug-Callbacks (M2a): Wo bricht die Render-Kette ab? ---
@@ -198,6 +203,8 @@ void liedplan_card_video_tick(void *data, float seconds)
 		debug_log("video_tick #%d: ctx=%p (Video-Thread lebt, Source wird getickt)",
 		            ctx->tick_calls, (void *)ctx);
 	ctx->tick_calls++;
+	if (ctx->tex_dirty.exchange(false))
+		rebuild_texture(ctx);
 }
 
 uint32_t liedplan_card_get_width(void *data)

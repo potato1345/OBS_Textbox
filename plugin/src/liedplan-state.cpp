@@ -465,6 +465,24 @@ std::string default_lieder_path()
 	return kFallbackLiederPath;
 }
 
+std::string default_animation_dir()
+{
+	const char *env = std::getenv("APPDATA");
+	if (env && env[0] != '\0') {
+		std::string val(env);
+		while (!val.empty() && (val.back() == '\\' || val.back() == '/'))
+			val.pop_back();
+		if (!val.empty()) {
+#ifdef _WIN32
+			return val + "\\obs-studio\\plugin_config\\liedplan-for-obs\\animations";
+#else
+			return val + "/obs-studio/plugin_config/liedplan-for-obs/animations";
+#endif
+		}
+	}
+	return "";
+}
+
 void liedplan_set_module_lieder_path(const std::string &path)
 {
 	if (path.empty()) {

@@ -76,14 +76,20 @@ std::string default_google_token_path();
 
 // Ermittelt den Standardpfad für lieder.md (obs_module_file-Auflösung falls vorhanden, sonst Dev-Fallback).
 std::string default_lieder_path();
+// IMP-T: runtime-Auflösung statt hartkodierter Benutzerpfad (Animationsordner
+// unter dem Plugin-Konfigverzeichnis).
+std::string default_animation_dir();
 void liedplan_set_module_lieder_path(const std::string &path);
 
 struct LiedplanSettings {
 	std::string google_form_id = "1jreAuzd-jt1x48WDmjaP7v0OusdVO2lb55Kt4JrhEgY";
 	std::string token_path = default_google_token_path();
-	std::string openrouter_key_path = "C:\\Users\\Johann\\Desktop\\GitHub\\OBS_Textbox\\main\\api.env";
-	std::string markitdown_python = "C:\\Users\\Johann\\Desktop\\GitHub\\OBS_Textbox\\.venv\\Scripts\\python.exe";
-	std::string animation_dir = "C:\\Users\\Johann\\Desktop\\GitHub\\OBS_Textbox\\animation";
+	// IMP-T: keine benutzerspezifischen Absolutpfade als Defaults — auf anderen
+	// Rechnern waren sie defekt und leakten die Benutzerstruktur. Persistierte
+	// Werte aus liedplan-state.json bleiben unverändert übernommen.
+	std::string openrouter_key_path = "";
+	std::string markitdown_python = "";
+	std::string animation_dir = default_animation_dir();
 	std::string lieder_path = default_lieder_path();
 	std::string textbox_path = ""; // leer = obs_module_file("index.html") -> Dev-Fallback kRepoTextboxPath
 	std::string ai_system_prompt = ""; // leer = LiedplanAi::kDefaultSystemPrompt verwenden

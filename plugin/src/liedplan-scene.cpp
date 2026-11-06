@@ -182,6 +182,9 @@ void update_everywhere(const LiedplanCard &card, bool clear, const LiedplanSetti
 		disk_card.zeile1.clear();
 		disk_card.zeile2.clear();
 		disk_card.zeile3.clear();
+		// IMP-T: rows mit-leeren — effective_rows() bevorzugt rows, sonst behält
+		// die Disk-HTML den Text und zeigt ihn nach jedem Reload wieder.
+		disk_card.rows.clear();
 	}
 
 	std::string html_path;

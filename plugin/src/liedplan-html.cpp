@@ -654,6 +654,20 @@ std::string normalize_anim_src(const std::string &raw, const LiedplanSettings &s
 			const std::filesystem::path dest =
 				std::filesystem::u8path(copy_dir) /
 				std::filesystem::u8path(sanitize_basename(src.filename().u8string()));
+			// IMP-T: Kopie nur bei Änderung wiederverwendet — copy_file wurde vorher
+			// bei JEDEM push_update (pro getipptem Zeichen) durchgeführt.
+			const std::filesystem::file_time_type src_mtime =
+				std::filesystem::last_write_time(src, ec);
+			if (!ec) {
+				std::error_code ec2;
+				const std::filesystem::file_time_type dest_mtime =
+					std::filesystem::last_write_time(dest, ec2);
+				const auto src_size = std::filesystem::file_size(src, ec2);
+				const auto dest_size = std::filesystem::file_size(dest, ec2);
+				if (!ec2 && dest_mtime >= src_mtime && src_size == dest_size) {
+					return path_to_file_url(dest.generic_u8string());
+				}
+			}
 			std::filesystem::copy_file(src, dest,
 			                           std::filesystem::copy_options::overwrite_existing, ec);
 			if (!ec)
