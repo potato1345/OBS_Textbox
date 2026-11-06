@@ -418,8 +418,8 @@ LiedplanDock::LiedplanDock(const std::string &state_path, QWidget *parent)
 	QAction *act_tpl_copy =
 		settings_menu->addAction(QStringLiteral("Vorlage aus index.html (classic) kopieren"));
 	settings_menu->addSeparator();
-	QAction *act_backup = settings_menu->addAction(QStringLiteral("Backup"));
-	QAction *act_restore = settings_menu->addAction(QStringLiteral("Restore"));
+	QAction *act_backup = settings_menu->addAction(QStringLiteral("Backup erstellen"));
+	QAction *act_restore = settings_menu->addAction(QStringLiteral("Backup wiederherstellen"));
 	tool_settings->setMenu(settings_menu);
 
 	bottom_toolbar->addWidget(tool_add);
@@ -558,6 +558,10 @@ LiedplanDock::LiedplanDock(const std::string &state_path, QWidget *parent)
 			if (match_idx >= 0) {
 				const QString id_q = card_search_->itemData(match_idx).toString();
 				flash_row(id_q.toUtf8().toStdString());
+			} else {
+				// IMP-O: ohne Treffer war bisher kein Feedback sichtbar —
+				// der alte Statusblinker blieb stehen.
+				set_dock_status(QStringLiteral("Keine Karte gefunden für „%1“").arg(query), true);
 			}
 		});
 	}
