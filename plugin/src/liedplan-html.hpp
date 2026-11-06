@@ -23,6 +23,11 @@ namespace liedplan_html {
 // Rückgabe: UTF-8-Pfad des Verzeichnisses (ohne abschließenden Separator).
 std::string cards_dir();
 
+// Reinigt eine Karten-ID auf das UI-Rename-Muster [A-Za-z0-9_-] (max 32);
+// fremde Zeichen werden zu '_' ersetzt. Schützt write_card/Dateinamen gegen
+// Pfad-Traversierung aus geladenem oder importiertem JSON.
+std::string sanitize_card_id(const std::string &id);
+
 // Verzeichnis der user-Templates: <plugin_config>/liedplan-for-obs/templates/
 // Basis wie cards_dir() (obs_module_config_path("liedplan-state.json").parent_path()),
 // im Test-Modus (LIEDPLAN_TEST_NO_OBS) temp_directory_path()/liedplan_templates_test.

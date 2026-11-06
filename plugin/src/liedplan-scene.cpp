@@ -89,7 +89,8 @@ obs_data_t *make_settings(const LiedplanCard &card)
 {
 	const std::string dir = liedplan_html::cards_dir();
 	const std::string local_file =
-		dir.empty() ? (card.id + ".html") : (dir + "/" + card.id + ".html");
+		dir.empty() ? (liedplan_html::sanitize_card_id(card.id) + ".html")
+			: (dir + "/" + liedplan_html::sanitize_card_id(card.id) + ".html");
 	return make_settings(card, local_file);
 }
 

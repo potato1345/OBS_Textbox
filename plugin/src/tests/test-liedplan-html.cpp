@@ -349,8 +349,32 @@ int main()
 		const std::string written_html =
 			wrote ? read_file_utf8(std::filesystem::u8path(out_html_path)) : "";
 		check(wrote && written_html.find("custom-template-marker") != std::string::npos &&
-			      written_html.find("OBS_TEXTBOX_INJECT_START") != std::string::npos,
+		      written_html.find("OBS_TEXTBOX_INJECT_START") != std::string::npos,
 		      "5e. write_card (#5): nutzt settings.textbox_path Override vor Dev-Fallback");
+
+		// 5f: IMP-P — sanitize_card_id + write_card gegen Pfad-Traversierung
+		{
+			const std::string clean = liedplan_html::sanitize_card_id("../evil");
+			const std::string keep = liedplan_html::sanitize_card_id("box-6_x");
+			const std::string long_id = liedplan_html::sanitize_card_id(std::string(60, 'a'));
+			bool ok = clean == "___evil" && keep == "box-6_x" && long_id.size() == 32;
+
+			LiedplanCard c_evil;
+			c_evil.id = "../../outside";
+			c_evil.zeile1 = "X";
+			std::string evil_path;
+			const bool wrote_evil = liedplan_html::write_card(c_evil, evil_path, st);
+			const std::filesystem::path cards =
+				std::filesystem::u8path(liedplan_html::cards_dir());
+			const std::string evil_rel = "______outside.html";
+			const bool inside = wrote_evil &&
+				std::filesystem::exists(cards / evil_rel) &&
+				evil_path.find("..") == std::string::npos;
+			check(ok && inside,
+			      "5f. IMP-P: sanitize_card_id reinigt ID; write_card schreibt nur in cards/");
+
+			std::filesystem::remove(cards / evil_rel, ec);
+		}
 
 		std::filesystem::remove_all(tmp_dir, ec);
 	}

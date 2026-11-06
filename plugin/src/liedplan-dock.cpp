@@ -1715,7 +1715,7 @@ void LiedplanDock::create_row_widget(const LiedplanCard &card)
 		// Karte weg -> HTML-Datei ebenfalls löschen, sonst bleiben Orphan-Dateien.
 		std::error_code ec;
 		std::filesystem::remove(
-		    std::filesystem::u8path(liedplan_html::cards_dir() + "/" + card_id + ".html"), ec);
+		    std::filesystem::u8path(liedplan_html::cards_dir() + "/" + liedplan_html::sanitize_card_id(card_id) + ".html"), ec);
 		liedplan_scene::remove_everywhere(card_id);
 		cards_layout_->removeWidget(row_widget);
 		row_widgets_.erase(std::remove(row_widgets_.begin(), row_widgets_.end(), row_widget),
@@ -1765,7 +1765,7 @@ void LiedplanDock::create_row_widget(const LiedplanCard &card)
 		        capture_undo_snapshot(this, state_);
 		        std::error_code ec;
 		        std::filesystem::remove(
-			        std::filesystem::u8path(liedplan_html::cards_dir() + "/" + card_id + ".html"), ec);
+			        std::filesystem::u8path(liedplan_html::cards_dir() + "/" + liedplan_html::sanitize_card_id(card_id) + ".html"), ec);
 		        const bool had_text = [&c]() {
 			        if (!c->zeile1.empty() || !c->zeile2.empty() || !c->zeile3.empty())
 				        return true;
@@ -2089,7 +2089,7 @@ void LiedplanDock::on_clear_all()
 			return;
 		std::error_code ec;
 		std::filesystem::remove(
-		    std::filesystem::u8path(liedplan_html::cards_dir() + "/" + id + ".html"), ec);
+		    std::filesystem::u8path(liedplan_html::cards_dir() + "/" + liedplan_html::sanitize_card_id(id) + ".html"), ec);
 		liedplan_scene::remove_everywhere(id);
 	}
 }

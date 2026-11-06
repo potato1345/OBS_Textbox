@@ -726,6 +726,25 @@ std::string render_card_html(const LiedplanCard &card, const std::string &repo_h
 	return out;
 }
 
+// IMP-P: Karten-ID wird als Dateiname unter cards/ verwendet. IDs aus
+// geladenen State-/Backup-JSON sind unvalidiert — ohne Reinigung könnte
+// ein Wert wie "../../evil" Dateien außerhalb des Cards-Ordners schreiben.
+// Erlaubt ist dasselbe Muster wie im UI-Rename: [A-Za-z0-9_-], max 32.
+std::string sanitize_card_id(const std::string &id)
+{
+    std::string out;
+    out.reserve(id.size());
+    for (const char ch : id) {
+        const unsigned char c = static_cast<unsigned char>(ch);
+        const bool ok = (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
+                        (c >= '0' && c <= '9') || c == '_' || c == '-';
+        out.push_back(ok ? ch : '_');
+    }
+    if (out.size() > 32)
+        out.resize(32);
+    return out;
+}
+
 std::string cards_dir()
 {
 #ifdef LIEDPLAN_TEST_NO_OBS
@@ -1303,6 +1322,12 @@ bool write_card(const LiedplanCard &card, std::string &path_out, const LiedplanS
 	if (dir.empty())
 		return false;
 
+	// IMP-P: ID vor Dateinamen-Bildung reinigen (Traversierung aus
+	// geladenem/Importiertem JSON verhindern).
+	const std::string safe_id = sanitize_card_id(card.id);
+	if (safe_id.empty())
+		return false;
+
 	std::string html;
 	if (!card.template_id.empty()) {
 		html = render_template_html(card, card.template_id, false, settings, dir);
@@ -1326,7 +1351,7 @@ bool write_card(const LiedplanCard &card, std::string &path_out, const LiedplanS
 		html = render_card_html(card, repo_html, settings, dir);
 	}
 
-	const std::string full_path = dir + "/" + card.id + ".html";
+	const std::string full_path = dir + "/" + safe_id + ".html";
 
 	std::ofstream file(std::filesystem::u8path(full_path), std::ios::binary | std::ios::trunc);
 	if (!file.is_open())
