@@ -78,7 +78,7 @@ set_target_properties_plugin(${CMAKE_PROJECT_NAME} PROPERTIES OUTPUT_NAME ${_nam
 # (analog target_install_resources -> ${CMAKE_PROJECT_NAME}/data für obs_module_file()).
 install(
   FILES
-    "${CMAKE_CURRENT_SOURCE_DIR}/../main/textbox.html"
+    "${CMAKE_CURRENT_SOURCE_DIR}/../main/index.html"
     "${CMAKE_CURRENT_SOURCE_DIR}/../main/controlui/lieder.md"
   DESTINATION "${CMAKE_PROJECT_NAME}/data"
   COMPONENT Runtime

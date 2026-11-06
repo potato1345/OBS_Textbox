@@ -42,7 +42,7 @@ struct LiedplanCard {
 	int anim_scale = 3; // 1,2,3,4,6,8,10,12 (v2-Optionen); Default 3
 	int anim_x = 0; // -1200..1200 px
 	int anim_y = 0; // -1200..1200 px
-	std::string template_id = ""; // "" = classic (CSS-Injektion in textbox.html)
+	std::string template_id = ""; // "" = classic (CSS-Injektion in index.html)
 	std::vector<LiedplanRow> rows; // dynamische Zeilen (max kMaxCardRows); leer = Legacy zeile1..3
 	std::vector<LiedplanStyleRule> style; // generelle CSS-Regeln (--name: value)
 
@@ -85,7 +85,7 @@ struct LiedplanSettings {
 	std::string markitdown_python = "C:\\Users\\Johann\\Desktop\\GitHub\\OBS_Textbox\\.venv\\Scripts\\python.exe";
 	std::string animation_dir = "C:\\Users\\Johann\\Desktop\\GitHub\\OBS_Textbox\\animation";
 	std::string lieder_path = default_lieder_path();
-	std::string textbox_path = ""; // leer = obs_module_file("textbox.html") -> Dev-Fallback kRepoTextboxPath
+	std::string textbox_path = ""; // leer = obs_module_file("index.html") -> Dev-Fallback kRepoTextboxPath
 	std::string ai_system_prompt = ""; // leer = LiedplanAi::kDefaultSystemPrompt verwenden
 
 	bool operator==(const LiedplanSettings &other) const

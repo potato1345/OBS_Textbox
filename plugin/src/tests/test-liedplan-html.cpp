@@ -5,7 +5,7 @@
  *   - Prüft build_inject_css() (CSS-Variablen, Escaping, rgba-Formatierung, Anim-Werte).
  *   - Prüft card_html() und #7-Konsistenz (leere Karte -> opacity:0 statt display:none auf #box;
  *     box_bg-Alpha aus card.box_opacity; .anim-wrapper und Regenbogen-CSS).
- *   - Prüft render_card_html() mit main/textbox.html inkl. Erhalt der geschützten Padding-Regel
+ *   - Prüft render_card_html() mit main/index.html inkl. Erhalt der geschützten Padding-Regel
  *     (.textbox-container { padding: 15px 60px 20px 50px; }).
  *   - Prüft push_update() JSON-Shape (alle 14 Felder, clear=true/false, nullptr-Guard).
  *   - Prüft normalize_anim_src() (Data-URI für Bilder, relative Pfade + Traversal-Schutz,
@@ -163,7 +163,7 @@ int main()
 		      "2c. card_html: enthält .anim-wrapper und liedplan_card_update Event-Listener");
 	}
 
-	// 3. render_card_html mit main/textbox.html: Erhalt der geschützten Padding-Zeile
+	// 3. render_card_html mit main/index.html: Erhalt der geschützten Padding-Zeile
 	//    .textbox-container { padding: 15px 60px 20px 50px; }
 	{
 		const std::filesystem::path repo_root =
@@ -172,9 +172,9 @@ int main()
 #else
 			std::filesystem::u8path("..");
 #endif
-		const std::filesystem::path textbox_file = repo_root / "main" / "textbox.html";
+		const std::filesystem::path textbox_file = repo_root / "main" / "index.html";
 		const std::string repo_html = read_file_utf8(textbox_file);
-		check(!repo_html.empty(), "3a. main/textbox.html im Repo lesbar", textbox_file.u8string());
+		check(!repo_html.empty(), "3a. main/index.html im Repo lesbar", textbox_file.u8string());
 
 		LiedplanCard c;
 		c.id = "box1";

@@ -1,4 +1,4 @@
-# M2a-Browser v2: Liedplan-Karten = OBS Browser-Source mit textbox.html
+# M2a-Browser v2: Liedplan-Karten = OBS Browser-Source mit index.html (formerly textbox.html)
 
 ## Kontext & Architektur-Entscheidung (User, 25.10.2026)
 Karten werden als **OBS Browser-Source** (CEF) gerendert – NICHT mehr über den Custom Source
@@ -6,7 +6,7 @@ Karten werden als **OBS Browser-Source** (CEF) gerendert – NICHT mehr über de
 Grund: alle Web-Features müssen nutzbar sein (GIF-Animationen, Ecken-Dreiecke A/B,
 Regenbogen-Corner, CSS-Animationen).
 
-**Wichtig: Das Projekt hat bereits ein Browser-Textbox-System** (`main/textbox.html`,
+**Wichtig: Das Projekt hat bereits ein Browser-Textbox-System** (`main/index.html`,
 7870 Byte, vom User seit August produktiv im Einsatz – siehe Source "Browser" in der Szene "Szene"):
 - Text wird über CSS-Variablen gerendert: `--zeile-1/2/3` (via `::before content`),
   Box `--box-bg`, Text `--text-color`, Fade `--box-opacity`, Ecken-Dreiecke
@@ -22,7 +22,7 @@ Regenbogen-Corner, CSS-Animationen).
   Das Format dieses Blocks ist die Referenz (unten 1:1 wiedergegeben).
 
 **Unser Ansatz (besser als Dashboard-Reload, gleiche Visuals):**
-Per Karte wird eine **Kopie** von `main/textbox.html` nach
+Per Karte wird eine **Kopie** von `main/index.html` nach
 `<obs-data>/plugins/liedplan-for-obs/cards/<id>.html` geschrieben, die zusätzlich enthält:
 1. ein `<style>`-Block mit dem `:root`-Injektionsblock (aktueller Karten-Zustand) –
    dadurch ist der Dateizustand IMMER aktuell (Reload/OBS-Restart zeigt korrekten Stand).
@@ -32,7 +32,7 @@ Per Karte wird eine **Kopie** von `main/textbox.html` nach
    **kein Browser-Reload pro Keystroke**, kein Flackern).
 Die Browser-Source zeigt per `local_file` auf die Kopie; das `css`-Property bleibt
 LEER (bleibt konstant ⇒ keine Reloads durch Setting-Änderungen).
-Repo-Pfad konstant: `C:/Users/Johann/Desktop/GitHub/OBS_Textbox/main/textbox.html`.
+Repo-Pfad konstant: `C:/Users/Johann/Desktop/GitHub/OBS_Textbox/main/index.html`.
 Falls die Datei fehlt: Fallback auf das eingebaute Basis-Template `card_html()`
 (bereits implementiert) – Karte rendert dann ohne Anim-Wrapper/Dreiecke-System.
 
@@ -105,7 +105,7 @@ std::string build_inject_css(const LiedplanCard &card);
 ```cpp
 // Rendert die komplette HTML-Datei der Karte (reines String, testbar):
 // 1. repo_html leer → card_html(card) (bestehendes Fallback-Template).
-// 2. sonst (Inhalt von main/textbox.html):
+// 2. sonst (Inhalt von main/index.html):
 //    a) vor dem LETZTEN "</head>": einfügen
 //       <style>\n + build_inject_css(card) + "\n</style>\n
 //    b) vor dem LETZTEN "</body>": einfügen das Listener-Script unten.
@@ -113,7 +113,7 @@ std::string build_inject_css(const LiedplanCard &card);
 std::string render_card_html(const LiedplanCard &card, const std::string &repo_html);
 ```
 `write_card` wird dünn: liest die Konstante
-`kRepoTextboxPath = "C:/Users/Johann/Desktop/GitHub/OBS_Textbox/main/textbox.html"`
+`kRepoTextboxPath = "C:/Users/Johann/Desktop/GitHub/OBS_Textbox/main/index.html"`
 (UTF-8 lesen; std::filesystem::u8path), rendert via `render_card_html`, schreibt
 nach `cards_dir()/<id>.html` (bestehendes Verhalten bleibt). Fehlt die Repo-Datei:
 Fallback + LOG_INFO "Liedplan: textbox.html nicht gefunden, nutze Fallback-Template".
@@ -166,7 +166,7 @@ anim_file:"", show_anim:0, anim_scale:3, anim_x:0, anim_y:0`.
 
 ### 4. Tests (`tests/render/test-liedplan-render.cpp`)
 Bestehende 8a–9d ANPASSEN + ergänzen. Repo-Inhalt testseitig per
-std::filesystem aus `C:/Users/Johann/Desktop/GitHub/OBS_Textbox/main/textbox.html`
+std::filesystem aus `C:/Users/Johann/Desktop/GitHub/OBS_Textbox/main/index.html`
 lesen (existiert auf dieser Maschine; falls nicht → Fallback-Pfade testen und
 repo-Tests überspringen, nicht scheitern):
 - 8a: card_html()-Fallback enthält die drei Texte (wie bisher).
@@ -200,14 +200,14 @@ cd build_x64 && ctest -C RelWithDebInfo -V
 ## Done-Kriterien
 1. Build 0 Fehler; DLL `build_x64/RelWithDebInfo/liedplan-for-obs.dll` frisch erzeugt.
 2. Alle ctest-Suiten grün (vollständige Ausgaben im Report).
-3. `render_card_html` erzeugt aus echtem `main/textbox.html`: gültige HTML-Kopie mit
+3. `render_card_html` erzeugt aus echtem `main/index.html`: gültige HTML-Kopie mit
    Injektionsblock + Listener; Fallback ohne Repo-Datei funktioniert.
 4. Report (deutsch): geänderte Dateien, Build-Status, ctest-Ausgaben, offene Punkte.
 
 ## Constraints
 - Keine neuen Abhängigkeiten. Code-Stil: Tabs, deutsche Kommentare, GPL-Kopfzeile.
 - Nicht anfassen: liedplan-dock.cpp, liedplan-card-source.cpp, liedplan-render.cpp,
-  plugin-main.cpp, **main/textbox.html (READ-ONLY für das Plugin)**, main/controlui/,
+  plugin-main.cpp, **main/index.html (READ-ONLY für das Plugin)**, main/controlui/,
   autocontinue-Dateien, alles außerhalb des plugin/-Verzeichnisses.
 - Keine Konsole/Popups erzeugen; Änderungen nur in plugin/src/, plugin/tests/,
   plugin/CMakeLists.txt und dieser Spec-Datei.

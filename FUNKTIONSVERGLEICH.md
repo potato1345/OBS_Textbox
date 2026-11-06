@@ -9,7 +9,7 @@ Verifikation Stand M7h: ctest 7/7 (state, textfmt, theme-icons, import, ai, rend
 
 | | v2 „Dock-Version“ | Plugin (T7) |
 |---|---|---|
-| Anzeige in OBS | **Browser-Quellen** mit injizierten CSS-Variablen (`--box-id` …) | **Browser-Quellen (CEF)** pro Karte mit `main/textbox.html` + injiziertem `:root`-CSS-Block (M2a). Ursprünglich `text_gdiplus`/Custom Source geplant; nach E2E-Fehlschlag der QPainter-Custom-Source (schwarz, 25.10) per User-Entscheidung auf Browser-Quelle umgestellt |
+| Anzeige in OBS | **Browser-Quellen** mit injizierten CSS-Variablen (`--box-id` …) | **Browser-Quellen (CEF)** pro Karte mit `main/index.html` + injiziertem `:root`-CSS-Block (M2a). Ursprünglich `text_gdiplus`/Custom Source geplant; nach E2E-Fehlschlag der QPainter-Custom-Source (schwarz, 25.10) per User-Entscheidung auf Browser-Quelle umgestellt |
 | Transport | OBS WebSocket v5 (SHA-256-Auth, Reconnect 3,5 s, 10 s-Timeouts) | **in-process** — kein Transport, kein Passwort, kein Reconnect |
 | Host | Python-Server `:8080` (statisch + `/api/*`) | keiner |
 | Zustand | `localStorage` im Browser | JSON-Datei `plugin_config/liedplan-for-obs/liedplan-state.json` (global, nicht pro Profil) |
@@ -74,7 +74,7 @@ haben im Plugin **kein Pendant — und brauchen keines**. Sie fallen von der Lis
 |---|---|---|---|
 | E1 | Toasts (Erfolg/Fehler/Info) | ✅ | `QMessageBox` bei Fehlern + Statuszeile im Dock für letzte Aktion („Importiert: 12 Punkte“, „Schnell-Profil gespeichert: …“ u. a.) |
 | E2 | Tastenkürzel (Esc schließt Dialoge) | ➖ | QDialog-Standardverhalten, kein Aufwand |
-| E3 | Live-Preview (textbox.html) | ➖ | die OBS-Preview **ist** die Preview (Browser-Quellen) |
+| E3 | Live-Preview (index.html) | ➖ | die OBS-Preview **ist** die Preview (Browser-Quellen) |
 | E4 | Header-Status „Mit OBS verbunden / Nicht verbunden“ | ➖ | kein Pendant nötig |
 
 ## F. Was das Plugin BEREITS hat, was v2 nicht kann
@@ -92,7 +92,7 @@ haben im Plugin **kein Pendant — und brauchen keines**. Sie fallen von der Lis
 |---|---|---|---|
 | M0 | Skelett, Dock sichtbar | ✅ | `d69e3dc` |
 | M1 | Kartenliste, State, Profile, CTest | ✅ | `f1556e9` |
-| M2a | Browser-Quelle pro Karte (textbox.html + CSS-Injektion + push_update) | ✅ | `df8e5f4`+`d2b104a` |
+| M2a | Browser-Quelle pro Karte (index.html + CSS-Injektion + push_update) | ✅ | `df8e5f4`+`d2b104a` |
 | Ui1 | Dock im v1-Look | ✅ | `ae4162b` |
 | M2b/Ui2 | Ecken A/B + Deckkraft A/B + Regenbogen | ✅ | `97900a9` |
 | M3 | Forms-/CSV-Import (Google-Forms-API + CSV-Port) | ✅ | `383d0d0` |

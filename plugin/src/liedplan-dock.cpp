@@ -389,7 +389,7 @@ LiedplanDock::LiedplanDock(const std::string &state_path, QWidget *parent)
 	QAction *act_tpl_folder =
 		settings_menu->addAction(QStringLiteral("Vorlagen-Ordner öffnen"));
 	QAction *act_tpl_copy =
-		settings_menu->addAction(QStringLiteral("Vorlage aus classic kopieren"));
+		settings_menu->addAction(QStringLiteral("Vorlage aus index.html (classic) kopieren"));
 	settings_menu->addSeparator();
 	QAction *act_backup = settings_menu->addAction(QStringLiteral("Backup"));
 	QAction *act_restore = settings_menu->addAction(QStringLiteral("Restore"));
@@ -1414,14 +1414,14 @@ void LiedplanDock::create_row_widget(const LiedplanCard &card)
 	auto *lbl_tpl = new QLabel(QStringLiteral("VORLAGE"), style_section);
 	lbl_tpl->setObjectName(QStringLiteral("lpFieldLabel"));
 	lbl_tpl->setToolTip(QStringLiteral(
-		"Pfad zur Vorlagen-HTML. Leer = classic. Einfacher Name (z.B. minimal) = "
+		"Pfad zur Vorlagen-HTML. Leer = index.html (classic). Einfacher Name (z.B. minimal) = "
 		"Vorlagen-Ordner; voller Pfad = direkte Datei. Ordner-Icon wählt eine .html."));
 	auto *tpl_row = new QHBoxLayout();
 	tpl_row->setContentsMargins(0, 0, 0, 0);
 	tpl_row->setSpacing(6);
 	auto *tpl_edit = new QLineEdit(style_section);
 	tpl_edit->setObjectName(QStringLiteral("lpTemplatePath"));
-	tpl_edit->setPlaceholderText(QStringLiteral("classic (leer) oder Pfad zur Vorlage"));
+	tpl_edit->setPlaceholderText(QStringLiteral("index.html (leer = classic) oder Pfad zur Vorlage"));
 	tpl_edit->setToolTip(lbl_tpl->toolTip());
 	tpl_edit->setFixedHeight(32);
 	tpl_edit->setText(QString::fromUtf8(card.template_id.c_str()));
@@ -1764,7 +1764,7 @@ void LiedplanDock::apply_template_id(const std::string &card_id, const std::stri
 	refresh_templates_ui();
 
 	if (template_id.empty()) {
-		set_dock_status(QStringLiteral("Karte %1: Vorlage „classic“")
+		set_dock_status(QStringLiteral("Karte %1: Vorlage „index.html“ (classic)")
 				.arg(QString::fromUtf8(card_id.c_str())),
 			false);
 	} else {
@@ -1836,7 +1836,7 @@ void LiedplanDock::on_copy_template_from_classic()
 {
 	bool ok = false;
 	const QString raw_name = QInputDialog::getText(
-		this, QStringLiteral("Vorlage aus classic kopieren"),
+		this, QStringLiteral("Vorlage aus index.html (classic) kopieren"),
 		QStringLiteral("Vorlagename (Datei <name>.html im Vorlagen-Ordner):"),
 		QLineEdit::Normal, QStringLiteral("meine-vorlage"), &ok);
 	if (!ok)
@@ -1851,7 +1851,7 @@ void LiedplanDock::on_copy_template_from_classic()
 	const std::string src_path = liedplan_html::resolve_textbox_path(state_.settings);
 	QFile src(QString::fromUtf8(src_path.c_str()));
 	if (!src.open(QIODevice::ReadOnly)) {
-		set_dock_status(QStringLiteral("classic-Vorlage nicht lesbar: %1")
+		set_dock_status(QStringLiteral("index.html (classic) nicht lesbar: %1")
 				.arg(QString::fromUtf8(src_path.c_str())),
 			true);
 		return;
@@ -1859,7 +1859,7 @@ void LiedplanDock::on_copy_template_from_classic()
 	const QByteArray contents = src.readAll();
 	src.close();
 	if (contents.isEmpty()) {
-		set_dock_status(QStringLiteral("classic-Vorlage ist leer."), true);
+		set_dock_status(QStringLiteral("index.html (classic) ist leer."), true);
 		return;
 	}
 
@@ -1879,7 +1879,7 @@ void LiedplanDock::on_copy_template_from_classic()
 	out.close();
 
 	refresh_templates_ui();
-	set_dock_status(QStringLiteral("Vorlage \"%1\" aus classic kopiert").arg(name), false);
+	set_dock_status(QStringLiteral("Vorlage \"%1\" aus index.html kopiert").arg(name), false);
 }
 
 void LiedplanDock::refresh_top_row()
@@ -3184,7 +3184,7 @@ void LiedplanDock::on_open_settings_dialog()
 
 	auto *tpl_info = new QLabel(
 		QStringLiteral("Vorlagen sind .html-Dateien im Vorlagen-Ordner des Plugins; "
-				 "jede Karte wählt seine Vorlage im Feld „VORLAGE“ (classic = Standard)."),
+				 "jede Karte wählt seine Vorlage im Feld „VORLAGE“ (leer = index.html = Standard)."),
 		tpl_group);
 	tpl_info->setWordWrap(true);
 	tpl_info->setObjectName(QStringLiteral("lpFieldLabel"));
@@ -3195,7 +3195,7 @@ void LiedplanDock::on_open_settings_dialog()
 		new QPushButton(QStringLiteral("Vorlagen-Ordner öffnen"), tpl_group);
 	tpl_folder_btn->setObjectName(QStringLiteral("lpBtn"));
 	auto *tpl_copy_btn =
-		new QPushButton(QStringLiteral("Neue Vorlage aus classic kopieren"), tpl_group);
+		new QPushButton(QStringLiteral("Neue Vorlage aus index.html kopieren"), tpl_group);
 	tpl_copy_btn->setObjectName(QStringLiteral("lpBtn"));
 	tpl_btn_row->addWidget(tpl_folder_btn);
 	tpl_btn_row->addWidget(tpl_copy_btn);

@@ -72,8 +72,8 @@ std::string render_template_html(const LiedplanCard &card, const std::string &te
 // "classic" ist hier nicht enthalten (leere template_id = klassischer Weg).
 std::vector<std::string> list_template_ids();
 
-// Löst den Pfad der classic-Vorlage (textbox.html) auf: settings.textbox_path →
-// obs_module_file("textbox.html") → Repo-Fallback. Für "Vorlage aus classic
+// Löst den Pfad der classic-Vorlage (index.html) auf: settings.textbox_path →
+// obs_module_file("index.html") → Repo-Fallback. Für "Vorlage aus classic
 // kopieren" (Spec F2b).
 std::string resolve_textbox_path(const LiedplanSettings &settings = LiedplanSettings());
 

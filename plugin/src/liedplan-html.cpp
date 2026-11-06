@@ -43,7 +43,7 @@ namespace liedplan_html {
 
 namespace {
 
-constexpr const char *kRepoTextboxPath = "C:/Users/Johann/Desktop/GitHub/OBS_Textbox/main/textbox.html";
+constexpr const char *kRepoTextboxPath = "C:/Users/Johann/Desktop/GitHub/OBS_Textbox/main/index.html";
 
 constexpr const char *kRainbowCssRepo =
 	".textbox-container { background-image: none !important; }\n"
@@ -350,11 +350,11 @@ bool is_abs_win_path(const std::string &s)
 	return false;
 }
 
-// Löst den Pfad zu textbox.html auf:
+// Löst den Pfad zu index.html (Standard-Vorlage „classic") auf:
 // 1. settings.textbox_path (Settings-Override, falls gesetzt und Datei existiert)
-// 2. obs_module_file("textbox.html") (OBS Plugin-Data-Verzeichnis, falls vorhanden)
+// 2. obs_module_file("index.html") (OBS Plugin-Data-Verzeichnis, falls vorhanden)
 // 3. kRepoTextboxPath (Dev-Fallback auf diesem PC)
-// anon-Impl; exportierter Wrapper am Namespace-Ende (für Dock "Vorlage aus classic kopieren").
+// anon-Impl; exportierter Wrapper am Namespace-Ende (für Dock "Vorlage aus index.html kopieren").
 std::string resolve_textbox_path_impl(const LiedplanSettings &settings)
 {
 	std::error_code ec;
@@ -364,7 +364,7 @@ std::string resolve_textbox_path_impl(const LiedplanSettings &settings)
 			return settings.textbox_path;
 	}
 #ifndef LIEDPLAN_TEST_NO_OBS
-	char *mod_file = obs_module_file("textbox.html");
+	char *mod_file = obs_module_file("index.html");
 	if (mod_file) {
 		const std::string mod_path(mod_file);
 		bfree(mod_file);
@@ -1268,7 +1268,7 @@ bool write_card(const LiedplanCard &card, std::string &path_out, const LiedplanS
 		const std::string repo_html = read_utf8_file(textbox_path.c_str());
 		if (repo_html.empty()) {
 #ifndef LIEDPLAN_TEST_NO_OBS
-			obs_log(LOG_INFO, "Liedplan: textbox.html nicht gefunden, nutze Fallback-Template");
+			obs_log(LOG_INFO, "Liedplan: index.html (classic) nicht gefunden, nutze Fallback-Template");
 #endif
 		}
 		html = render_card_html(card, repo_html, settings, dir);
