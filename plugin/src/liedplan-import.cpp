@@ -1847,8 +1847,19 @@ std::optional<std::string> get_access_token(const std::filesystem::path &token_p
 		return std::nullopt;
 
 	if (resp->status < 200 || resp->status >= 300) {
-		if (out_error)
-			*out_error = format_http_error(resp->status);
+		if (out_error) {
+			std::string detail;
+			const nlohmann::json ej = nlohmann::json::parse(resp->body, nullptr, false);
+			if (ej.is_object()) {
+				const std::string err = ej.value("error", std::string{});
+				const std::string desc = ej.value("error_description", std::string{});
+				if (!err.empty())
+					detail = " (" + err + (desc.empty() ? "" : ": " + desc) + ")";
+			}
+			*out_error = format_http_error(resp->status) + detail;
+			if (resp->status == 400 && detail.find("invalid_grant") != std::string::npos)
+				*out_error += " — Google-Token abgelaufen/revoked, OAuth-Re-Authorisierung nötig.";
+		}
 		return std::nullopt;
 	}
 

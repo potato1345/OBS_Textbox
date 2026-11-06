@@ -87,6 +87,10 @@ bool reload_browser_source(obs_source_t *source);
 bool write_card(const LiedplanCard &card, std::string &path_out,
 		const LiedplanSettings &settings = LiedplanSettings());
 
+// Löscht Orphan-HTML in cards_dir(): cards/<id>.html, deren ID nicht in live_ids
+// steht (z.B. Reste gelöschter Karten). Anzahl gelöschter Dateien; Fehler ignoriert.
+std::size_t prune_orphan_card_html(const std::vector<std::string> &live_ids);
+
 // Reines String-Template (für Testbarkeit), ohne Dateizugriff.
 std::string card_html(const LiedplanCard &card);
 

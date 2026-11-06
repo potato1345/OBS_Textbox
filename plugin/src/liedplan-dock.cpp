@@ -536,6 +536,15 @@ LiedplanDock::LiedplanDock(const std::string &state_path, QWidget *parent)
 	const std::string err = state_.load(state_path_);
 	blog(LOG_INFO, "[liedplan] Zustand geladen (%zu Karten, Datei: %s)", state_.cards.size(), state_path_.c_str());
 
+	// Reste gelöschter Karten aufräumen, damit cards/ nicht mit Orphan-HTML vollläuft.
+	std::vector<std::string> live_ids;
+	live_ids.reserve(state_.cards.size());
+	for (const auto &c : state_.cards)
+		live_ids.push_back(c.id);
+	const std::size_t pruned = liedplan_html::prune_orphan_card_html(live_ids);
+	if (pruned > 0)
+		blog(LOG_INFO, "[liedplan] %zu Orphan-Karten-HTML gelöscht", pruned);
+
 	if (!err.empty()) {
 		if (!state_path_.empty()) {
 			std::error_code ec;
@@ -675,7 +684,7 @@ void LiedplanDock::create_row_widget(const LiedplanCard &card)
 	style_toggle_btn->setToolTip(QStringLiteral("Stil-Optionen einklappen"));
 
 	auto *dup_btn = new QToolButton(id_bar);
-	dup_btn->setObjectName(QStringLiteral("lpStyleToggle"));
+	dup_btn->setObjectName(QStringLiteral("lpDupBtn"));
 	dup_btn->setFixedSize(28, 28);
 	dup_btn->setAutoRaise(true);
 	dup_btn->setText(QStringLiteral("⧉"));
@@ -740,14 +749,14 @@ void LiedplanDock::create_row_widget(const LiedplanCard &card)
 	lbl_rows->setText(QStringLiteral("▼ ZEILEN"));
 	lbl_rows->setToolTip(QStringLiteral("ZEILEN ein-/ausklappen"));
 	auto *row_add_btn = new QToolButton(rows_frame);
-	row_add_btn->setObjectName(QStringLiteral("lpStyleToggle"));
+	row_add_btn->setObjectName(QStringLiteral("lpRowAdd"));
 	row_add_btn->setFixedSize(28, 28);
 	row_add_btn->setAutoRaise(true);
 	row_add_btn->setIcon(theme_icon("plus.svg"));
 	row_add_btn->setIconSize(QSize(16, 16));
 	row_add_btn->setToolTip(QStringLiteral("Zeile hinzufügen (max 8)"));
 	auto *row_del_btn = new QToolButton(rows_frame);
-	row_del_btn->setObjectName(QStringLiteral("lpStyleToggle"));
+	row_del_btn->setObjectName(QStringLiteral("lpRowDel"));
 	row_del_btn->setFixedSize(28, 28);
 	row_del_btn->setAutoRaise(true);
 	row_del_btn->setIcon(theme_icon("trash.svg"));
@@ -793,13 +802,13 @@ void LiedplanDock::create_row_widget(const LiedplanCard &card)
 		vedit->setPlaceholderText(QStringLiteral("Text dieser Zeile"));
 		vedit->setFixedHeight(34);
 		auto *up_btn = new QToolButton(card_inner);
-		up_btn->setObjectName(QStringLiteral("lpStyleToggle"));
+		up_btn->setObjectName(QStringLiteral("lpRowUp"));
 		up_btn->setFixedSize(24, 34);
 		up_btn->setAutoRaise(true);
 		up_btn->setText(QStringLiteral("▲"));
 		up_btn->setToolTip(QStringLiteral("Zeile nach oben verschieben"));
 		auto *down_btn = new QToolButton(card_inner);
-		down_btn->setObjectName(QStringLiteral("lpStyleToggle"));
+		down_btn->setObjectName(QStringLiteral("lpRowDown"));
 		down_btn->setFixedSize(24, 34);
 		down_btn->setAutoRaise(true);
 		down_btn->setText(QStringLiteral("▼"));
@@ -1041,14 +1050,14 @@ void LiedplanDock::create_row_widget(const LiedplanCard &card)
 	lbl_css->setText(QStringLiteral("▶ GENERELLE CSS-REGELN"));
 	lbl_css->setToolTip(QStringLiteral("CSS-Regeln ein-/ausklappen"));
 	auto *css_add_btn = new QToolButton(css_frame);
-	css_add_btn->setObjectName(QStringLiteral("lpStyleToggle"));
+	css_add_btn->setObjectName(QStringLiteral("lpCssAdd"));
 	css_add_btn->setFixedSize(28, 28);
 	css_add_btn->setAutoRaise(true);
 	css_add_btn->setIcon(theme_icon("plus.svg"));
 	css_add_btn->setIconSize(QSize(16, 16));
 	css_add_btn->setToolTip(QStringLiteral("CSS-Regel hinzufügen (--variable = wert)"));
 	auto *css_del_btn = new QToolButton(css_frame);
-	css_del_btn->setObjectName(QStringLiteral("lpStyleToggle"));
+	css_del_btn->setObjectName(QStringLiteral("lpCssDel"));
 	css_del_btn->setFixedSize(28, 28);
 	css_del_btn->setAutoRaise(true);
 	css_del_btn->setIcon(theme_icon("trash.svg"));
@@ -1646,6 +1655,10 @@ void LiedplanDock::create_row_widget(const LiedplanCard &card)
 		if (state_.remove_card(card_id)) {
 			save_state();
 		}
+		// Karte weg -> HTML-Datei ebenfalls löschen, sonst bleiben Orphan-Dateien.
+		std::error_code ec;
+		std::filesystem::remove(
+		    std::filesystem::u8path(liedplan_html::cards_dir() + "/" + card_id + ".html"), ec);
 		liedplan_scene::remove_everywhere(card_id);
 		cards_layout_->removeWidget(row_widget);
 		row_widgets_.erase(std::remove(row_widgets_.begin(), row_widgets_.end(), row_widget),
@@ -2010,6 +2023,9 @@ void LiedplanDock::on_clear_all()
 	for (const auto &id : ids) {
 		if (cancel_ && *cancel_)
 			return;
+		std::error_code ec;
+		std::filesystem::remove(
+		    std::filesystem::u8path(liedplan_html::cards_dir() + "/" + id + ".html"), ec);
 		liedplan_scene::remove_everywhere(id);
 	}
 }

@@ -749,6 +749,35 @@ std::string cards_dir()
 	return out;
 }
 
+std::size_t prune_orphan_card_html(const std::vector<std::string> &live_ids)
+{
+	const std::string dir = cards_dir();
+	if (dir.empty())
+		return 0;
+
+	std::error_code ec;
+	std::filesystem::directory_iterator it(std::filesystem::u8path(dir), ec);
+	if (ec)
+		return 0;
+
+	std::size_t removed = 0;
+	for (const auto &entry : it) {
+		if (!entry.is_regular_file(ec) || ec)
+			continue;
+		const std::string name = entry.path().filename().u8string();
+		if (name.size() < 6 || name.compare(name.size() - 5, 5, ".html") != 0)
+			continue;
+		const std::string stem = name.substr(0, name.size() - 5);
+		if (std::find(live_ids.begin(), live_ids.end(), stem) != live_ids.end())
+			continue;
+		std::error_code rm;
+		std::filesystem::remove(entry.path(), rm);
+		if (!rm)
+			++removed;
+	}
+	return removed;
+}
+
 std::string templates_dir()
 {
 #ifdef LIEDPLAN_TEST_NO_OBS
