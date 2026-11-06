@@ -450,6 +450,11 @@ LiedplanDock::LiedplanDock(const std::string &state_path, QWidget *parent)
 				}
 			}
 		}
+		// IMP-S: Undo stellt Karten-Daten wieder her — die Karten-HTMLs wurden
+		// beim Leeren gelöscht bzw. weggepruned. Alle wiederhergestellten Karten
+		// als dirty markieren, damit save_state() die HTMLs neu schreibt.
+		for (const auto &c : state_.cards)
+			mark_card_dirty_and_schedule(this, c.id);
 		save_state();
 		rebuild_rows();
 		sync_all_cards_live(prev_ids);
@@ -1554,8 +1559,13 @@ void LiedplanDock::create_row_widget(const LiedplanCard &card)
 	connect(tpl_edit, &QLineEdit::textChanged, tpl_timer, [tpl_timer]() {
 		tpl_timer->start();
 	});
-	connect(tpl_timer, &QTimer::timeout, this, [this, card_id, tpl_edit]() {
-		const QString t = tpl_edit->text().trimmed();
+	connect(tpl_timer, &QTimer::timeout, this,
+		[this, card_id, tpl_guard = QPointer<QLineEdit>(tpl_edit)]() {
+			// IMP-S: style_section (und damit tpl_edit) kann vor dem Timeout
+			// zerstört sein — QPointer guardet den dangling Zeiger.
+			if (!tpl_guard)
+				return;
+			const QString t = tpl_guard->text().trimmed();
 		LiedplanCard *c = find_card_mut(card_id);
 		if (!c || c->template_id == t.toUtf8().toStdString())
 			return;
@@ -3693,6 +3703,10 @@ void LiedplanDock::on_open_settings_dialog()
 
 void LiedplanDock::save_state()
 {
+	// IMP-S: Abbruch vor allen Writes prüfen — sonst bleibt bei Abbruch mitten
+	// im Loop ein partial geschriebener Zustand (HTML ohne state.json) stehen.
+	if (cancel_ && *cancel_)
+		return;
 	auto it = g_dock_schedulers.find(this);
 	if (it != g_dock_schedulers.end()) {
 		if (it->second.timer && it->second.timer->isActive())
@@ -3700,12 +3714,12 @@ void LiedplanDock::save_state()
 		std::vector<std::string> ids;
 		ids.swap(it->second.dirty_cards);
 		for (const std::string &id : ids) {
-			if (cancel_ && *cancel_)
-				return;
 			if (const LiedplanCard *c = find_card_mut(id)) {
 				std::string html_path;
 				if (liedplan_html::write_card(*c, html_path, state_.settings)) {
 					lp_log("HTML geschrieben: " + html_path);
+					// IMP-S: Live-Text/Farbe ohne Reload in alle Szenen pushen.
+					liedplan_scene::push_all_scenes(*c, state_.settings);
 				}
 			}
 		}

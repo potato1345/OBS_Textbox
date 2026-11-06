@@ -78,6 +78,9 @@ obs_data_t *make_settings(const LiedplanCard &card, const std::string &local_fil
 	obs_data_set_int(settings, "width", kLiedplanCardWidth);
 	obs_data_set_int(settings, "height", kBrowserCardHeight);
 	obs_data_set_int(settings, "fps", kBrowserFps);
+	// IMP-S: "Listen for events" — ohne dieses Setting ist der
+	// javascript_event-Proc ein No-Op und Live-Pushes erreichen den Render nie.
+	obs_data_set_bool(settings, "events_listen", true);
 	// WICHTIG: kein "shutdown"-Setting setzen — obs-browser interpretiert
 	// shutdown:true als "CEF-Source angehalten" → schwarze Box.
 	// Default (nicht gesetzt / false) = Source startet und rendert.
@@ -114,6 +117,16 @@ void send_to_current_scene(const LiedplanCard &card, const LiedplanSettings &set
 	if (item) {
 		obs_source_t *src = obs_sceneitem_get_source(item);
 		if (is_browser_source(src)) {
+			// IMP-S: ältere Quellen ohne "Listen for events" selbst-heilen,
+			// sonst bleibt der Live-Push (javascript_event) ein No-Op.
+			obs_data_t *sd = obs_source_get_settings(src);
+			if (sd && !obs_data_get_bool(sd, "events_listen")) {
+				obs_data_set_bool(sd, "events_listen", true);
+				obs_source_update(src, sd);
+				blog(LOG_INFO, "[liedplan] events_listen für '%s' aktiviert", name.c_str());
+			}
+			if (sd)
+				obs_data_release(sd);
 			std::string html_path;
 			if (liedplan_html::write_card(card, html_path, settings)) {
 				lp_log("HTML geschrieben: " + html_path);
@@ -190,6 +203,32 @@ void update_everywhere(const LiedplanCard &card, bool clear, const LiedplanSetti
 
 		liedplan_html::push_update(src, card, clear, settings,
 					   liedplan_html::cards_dir());
+	}
+}
+
+void push_all_scenes(const LiedplanCard &card, const LiedplanSettings &settings)
+{
+	// IMP-S: Text-/Farbänderungen live ohne Reload in allen Szenen pushen.
+	const std::string name = source_name(card.id);
+	const std::vector<obs_scene_t *> scenes = collect_all_scenes();
+	const std::string dir = liedplan_html::cards_dir();
+	for (obs_scene_t *scene : scenes) {
+		obs_sceneitem_t *item = obs_scene_find_source(scene, name.c_str());
+		if (!item)
+			continue;
+		obs_source_t *src = obs_sceneitem_get_source(item);
+		if (!is_browser_source(src))
+			continue;
+		obs_data_t *sd = obs_source_get_settings(src);
+		if (sd && !obs_data_get_bool(sd, "events_listen")) {
+			obs_data_set_bool(sd, "events_listen", true);
+			obs_source_update(src, sd);
+			blog(LOG_INFO, "[liedplan] events_listen für '%s' aktiviert", name.c_str());
+		}
+		if (sd)
+			obs_data_release(sd);
+		liedplan_html::push_update(src, card, false, settings, dir);
+		blog(LOG_INFO, "[liedplan] Live-Push für '%s'", name.c_str());
 	}
 }
 

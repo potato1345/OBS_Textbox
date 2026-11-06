@@ -115,20 +115,20 @@
             const setVar = (name, value) => document.documentElement.style.setProperty(name, value);
             if (d.zeilen != null) {
                 for (let i = 0; i < d.zeilen.length && i < 8; i++) {
-                    setVar('--zeile-' + (i + 1), '"' + String(d.zeilen[i]) + '"');
-                    if (d.vn && d.vn[i]) setVar(d.vn[i], '"' + String(d.zeilen[i]) + '"');
+                    setVar('--zeile-' + (i + 1), JSON.stringify(d.zeilen[i]));
+                    if (d.vn && d.vn[i]) setVar(d.vn[i], JSON.stringify(d.zeilen[i]));
                 }
                 setVar('--zeile-count', String(d.zeilen.length));
             } else {
-                if (d.zeile1 != null) setVar('--zeile-1', '"' + String(d.zeile1) + '"');
-                if (d.zeile2 != null) setVar('--zeile-2', '"' + String(d.zeile2) + '"');
-                if (d.zeile3 != null) setVar('--zeile-3', '"' + String(d.zeile3) + '"');
+                if (d.zeile1 != null) setVar('--zeile-1', JSON.stringify(d.zeile1));
+                if (d.zeile2 != null) setVar('--zeile-2', JSON.stringify(d.zeile2));
+                if (d.zeile3 != null) setVar('--zeile-3', JSON.stringify(d.zeile3));
             }
             if (d.box_bg != null) setVar('--lp-bg-color', d.box_bg);
             if (d.text_color != null) setVar('--lp-text-color', d.text_color);
             if (d.triangle_color_a != null) setVar('--lp-corner-a', d.triangle_color_a);
             if (d.triangle_color_b != null) setVar('--lp-corner-b', d.triangle_color_b);
-            if (d.anim_file != null) setVar('--anim-file', '"' + String(d.anim_file) + '"');
+            if (d.anim_file != null) setVar('--anim-file', JSON.stringify(d.anim_file));
             if (d.show_anim != null) setVar('--show-anim', String(d.show_anim));
             if (d.anim_scale != null) setVar('--anim-scale', String(d.anim_scale));
             if (d.anim_x != null) setVar('--anim-x', String(d.anim_x) + 'px');

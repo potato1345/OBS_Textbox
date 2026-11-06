@@ -515,6 +515,32 @@ int main()
 	check(infer_style_type("#ff00000") == "text",
 	      "9c. infer_style_type: 8-Zeichen-Hex -> text");
 
+	// 10) IMP-S: CSS-Value-Sanitizer lehnt url()/expression() ab.
+	check(liedplan_html::sanitize_css_value("url(javascript:alert(1))").empty(),
+	      "10a. url() wird verworfen");
+	check(liedplan_html::sanitize_css_value("expression( x)").empty(),
+	      "10b. expression() wird verworfen");
+	check(liedplan_html::sanitize_css_value("rgb(255 0 0)") == "rgb(255 0 0)",
+	      "10c. normale Funktionswerte bleiben erhalten");
+
+	// 11) IMP-S: relative Template-IDs können nicht traversieren.
+	{
+		const std::string tdir = liedplan_html::templates_dir();
+		// Datei oberhalb des Template-Dirs, würde ohne Guard getroffen.
+		const std::filesystem::path outside =
+			std::filesystem::u8path(tdir) / ".." / "evil_outside.html";
+		write_file_bytes(outside, "<html><body>OUTSIDE {{zeile1}}</body></html>");
+		LiedplanCard c;
+		c.id = "box_trav";
+		c.zeile1 = "TOUCHED";
+		const std::string html =
+			liedplan_html::render_template_html(c, "../evil_outside.html", false);
+		check(html.find("OUTSIDE") == std::string::npos,
+		      "11a. ../-Template-ID trifft die Datei oberhalb nicht", html);
+		std::error_code ec;
+		std::filesystem::remove(outside, ec);
+	}
+
 	std::cout << "All test-liedplan-templates checks passed.\n";
 	return 0;
 }

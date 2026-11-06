@@ -31,6 +31,11 @@ void send_to_current_scene(const LiedplanCard &card,
 void update_everywhere(const LiedplanCard &card, bool clear,
                        const LiedplanSettings &settings = LiedplanSettings());
 
+/** Pushed Karten-Updates per javascript_event in alle Browser-Quellen aller
+ * Szenen (Live-Text/Farbe ohne Reload). */
+void push_all_scenes(const LiedplanCard &card,
+                     const LiedplanSettings &settings);
+
 /** Schreibt die Karten-HTML neu und reloadt alle Browser-Quellen dieser Karte
  * in allen Szenen (Template-Wechsel, Spec F2b — Document-Neuerstellung). */
 void reload_everywhere(const LiedplanCard &card,

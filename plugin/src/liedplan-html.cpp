@@ -137,15 +137,15 @@ std::string build_repo_listener_script()
 	     "        if (d.zeilen != null) {\n"
 	     "            var n = 0;\n"
 	     "            for (var i = 0; i < d.zeilen.length && i < 8; i++) {\n"
-	     "                setVar(\"--zeile-\" + (i + 1), '\"' + String(d.zeilen[i]) + '\"');\n"
-     "                if (d.vn && d.vn[i]) setVar(d.vn[i], '\"' + String(d.zeilen[i]) + '\"');\n"
+	     "                setVar(\"--zeile-\" + (i + 1), JSON.stringify(d.zeilen[i]));\n"
+	     "                if (d.vn && d.vn[i]) setVar(d.vn[i], JSON.stringify(d.zeilen[i]));\n"
 	     "                n = i + 1;\n"
 	     "            }\n"
 	     "            setVar(\"--zeile-count\", String(n));\n"
 	     "        } else {\n"
-	     "            if (d.zeile1 != null) setVar(\"--zeile-1\", '\"' + String(d.zeile1) + '\"');\n"
-	     "            if (d.zeile2 != null) setVar(\"--zeile-2\", '\"' + String(d.zeile2) + '\"');\n"
-	     "            if (d.zeile3 != null) setVar(\"--zeile-3\", '\"' + String(d.zeile3) + '\"');\n"
+	     "            if (d.zeile1 != null) setVar(\"--zeile-1\", JSON.stringify(d.zeile1));\n"
+	     "            if (d.zeile2 != null) setVar(\"--zeile-2\", JSON.stringify(d.zeile2));\n"
+	     "            if (d.zeile3 != null) setVar(\"--zeile-3\", JSON.stringify(d.zeile3));\n"
 	     "        }\n"
 	     "        if (d.style != null) {\n"
 	     "            for (var j = 0; j < d.style.length; j++) {\n"
@@ -159,7 +159,7 @@ std::string build_repo_listener_script()
 	     "        if (d.triangle_color_a != null) setVar(\"--triangle-color-a\", d.triangle_color_a);\n"
 	     "        if (d.triangle_color_b != null) setVar(\"--triangle-color-b\", d.triangle_color_b);\n"
 	     "        if (d.rainbow != null) applyRainbow(d.rainbow);\n"
-	     "        if (d.anim_file != null) setVar(\"--anim-file\", '\"' + String(d.anim_file) + '\"');\n"
+	     "        if (d.anim_file != null) setVar(\"--anim-file\", JSON.stringify(d.anim_file));\n"
 	     "        if (d.show_anim != null) setVar(\"--show-anim\", String(d.show_anim));\n"
 	     "        if (d.anim_scale != null) setVar(\"--anim-scale\", String(d.anim_scale));\n"
 	     "        if (d.anim_x != null) setVar(\"--anim-x\", String(d.anim_x) + \"px\");\n"
@@ -246,6 +246,14 @@ std::string escape_css_string(const std::string &input)
 			break;
 		case '&':
 			out += "\\26 ";
+			break;
+		// IMP-S: Backtick/Term-Schützer escapen — sonst können in CSS-Strings
+		// Template-Literal-artige Inhalte stehen.
+		case '`':
+			out += "\\60 ";
+			break;
+		case '$':
+			out += "\\24 ";
 			break;
 		default:
 			out += c;
@@ -1000,14 +1008,24 @@ std::string render_template_html(const LiedplanCard &card, const std::string &te
 	const bool ends_html = template_id.size() >= 5 &&
 		template_id.compare(template_id.size() - 5, 5, ".html") == 0;
 	std::vector<std::string> candidates;
-	candidates.push_back(template_id);
+	// IMP-S: relative Template-IDs werden zu harmlosen Namen normalisiert
+	// (kein '/', '\\', keine Traversal); absolute Pfade bleiben erlaubt
+	// (vom Nutzer via GUI-Dateipicker gewählt).
+	if (std::filesystem::u8path(template_id).is_absolute())
+		candidates.push_back(template_id);
+	std::string tid_safe;
+	for (unsigned char uc : template_id) {
+		if ((uc >= 'a' && uc <= 'z') || (uc >= 'A' && uc <= 'Z') ||
+		    (uc >= '0' && uc <= '9') || uc == '_' || uc == '-' || uc == '.')
+			tid_safe.push_back(static_cast<char>(uc));
+	}
 	const std::string dirs[] = {user_dir, builtin_dir};
 	for (const std::string &dir : dirs) {
-		if (dir.empty())
+		if (dir.empty() || tid_safe.empty())
 			continue;
 		if (!ends_html)
-			candidates.push_back(dir + "/" + template_id + ".html");
-		candidates.push_back(dir + "/" + template_id);
+			candidates.push_back(dir + "/" + tid_safe + ".html");
+		candidates.push_back(dir + "/" + tid_safe);
 	}
 	for (const std::string &tpl_path : candidates) {
 		const std::string tpl_html = read_utf8_file(tpl_path.c_str());
@@ -1330,7 +1348,7 @@ std::string card_html(const LiedplanCard &card)
 		"\tif (d.triangle_color_a != null) setVar(\"--triangle-color-a\", d.triangle_color_a);\n"
 		"\tif (d.triangle_color_b != null) setVar(\"--triangle-color-b\", d.triangle_color_b);\n"
 		"\tif (d.rainbow != null) applyRainbow(d.rainbow);\n"
-		"\tif (d.anim_file != null) setVar(\"--anim-file\", '\"' + String(d.anim_file) + '\"');\n"
+		"\tif (d.anim_file != null) setVar(\"--anim-file\", JSON.stringify(d.anim_file));\n"
 		"\tif (d.show_anim != null) setVar(\"--show-anim\", String(d.show_anim));\n"
 		"\tif (d.anim_scale != null) setVar(\"--anim-scale\", String(d.anim_scale));\n"
 		"\tif (d.anim_x != null) setVar(\"--anim-x\", String(d.anim_x) + \"px\");\n"
@@ -1511,6 +1529,16 @@ std::string sanitize_css_value(const std::string &raw)
 			continue;
 		out.push_back(ch);
 	}
+	// IMP-S: Funktions-/Schema-Werte ablehnen — url()/expression() wären CSS-
+	// Data-Exfiltration (url() kann externe Requests auslösen).
+	std::string low = out;
+	for (auto &ch : low)
+		ch = static_cast<char>(std::tolower(static_cast<unsigned char>(ch)));
+	if (low.find("url(") != std::string::npos ||
+	    low.find("expression(") != std::string::npos ||
+	    low.find("javascript:") != std::string::npos ||
+	    low.find("vbscript:") != std::string::npos)
+		return {};
 	return out;
 }
 } // namespace liedplan_html

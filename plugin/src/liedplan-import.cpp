@@ -236,6 +236,11 @@ std::string format_http_error(DWORD status)
 		return "Google-API-Fehler 403 — Zugriff verweigert";
 	if (status == 404)
 		return "Google-API-Fehler 404 — Formular nicht gefunden";
+	// IMP-S: Rate-Limit und Serverfehler unterscheidbar machen.
+	if (status == 429)
+		return "Google-API-Fehler 429 — Rate Limit erreicht, erneut nach wenigen Sekunden";
+	if (status >= 500)
+		return "Google-API-Fehler " + std::to_string(status) + " — Serverfehler bei Google, erneut versuchen";
 	return "Google-API-Fehler " + std::to_string(status) + " — Anfrage fehlgeschlagen";
 }
 
@@ -248,7 +253,8 @@ std::optional<HttpResponse> winhttp_request(const std::string &method,
 					    const std::string &url,
 					    const std::wstring &headers,
 					    const std::string &req_body,
-					    std::string *out_error)
+					    std::string *out_error,
+					    bool require_https = false)
 {
 	const std::wstring wurl = utf8_to_wide(url);
 	URL_COMPONENTS uc{};
@@ -290,6 +296,13 @@ std::optional<HttpResponse> winhttp_request(const std::string &method,
 		return std::nullopt;
 	}
 
+	// IMP-S: Token-/OAuth-Endpunkte verlangen HTTPS — ein downgrade auf http
+	// wäre Credential-Klartext im Netz.
+	if (require_https && uc.nScheme != INTERNET_SCHEME_HTTPS) {
+		if (out_error)
+			*out_error = "HTTPS für diese Anfrage erforderlich — Anfrage abgebrochen.";
+		return std::nullopt;
+	}
 	const DWORD flags = (uc.nScheme == INTERNET_SCHEME_HTTPS) ? WINHTTP_FLAG_SECURE : 0;
 	const std::wstring wmethod = utf8_to_wide(method);
 	WinHttpHandle request(WinHttpOpenRequest(connect, wmethod.c_str(), path.c_str(), nullptr,
@@ -735,7 +748,15 @@ ImportError parse_csv_file(const std::filesystem::path &path,
 			*out_error = "CSV-Datei konnte nicht gelesen werden: " + path.u8string();
 		return ImportError::File;
 	}
-
+	// IMP-S: harte Size-Cap — sonst OOM bei pathological großen Dateien.
+	{
+		std::error_code sz_ec;
+		const auto sz = std::filesystem::file_size(path, sz_ec);
+		if (!sz_ec && sz > 50u * 1024u * 1024u) {
+			*out_error = "CSV-Datei zu groß (>50 MB): " + path.u8string();
+			return ImportError::File;
+		}
+	}
 	std::ostringstream ss;
 	ss << in.rdbuf();
 	return parse_csv_string(ss.str(), out_result, out_count, out_error);
@@ -1421,7 +1442,15 @@ ImportError parse_xlsx_file(const std::filesystem::path &path,
 			*out_error = "XLSX-Datei konnte nicht gelesen werden: " + path.u8string();
 		return ImportError::File;
 	}
-
+	// IMP-S: Size-Cap gegen pathological große Dateien (OOM).
+	{
+		std::error_code sz_ec;
+		const auto sz = std::filesystem::file_size(path, sz_ec);
+		if (!sz_ec && sz > 50u * 1024u * 1024u) {
+			*out_error = "XLSX-Datei zu groß (>50 MB): " + path.u8string();
+			return ImportError::File;
+		}
+	}
 	std::ostringstream ss;
 	ss << in.rdbuf();
 	const std::string bytes = ss.str();
@@ -1516,7 +1545,16 @@ ImportError parse_zip_file(const std::filesystem::path &path,
 			*out_error = "ZIP-Datei konnte nicht gelesen werden: " + path.u8string();
 		return ImportError::File;
 	}
-
+	// IMP-S: Size-Cap gegen pathological große Dateien (OOM).
+	{
+		std::error_code sz_ec;
+		const auto sz = std::filesystem::file_size(path, sz_ec);
+		if (!sz_ec && sz > 100u * 1024u * 1024u) {
+			if (out_error)
+				*out_error = "ZIP-Datei zu groß (>100 MB): " + path.u8string();
+			return ImportError::File;
+		}
+	}
 	std::ostringstream ss;
 	ss << in.rdbuf();
 	const std::string bytes = ss.str();
@@ -1842,7 +1880,8 @@ std::optional<std::string> get_access_token(const std::filesystem::path &token_p
 				      "&client_secret=" + url_encode(client_secret);
 
 	const std::wstring headers = L"Content-Type: application/x-www-form-urlencoded\r\n";
-	auto resp = winhttp_request("POST", token_uri, headers, post_body, out_error);
+	// IMP-S: Token-Refresh nur über HTTPS — Credential-Klartext im POST-Body.
+	auto resp = winhttp_request("POST", token_uri, headers, post_body, out_error, true);
 	if (!resp)
 		return std::nullopt;
 
@@ -1906,7 +1945,7 @@ std::optional<nlohmann::json> fetch_titles(const std::string &form_id,
 	const std::wstring headers =
 		L"Authorization: Bearer " + utf8_to_wide(access_token) + L"\r\n";
 
-	auto resp = winhttp_request("GET", url, headers, {}, out_error);
+	auto resp = winhttp_request("GET", url, headers, {}, out_error, true);
 	if (!resp)
 		return std::nullopt;
 
@@ -1967,7 +2006,7 @@ std::optional<std::vector<nlohmann::json>> fetch_responses(const std::string &fo
 		if (!page_token.empty())
 			url += "&pageToken=" + url_encode(page_token);
 
-		auto resp = winhttp_request("GET", url, headers, {}, out_error);
+		auto resp = winhttp_request("GET", url, headers, {}, out_error, true);
 		if (!resp)
 			return std::nullopt;
 
