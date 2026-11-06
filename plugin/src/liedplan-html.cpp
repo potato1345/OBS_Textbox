@@ -975,8 +975,10 @@ std::string render_template_html(const LiedplanCard &card, const std::string &te
 				if (insert_pos != std::string::npos) {
 					const std::string style_block =
 						"<style>\n" + build_inject_css(card, settings, copy_dir) + "\n</style>\n";
-					const std::string rainbow_block = std::string("<style id=\"lp-rainbow\">") +
-						(card.rainbow_corners ? kRainbowCssRepo : "") + "</style>\n";
+					std::string rainbow_block;
+					if (card.rainbow_corners)
+						rainbow_block = std::string("<style id=\"lp-rainbow\">") +
+							kRainbowCssRepo + "</style>\n";
 					out.insert(insert_pos, style_block + rainbow_block);
 				}
 			}

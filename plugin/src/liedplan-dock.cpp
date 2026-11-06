@@ -1798,8 +1798,15 @@ void LiedplanDock::apply_template_id(const std::string &card_id, const std::stri
 
 	if (template_id.empty()) {
 		set_dock_status(QStringLiteral("Karte %1: Vorlage „index.html“ (classic)")
-				.arg(QString::fromUtf8(card_id.c_str())),
+			.arg(QString::fromUtf8(card_id.c_str())),
 			false);
+	} else if (liedplan_html::render_template_html(*c, template_id, true).empty()) {
+		// IMP-M: Pfad existiert/lesbar? Sonst fällt write_card still auf
+		// classic zurück — ohne Hinweis wäre das für den Nutzer unsichtbar.
+		set_dock_status(QStringLiteral("Vorlage \"%1\" nicht gefunden — Karte %2 nutzt „index.html“ (classic)")
+			.arg(QString::fromUtf8(template_id.c_str()),
+			     QString::fromUtf8(card_id.c_str())),
+			true);
 	} else {
 		set_dock_status(QStringLiteral("Vorlage \"%1\" auf Karte %2 angewendet")
 				.arg(QString::fromUtf8(template_id.c_str()),
