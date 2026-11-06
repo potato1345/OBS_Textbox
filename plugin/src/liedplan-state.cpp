@@ -365,6 +365,14 @@ std::string state_from_json(LiedplanState &s, const nlohmann::json &root)
 
 			loaded_cards.push_back(card_from_json(item));
 		}
+		// IMP-R: doppelte IDs machen remove/rename/HTML-Pfade inkonsistent
+		// (zwei Karten teilen sich dieselbe <id>.html). Ablehn statt Stillstand.
+		for (std::size_t i = 0; i < loaded_cards.size(); ++i) {
+			for (std::size_t j = i + 1; j < loaded_cards.size(); ++j) {
+				if (loaded_cards[i].id == loaded_cards[j].id)
+					return "Duplicate card IDs in state JSON";
+			}
+		}
 	}
 
 	update_next_id_from_cards(loaded_cards, loaded_next_id);

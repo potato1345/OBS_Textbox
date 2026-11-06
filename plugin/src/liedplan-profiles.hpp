@@ -179,13 +179,16 @@ inline bool liedplan_is_default_profile(const std::string &name)
 // Typ einer CSS-Regel: aus dem Wert inferiert, wenn kein type gespeichert ist.
 inline std::string infer_style_type(const std::string &value)
 {
-	if (value.size() >= 7 && value[0] == '#' && value[6] != 'x')
+	// IMP-R: echte #RRGGBB-Laenge (ohne value[6]!='x'-Trick) und negative
+	// Zahlen als num klassifizieren.
+	if (value.size() == 7 && value[0] == '#')
 		return "hex";
 	if (value.size() > 2 && value.compare(value.size() - 2, 2, "px") == 0)
 		return "px";
-	bool digits = !value.empty();
-	for (char ch : value) {
-		if (ch < '0' || ch > '9') {
+	const std::size_t start = (!value.empty() && value[0] == '-') ? 1 : 0;
+	bool digits = value.size() > start;
+	for (std::size_t i = start; i < value.size(); ++i) {
+		if (value[i] < '0' || value[i] > '9') {
 			digits = false;
 			break;
 		}

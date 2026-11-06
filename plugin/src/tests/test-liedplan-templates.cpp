@@ -19,6 +19,8 @@
 
 #include "../liedplan-html.hpp"
 #include "../liedplan-state.hpp"
+#include "../liedplan-textfmt.hpp"
+#include "../liedplan-profiles.hpp"
 
 #include <filesystem>
 #include <fstream>
@@ -477,6 +479,42 @@ int main()
 		std::cerr << g_failures << " check(s) failed.\n";
 		return 1;
 	}
+	// 8) IMP-R: kontextabhaengiges Token-Escape (CSS-String vs. HTML)
+	{
+		const std::string tdir = liedplan_html::templates_dir();
+		const std::filesystem::path css_tpl =
+			std::filesystem::u8path(tdir) / "escape_test.html";
+		write_file_bytes(css_tpl,
+			"<!DOCTYPE html><html><head><style>:root{ --zeile-1: \"{{zeile1}}\"; }"
+			"</style></head><body><p>{{zeile1}}</p></body></html>");
+
+		LiedplanCard c;
+		c.id = "box_esc";
+		c.zeile1 = "A\"; color: red; --evil: \"B<script>";
+
+		const std::string html =
+			liedplan_html::render_template_html(c, "escape_test.html", false);
+		check(html.find("A\"; color: red") == std::string::npos,
+		      "8a. CSS-Kontext: rohes Quote bleibt in der CSS-String", html);
+		check(html.find("--zeile-1: \"A\\\"; color: red; --evil: \\\"B<script>\";") !=
+		      std::string::npos,
+		      "8b. CSS-Kontext: Token ist CSS-escaped", html);
+		check(html.find("<p>A&quot; color: red; --evil: &quot;B&lt;script&gt;</p>") !=
+		      std::string::npos,
+		      "8c. HTML-Kontext: Token ist HTML-escaped", html);
+
+		std::error_code ec;
+		std::filesystem::remove(css_tpl, ec);
+	}
+
+	// 9) IMP-R: #RGB-Kurzform + negative Zahlen als num-Typ (Header ohne Namespace).
+	check(parse_hex_color("#f0a", 0) == 0xff00aa,
+	      "9a. parse_hex_color: #RGB-Kurzform expandiert");
+	check(infer_style_type("-12") == "num",
+	      "9b. infer_style_type: negative Zahl -> num");
+	check(infer_style_type("#ff00000") == "text",
+	      "9c. infer_style_type: 8-Zeichen-Hex -> text");
+
 	std::cout << "All test-liedplan-templates checks passed.\n";
 	return 0;
 }

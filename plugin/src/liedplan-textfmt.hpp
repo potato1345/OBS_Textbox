@@ -24,12 +24,24 @@
  */
 inline uint32_t parse_hex_color(const std::string &hex, uint32_t fallback)
 {
-	if (hex.size() != 7 || hex[0] != '#')
+	// #RGB-Kurzform (CSS) auf #RRGGBB normalisieren.
+	std::string full = hex;
+	if (full.size() == 4 && full[0] == '#') {
+		std::string expanded;
+		expanded.reserve(7);
+		expanded += '#';
+		for (size_t i = 1; i < 4; ++i) {
+			expanded += full[i];
+			expanded += full[i];
+		}
+		full = expanded;
+	}
+	if (full.size() != 7 || full[0] != '#')
 		return fallback;
 
 	uint32_t value = 0;
 	for (size_t i = 1; i < 7; ++i) {
-		const unsigned char ch = static_cast<unsigned char>(hex[i]);
+		const unsigned char ch = static_cast<unsigned char>(full[i]);
 		uint32_t nibble = 0;
 		if (ch >= '0' && ch <= '9') {
 			nibble = static_cast<uint32_t>(ch - '0');

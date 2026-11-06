@@ -38,6 +38,7 @@ OBS_DECLARE_MODULE()
 #ifdef ENABLE_QT
 #include "liedplan-dock.hpp"
 #include <QDockWidget>
+#include <QPointer>
 #include <QEvent>
 #include <QGuiApplication>
 #include <QRect>
@@ -164,9 +165,20 @@ bool obs_module_load(void)
 				}
 			}
 			/* OBS versteckt Custom-Docks evtl. verzoegert nach dem Load;
-			 * Show erneut nach 1s und 3s erzwingen. */
-			QTimer::singleShot(1000, g_dock, [d = g_dock] { d->show(); d->raise(); });
-			QTimer::singleShot(3000, g_dock, [d = g_dock] {
+			 * Show erneut nach 1s und 3s erzwingen. QPointer statt Roh-Pointer:
+			 * nach obs_plugin_unload ist g_dock geloescht, die Timer duerfen
+			 * dann nicht mehr dereferenziert werden. */
+			const QPointer<QDockWidget> show_dock = g_dock;
+			QTimer::singleShot(1000, g_dock, [show_dock] {
+				if (show_dock) {
+					show_dock->show();
+					show_dock->raise();
+				}
+			});
+			QTimer::singleShot(3000, g_dock, [show_dock] {
+				QDockWidget *d = show_dock.data();
+				if (!d)
+					return;
 				d->show();
 				d->raise();
 				if (d->isFloating()) {

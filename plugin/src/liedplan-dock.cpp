@@ -1789,7 +1789,8 @@ void LiedplanDock::create_row_widget(const LiedplanCard &card)
 		        row_widget->deleteLater();
 		        create_row_widget(*c);
 		        refresh_top_row();
-		        schedule_save();
+		        // IMP-R: Dirty-Eintrag mit der NEUEN ID (die alte ID existiert nicht mehr).
+		        mark_card_dirty_and_schedule(this, new_id);
 	        });
 
 	const int insert_idx = std::max(0, cards_layout_->count() - 1);
@@ -2156,6 +2157,9 @@ void LiedplanDock::apply_import_result(const liedplan_import::LiedplanImportResu
 		state_.cards[i].zeile1 = enriched[i].zeile1;
 		state_.cards[i].zeile2 = enriched[i].zeile2;
 		state_.cards[i].zeile3 = enriched[i].zeile3;
+		// IMP-R: importierte Zeilen überschreiben alte rows (rows gewinnen
+		// sonst in effective_rows und der Import wäre unsichtbar).
+		state_.cards[i].rows.clear();
 	}
 	// Überzählige Bestandskarten bereinigen, damit keine Lieder der Vorwoche stehen bleiben.
 	for (std::size_t i = total_items; i < state_.cards.size(); ++i) {
@@ -2163,6 +2167,7 @@ void LiedplanDock::apply_import_result(const liedplan_import::LiedplanImportResu
 			state_.cards[i].zeile1.clear();
 		state_.cards[i].zeile2.clear();
 		state_.cards[i].zeile3.clear();
+		state_.cards[i].rows.clear();
 	}
 
 	save_state();
@@ -2828,6 +2833,8 @@ void LiedplanDock::on_open_import_dialog()
 				state_.cards[i].zeile1 = pending_ai_res->items[i].zeile1;
 				state_.cards[i].zeile2 = pending_ai_res->items[i].zeile2;
 				state_.cards[i].zeile3 = pending_ai_res->items[i].zeile3;
+				// IMP-R: rows fallen auf die neuen zeile1..3 zurueck.
+				state_.cards[i].rows.clear();
 			}
 			// Überzählige Bestandskarten bereinigen, damit keine Lieder der Vorwoche stehen bleiben.
 			for (std::size_t i = n; i < state_.cards.size(); ++i) {
@@ -2835,6 +2842,7 @@ void LiedplanDock::on_open_import_dialog()
 					state_.cards[i].zeile1.clear();
 				state_.cards[i].zeile2.clear();
 				state_.cards[i].zeile3.clear();
+				state_.cards[i].rows.clear();
 			}
 
 			save_state();

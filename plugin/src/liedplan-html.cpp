@@ -495,7 +495,7 @@ std::string sanitize_basename(const std::string &name)
 	return out.empty() ? "anim" : out;
 }
 
-// true, wenn `p` (absolut) innerhalb des Verzeichnisses `dir` liegt (oder gleich).
+// true, wenn `p` (absolut) strikt innerhalb des Verzeichnisses `dir` liegt.
 bool path_inside_dir(const std::string &p, const std::string &dir)
 {
 	std::error_code ec1, ec2;
@@ -599,33 +599,39 @@ std::string normalize_anim_src(const std::string &raw, const LiedplanSettings &s
 
 		std::error_code ec;
 		const std::filesystem::path img_path = std::filesystem::u8path(resolved);
-		const auto mtime = std::filesystem::last_write_time(img_path, ec);
-		if (!ec) {
-			const auto fsize = std::filesystem::file_size(img_path, ec);
-			if (!ec && fsize <= 16 * 1024 * 1024) {
-				const std::size_t sz = static_cast<std::size_t>(fsize);
-				const auto key_meta = std::make_pair(mtime, sz);
-				{
-					std::lock_guard<std::mutex> lk(s_cache_mtx);
+		std::pair<std::filesystem::file_time_type, std::size_t> key_meta{};
+		bool cacheable = false;
+		{
+			// IMP-R: Stat und Cache-Look unter demselben Mutex (kein TOCTOU
+			// zwischen last_write_time und Lookup).
+			std::lock_guard<std::mutex> lk(s_cache_mtx);
+			const auto mtime = std::filesystem::last_write_time(img_path, ec);
+			if (!ec) {
+				const auto fsize = std::filesystem::file_size(img_path, ec);
+				if (!ec && fsize <= 16 * 1024 * 1024) {
+					key_meta = std::make_pair(mtime,
+						static_cast<std::size_t>(fsize));
+					cacheable = true;
 					const auto it = s_anim_cache.find(resolved);
 					if (it != s_anim_cache.end() &&
 					    it->second.first == key_meta) {
 						return it->second.second;
 					}
 				}
-				std::string bytes;
-				if (read_file_bytes(resolved, 16 * 1024 * 1024, bytes)) {
-					std::string uri = "data:" + mime_for_ext(ext) +
-							  ";base64," + base64_encode(bytes);
-					std::lock_guard<std::mutex> lk(s_cache_mtx);
-					s_anim_cache[resolved] =
-						std::make_pair(key_meta, uri);
-					return uri;
-				}
+			} else {
+				s_anim_cache.erase(resolved);
 			}
-		} else {
-			std::lock_guard<std::mutex> lk(s_cache_mtx);
-			s_anim_cache.erase(resolved);
+		}
+		if (cacheable) {
+			std::string bytes;
+			if (read_file_bytes(resolved, 16 * 1024 * 1024, bytes)) {
+				std::string uri = "data:" + mime_for_ext(ext) +
+					  ";base64," + base64_encode(bytes);
+				std::lock_guard<std::mutex> lk(s_cache_mtx);
+				s_anim_cache[resolved] =
+					std::make_pair(key_meta, uri);
+				return uri;
+			}
 		}
 		// Lesefehler → Fallback wie vorher (file-URL, best effort).
 	}
@@ -822,6 +828,20 @@ std::string templates_dir()
 	return out;
 }
 
+// true, wenn das Token-Vorkommen in einer gequoteten String derselben Zeile
+// steht (CSS-Kontext: --zeile-1: "{{zeile1}}"); sonst HTML-Kontext.
+static bool token_in_quoted_string(const std::string &text, std::size_t pos)
+{
+	const std::size_t line_start = text.rfind('\n', pos);
+	const std::size_t from = (line_start == std::string::npos) ? 0 : line_start + 1;
+	std::size_t quotes = 0;
+	for (std::size_t i = from; i < pos; ++i) {
+		if (text[i] == '"')
+			++quotes;
+	}
+	return (quotes % 2) != 0;
+}
+
 std::string substitute_tokens(const LiedplanCard &card, const std::string &template_html,
 			      bool clear, const LiedplanSettings &settings,
 			      const std::string &copy_dir)
@@ -855,6 +875,8 @@ std::string substitute_tokens(const LiedplanCard &card, const std::string &templ
 	const std::string clear_str = clear ? "1" : "0";
 
 	const std::pair<const char *, std::string> tokens[] = {
+		// IMP-R: Werte werden im Substitutionsloop kontextabhaengig escaped
+		// (CSS-String vs. HTML) — hier bleiben sie roh.
 		{"{{zeile1}}", clear ? std::string() : card.zeile1},
 		{"{{zeile2}}", clear ? std::string() : card.zeile2},
 		{"{{zeile3}}", clear ? std::string() : card.zeile3},
@@ -882,8 +904,15 @@ std::string substitute_tokens(const LiedplanCard &card, const std::string &templ
 		const std::string &val = kv.second;
 		std::size_t pos = 0;
 		while ((pos = out.find(key, pos)) != std::string::npos) {
-			out.replace(pos, key.size(), val);
-			pos += val.size();
+			// IMP-R: User-Text (auch aus Google-Formularen) kontextabhaengig
+			// escaped: innerhalb gequoteter CSS-Strings CSS-sicher, sonst
+			// HTML-sicher. Sonst verlaesst ein Quote die CSS-String
+			// (CSS-Injection) oder '<' bricht HTML (Script im Browser-Source).
+			const std::string esc = token_in_quoted_string(out, pos)
+			    ? escape_css_string(val)
+			    : escape_html(val);
+			out.replace(pos, key.size(), esc);
+			pos += esc.size();
 		}
 	}
 	// Dynamische Zeilen-Tokens {{zeile-1}}..{{zeile-8}} + {{zeile-count}}.
@@ -893,8 +922,12 @@ std::string substitute_tokens(const LiedplanCard &card, const std::string &templ
 		const std::string val = (i < rows.size() && !clear) ? rows[i].value : std::string();
 		std::size_t pos = 0;
 		while ((pos = out.find(key, pos)) != std::string::npos) {
-			out.replace(pos, key.size(), val);
-			pos += val.size();
+			// IMP-R: kontextabhaengiges Escape wie oben.
+			const std::string esc = token_in_quoted_string(out, pos)
+			    ? escape_css_string(val)
+			    : escape_html(val);
+			out.replace(pos, key.size(), esc);
+			pos += esc.size();
 		}
 	}
 	{
@@ -1354,8 +1387,10 @@ bool write_card(const LiedplanCard &card, std::string &path_out, const LiedplanS
 	const std::string full_path = dir + "/" + safe_id + ".html";
 
 	std::ofstream file(std::filesystem::u8path(full_path), std::ios::binary | std::ios::trunc);
-	if (!file.is_open())
+	if (!file.is_open()) {
+		path_out.clear(); // Writer erwartet leeren Pfad bei Misserfolg.
 		return false;
+	}
 
 	file.write(html.data(), static_cast<std::streamsize>(html.size()));
 	file.flush();
