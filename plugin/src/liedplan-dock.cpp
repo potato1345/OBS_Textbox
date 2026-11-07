@@ -369,7 +369,27 @@ LiedplanDock::LiedplanDock(const std::string &state_path, QWidget *parent)
 	dock_status_lbl_->setContentsMargins(4, 0, 4, 0);
 	dock_status_lbl_->setWordWrap(true);
 	dock_status_lbl_->setVisible(false);
-	root_layout->addWidget(dock_status_lbl_);
+	dock_status_close_ = new QToolButton(this); // c1: Schließen-Button für die Statusmeldung
+	dock_status_close_->setObjectName(QStringLiteral("lpDockStatusClose"));
+	dock_status_close_->setAutoRaise(true);
+	dock_status_close_->setIcon(theme_icon("close.svg"));
+	dock_status_close_->setIconSize(QSize(12, 12));
+	dock_status_close_->setToolTip(QStringLiteral("Meldung schließen"));
+	dock_status_close_->setVisible(false);
+	connect(dock_status_close_, &QToolButton::clicked, this, [this]() {
+		if (dock_status_lbl_)
+			dock_status_lbl_->setVisible(false);
+		if (dock_status_close_)
+			dock_status_close_->setVisible(false);
+		if (dock_status_timer_)
+			dock_status_timer_->stop();
+	});
+	auto *status_row = new QHBoxLayout();
+	status_row->setContentsMargins(4, 0, 4, 0);
+	status_row->setSpacing(4);
+	status_row->addWidget(dock_status_lbl_, 1);
+	status_row->addWidget(dock_status_close_, 0);
+	root_layout->addLayout(status_row);
 
 	auto *bottom_toolbar = new QHBoxLayout();
 	bottom_toolbar->setContentsMargins(4, 2, 4, 4);
@@ -800,8 +820,8 @@ void LiedplanDock::create_row_widget(const LiedplanCard &card)
 	auto *lbl_rows = new QToolButton(rows_frame);
 	lbl_rows->setObjectName(QStringLiteral("lpFieldLabel"));
 	lbl_rows->setAutoRaise(true);
-	lbl_rows->setText(QStringLiteral("▼ ZEILEN"));
-	lbl_rows->setToolTip(QStringLiteral("ZEILEN ein-/ausklappen"));
+	lbl_rows->setText(QStringLiteral("▼ SPEZIFISCHE CSS-REGELN")); // c4: Umbenennung von "ZEILEN"
+	lbl_rows->setToolTip(QStringLiteral("Spezifische CSS-Regeln ein-/ausklappen"));
 	auto *row_add_btn = new QToolButton(rows_frame);
 	row_add_btn->setObjectName(QStringLiteral("lpRowAdd"));
 	row_add_btn->setFixedSize(28, 28);
@@ -832,8 +852,8 @@ void LiedplanDock::create_row_widget(const LiedplanCard &card)
 	connect(lbl_rows, &QToolButton::clicked, rows_frame,
 	        [rows_collapsed, label_edits, value_edits, move_btns, lbl_rows]() {
 		        *rows_collapsed = !*rows_collapsed;
-		        lbl_rows->setText(*rows_collapsed ? QStringLiteral("▶ ZEILEN")
-		                                          : QStringLiteral("▼ ZEILEN"));
+		        lbl_rows->setText(*rows_collapsed ? QStringLiteral("▶ SPEZIFISCHE CSS-REGELN")
+		                                          : QStringLiteral("▼ SPEZIFISCHE CSS-REGELN"));
 		        for (auto *e : *label_edits)
 			        e->setVisible(!*rows_collapsed);
 		        for (auto *e : *value_edits)
@@ -1067,11 +1087,13 @@ void LiedplanDock::create_row_widget(const LiedplanCard &card)
 	new_prof_btn->setToolTip(
 		QStringLiteral("Aktuelles Karten-Farbprofil (Text/Box/Ecken/Deckkraft) speichern"));
 
-	auto *prof_rename_btn = new QPushButton(QStringLiteral("✎"), style_section);
+	auto *prof_rename_btn = new QPushButton(style_section); // c2: eigenes Umbenennen-Icon statt ✎
 	prof_rename_btn->setObjectName(QStringLiteral("lpBtnRenameProfile"));
 	prof_rename_btn->setFixedHeight(34);
 	prof_rename_btn->setToolTip(QStringLiteral("Aktuelles Profil umbenennen"));
 	prof_rename_btn->setMaximumWidth(40);
+	prof_rename_btn->setIcon(theme_icon("rename.svg"));
+	prof_rename_btn->setIconSize(QSize(16, 16));
 
 	auto *prof_del_btn = new QPushButton(QStringLiteral("−"), style_section);
 	prof_del_btn->setObjectName(QStringLiteral("lpBtnDeleteProfile"));
@@ -1625,6 +1647,19 @@ void LiedplanDock::create_row_widget(const LiedplanCard &card)
 			state_.color_profiles.push_back(std::move(prof));
 		}
 		c->profile = name_utf8;
+		// c3 (Bugfix): Karten mit demselben Profil folgen sofort den neuen
+		// Profilfarben — sonst behielten sie ihre alten baked Farben.
+		const std::string canonical = profile_name_canonical(name_utf8);
+		for (auto &other : state_.cards) {
+			if (other.id == c->id)
+				continue;
+			if (other.profile == name_utf8 || profile_name_canonical(other.profile) == canonical) {
+				if (const LiedplanProfile *p =
+					liedplan_profile_lookup(other.profile, state_.color_profiles))
+					profile_switch(*p, other);
+				push_card_live(other, state_.settings);
+			}
+		}
 		save_state();
 		rebuild_rows();
 		set_dock_status(QStringLiteral("Farbprofil \"%1\" gespeichert").arg(qname), false);
@@ -2136,8 +2171,23 @@ void LiedplanDock::set_dock_status(const QString &msg, bool is_error)
 	dock_status_lbl_->setText(msg);
 	dock_status_lbl_->setStyleSheet(
 		is_error ? QStringLiteral("color: #E85E75; font-size: 10pt; font-weight: bold;")
-		 : QStringLiteral("color: #969696; font-size: 10pt;"));
+			 : QStringLiteral("color: #969696; font-size: 10pt;"));
 	dock_status_lbl_->setVisible(!msg.isEmpty());
+	if (dock_status_close_)
+		dock_status_close_->setVisible(!msg.isEmpty());
+	// c1: Auto-dismiss — Fehler bleiben 15 s sichtbar, Infos 6 s.
+	if (!dock_status_timer_) {
+		dock_status_timer_ = new QTimer(this);
+		dock_status_timer_->setSingleShot(true);
+		connect(dock_status_timer_, &QTimer::timeout, this, [this]() {
+			if (dock_status_lbl_)
+				dock_status_lbl_->setVisible(false);
+			if (dock_status_close_)
+				dock_status_close_->setVisible(false);
+		});
+	}
+	dock_status_timer_->stop();
+	dock_status_timer_->start(is_error ? 15000 : 6000);
 }
 
 void LiedplanDock::apply_import_result(const liedplan_import::LiedplanImportResult &res)

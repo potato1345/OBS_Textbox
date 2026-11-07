@@ -136,10 +136,11 @@ std::string build_inject_css(const LiedplanCard &card,
 			     const std::string &copy_dir = "");
 
 // Rendert die komplette HTML-Datei der Karte (reines String, testbar):
-// 1. repo_html leer → card_html(card) (Fallback-Template inkl. <style id="lp-rainbow">).
+// 1. repo_html leer → card_html(card) (Fallback-Template inkl. Rainbow-Pseudo-Elementen).
 // 2. sonst (Inhalt von main/textbox.html):
 //    a) vor dem LETZTEN "</head>": <style>\n + build_inject_css(card, settings) + "\n</style>\n
-//       gefolgt vom <style id="lp-rainbow">-Platzhalter (befüllt bei rainbow_corners=true, sonst leer).
+//       (IMP-U: Rainbow wird über --lp-rainbow / --triangle-background gesteuert;
+//       die Pseudo-Element-Magie liegt im HTML).
 //    b) vor dem LETZTEN "</body>": Listener-Script für liedplan_card_update.
 // 3. Fehlt ein Marker (</head> oder </body>) im repo_html → Fallback card_html(card).
 std::string render_card_html(const LiedplanCard &card, const std::string &repo_html,

@@ -40,6 +40,7 @@ class QComboBox;
 class QLabel;
 class QMenu;
 class QScrollArea;
+class QTimer;
 class QToolButton;
 class QVBoxLayout;
 
@@ -93,6 +94,8 @@ private:
 	QScrollArea *scroll_area_ = nullptr;
 	QVBoxLayout *cards_layout_ = nullptr;
 	QLabel *dock_status_lbl_ = nullptr;
+	QToolButton *dock_status_close_ = nullptr; // c1: Fehlermeldung per Hand schließen
+	QTimer *dock_status_timer_ = nullptr;      // c1: Auto-dismiss der Statusmeldung
 	std::vector<QWidget *> row_widgets_;
 	// Kooperatives Abbruch-Flag für laufende Hintergrund-Threads beim Schließen des Docks.
 	std::shared_ptr<std::atomic<bool>> cancel_ = std::make_shared<std::atomic<bool>>(false);

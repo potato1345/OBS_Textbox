@@ -45,45 +45,9 @@ namespace {
 
 constexpr const char *kRepoTextboxPath = "C:/Users/Johann/Desktop/GitHub/OBS_Textbox/main/index.html";
 
-constexpr const char *kRainbowCssRepo =
-	".textbox-container { background-image: none !important; }\n"
-	".textbox-container::before {\n"
-	"  content: \"\" !important; display: block !important; position: absolute; top: 0; left: 0;\n"
-	"  width: 50px; height: 50px; border-top-left-radius: 4px;\n"
-	"  background: linear-gradient(135deg, var(--triangle-color-a) 50%, transparent 50%);\n"
-	"  pointer-events: none; z-index: 0; animation: rainbow-rotate 12s linear infinite;\n"
-	"}\n"
-	".textbox-container::after {\n"
-	"  content: \"\" !important; display: block !important; position: absolute; bottom: 0; right: 0;\n"
-	"  width: 50px; height: 50px; border-bottom-right-radius: 4px;\n"
-	"  background: linear-gradient(315deg, var(--triangle-color-b) 50%, transparent 50%);\n"
-	"  pointer-events: none; z-index: 0; animation: rainbow-rotate 12s linear infinite;\n"
-	"}\n"
-	".text-line { position: relative; z-index: 1; }\n"
-	"@keyframes rainbow-rotate {\n"
-	"  from { filter: hue-rotate(0deg); }\n"
-	"  to   { filter: hue-rotate(360deg); }\n"
-	"}\n";
-
-constexpr const char *kRainbowCssFallback =
-	"#box { background-image: none !important; }\n"
-	"#box::before {\n"
-	"  content: \"\" !important; display: block !important; position: absolute; top: 0; left: 0;\n"
-	"  width: 50px; height: 50px; border-top-left-radius: 24px;\n"
-	"  background: linear-gradient(135deg, var(--triangle-color-a) 50%, transparent 50%);\n"
-	"  pointer-events: none; z-index: 0; animation: rainbow-rotate 12s linear infinite;\n"
-	"}\n"
-	"#box::after {\n"
-	"  content: \"\" !important; display: block !important; position: absolute; bottom: 0; right: 0;\n"
-	"  width: 50px; height: 50px; border-bottom-right-radius: 24px;\n"
-	"  background: linear-gradient(315deg, var(--triangle-color-b) 50%, transparent 50%);\n"
-	"  pointer-events: none; z-index: 0; animation: rainbow-rotate 12s linear infinite;\n"
-	"}\n"
-	"#lines { position: relative; z-index: 1; }\n"
-	"@keyframes rainbow-rotate {\n"
-	"  from { filter: hue-rotate(0deg); }\n"
-	"  to   { filter: hue-rotate(360deg); }\n"
-	"}\n";
+// IMP-U: Regenbogen-Magie liegt im HTML (main/index.html + Templates +
+// Fallback-Template) und wird über --lp-rainbow / --triangle-background
+// gesteuert; das Plugin injectiert nur noch Variablen.
 
 std::string escape_js_string(const char *input)
 {
@@ -121,15 +85,8 @@ std::string build_repo_listener_script()
 		"<script>\n"
 		"// Liedplan-Plugin: Live-Updates ohne Reload (javascript_event → CustomEvent)\n"
 		"(function () {\n"
-		"    var RAINBOW_CSS = \"";
-	s += escape_js_string(kRainbowCssRepo);
-	s += "\";\n"
-	     "    function setVar(name, value) {\n"
+		"    function setVar(name, value) {\n"
 	     "        document.documentElement.style.setProperty(name, value);\n"
-	     "    }\n"
-	     "    function applyRainbow(v) {\n"
-	     "        var el = document.getElementById(\"lp-rainbow\");\n"
-	     "        if (el) el.textContent = v ? RAINBOW_CSS : \"\";\n"
 	     "    }\n"
 	     "    window.addEventListener(\"liedplan_card_update\", function (ev) {\n"
 	     "        var d = ev.detail;\n"
@@ -158,7 +115,10 @@ std::string build_repo_listener_script()
 	     "        if (d.box_opacity != null) setVar(\"--box-opacity\", String(d.box_opacity));\n"
 	     "        if (d.triangle_color_a != null) setVar(\"--triangle-color-a\", d.triangle_color_a);\n"
 	     "        if (d.triangle_color_b != null) setVar(\"--triangle-color-b\", d.triangle_color_b);\n"
-	     "        if (d.rainbow != null) applyRainbow(d.rainbow);\n"
+	     "        if (d.rainbow != null) {\n"
+     "            setVar(\"--lp-rainbow\", String(d.rainbow));\n"
+     "            setVar(\"--triangle-background\", Number(d.rainbow) ? \"none\" : \"\");\n"
+     "        }\n"
 	     "        if (d.anim_file != null) setVar(\"--anim-file\", JSON.stringify(d.anim_file));\n"
 	     "        if (d.show_anim != null) setVar(\"--show-anim\", String(d.show_anim));\n"
 	     "        if (d.anim_scale != null) setVar(\"--anim-scale\", String(d.anim_scale));\n"
@@ -712,6 +672,12 @@ std::string build_inject_css(const LiedplanCard &card, const LiedplanSettings &s
 	    << "  --triangle-color-b: " << tri_col_b << ";\n"
 	    << "  --text-color: " << text_col << ";\n"
 	    << "  --box-opacity: " << box_opacity << ";\n";
+	// IMP-U: Regenbogen als CSS-Variable — die Magie (Pseudo-Elemente,
+	// Animation) lebt im HTML; das Plugin liefert nur --lp-rainbow und
+	// schaltet im Regenbogenmodus den statischen Triangle-Hintergrund aus.
+	oss << "  --lp-rainbow: " << (card.rainbow_corners ? 1 : 0) << ";\n";
+	if (card.rainbow_corners)
+		oss << "  --triangle-background: none;\n";
 	// Generelle CSS-Regeln (--name: value); ungültige Namen/Values werden gedroppt.
 	for (const auto &rule : card.style) {
 		const std::string var_name = sanitize_css_var_name(rule.name);
@@ -739,15 +705,12 @@ std::string render_card_html(const LiedplanCard &card, const std::string &repo_h
 
 	const std::string style_block =
 		"<style>\n" + build_inject_css(card, settings, copy_dir) + "\n</style>\n";
-	const std::string rainbow_block = std::string("<style id=\"lp-rainbow\">") +
-					  (card.rainbow_corners ? kRainbowCssRepo : "") + "</style>\n";
 	const std::string listener_script = build_repo_listener_script();
 
 	std::string out;
-	out.reserve(repo_html.size() + style_block.size() + rainbow_block.size() + listener_script.size());
+	out.reserve(repo_html.size() + style_block.size() + listener_script.size());
 	out.append(repo_html, 0, head_pos);
 	out.append(style_block);
-	out.append(rainbow_block);
 	out.append(repo_html, head_pos, body_pos - head_pos);
 	out.append(listener_script);
 	out.append(repo_html, body_pos, repo_html.size() - body_pos);
@@ -1059,11 +1022,9 @@ std::string render_template_html(const LiedplanCard &card, const std::string &te
 				if (insert_pos != std::string::npos) {
 					const std::string style_block =
 						"<style>\n" + build_inject_css(card, settings, copy_dir) + "\n</style>\n";
-					std::string rainbow_block;
-					if (card.rainbow_corners)
-						rainbow_block = std::string("<style id=\"lp-rainbow\">") +
-							kRainbowCssRepo + "</style>\n";
-					out.insert(insert_pos, style_block + rainbow_block);
+					// IMP-U: Rainbow kommt als Variable aus build_inject_css;
+					// Template-Magie (Klassen/Pseudo-Elemente) liegt im HTML.
+					out.insert(insert_pos, style_block);
 				}
 			}
 			return out;
@@ -1153,10 +1114,16 @@ std::string card_html(const LiedplanCard &card)
 		"\t--triangle-color-a: " +
 		tri_a_rgba +
 		";\n"
-		"\t--triangle-color-b: " +
+		"	--triangle-color-b: " +
 		tri_b_rgba +
 		";\n"
-		"\t--anim-file: \"" +
+		"	--lp-rainbow: " +
+		(card.rainbow_corners ? "1" : "0") +
+		";\n"
+		"	--triangle-background: " +
+		(card.rainbow_corners ? "none" : "") +
+		";\n"
+		"	--anim-file: \"" +
 		escape_css_string(norm_anim) +
 		"\";\n"
 		"\t--show-anim: " +
@@ -1192,11 +1159,40 @@ std::string card_html(const LiedplanCard &card)
 		"\theight: 400px;\n"
 		"\tborder-radius:24px;\n"
 		"\toverflow: hidden;\n"
-		"\tbackground-image: linear-gradient(135deg, var(--triangle-color-a) 50%, transparent 50%), linear-gradient(315deg, var(--triangle-color-b) 50%, transparent 50%);\n"
+		"	background-image: var(--triangle-background,\n"
+		"		linear-gradient(135deg, var(--triangle-color-a) 50%, transparent 50%),\n"
+		"		linear-gradient(315deg, var(--triangle-color-b) 50%, transparent 50%));\n"
 		"\tbackground-size: 50px 50px, 50px 50px;\n"
 		"\tbackground-position: top left, bottom right;\n"
 		"\tbackground-repeat: no-repeat;\n"
-		"\ttransition: opacity 0.3s ease;\n"
+		"	transition: opacity 0.3s ease;\n"
+		"}\n"
+		"/* IMP-U: Regenbogen-Ecken als Pseudo-Elemente; sichtbar via --lp-rainbow */\n"
+		"#box::before, #box::after {\n"
+		"	content: \"\";\n"
+		"	position: absolute;\n"
+		"	width: 50px;\n"
+		"	height: 50px;\n"
+		"	pointer-events: none;\n"
+		"	z-index: 0;\n"
+		"	opacity: var(--lp-rainbow, 0);\n"
+		"	animation: lp-rainbow-rotate 12s linear infinite;\n"
+		"}\n"
+		"#box::before {\n"
+		"	top: 0;\n"
+		"	left: 0;\n"
+		"	border-top-left-radius: 24px;\n"
+		"	background: linear-gradient(135deg, var(--triangle-color-a) 50%, transparent 50%);\n"
+		"}\n"
+		"#box::after {\n"
+		"	bottom: 0;\n"
+		"	right: 0;\n"
+		"	border-bottom-right-radius: 24px;\n"
+		"	background: linear-gradient(315deg, var(--triangle-color-b) 50%, transparent 50%);\n"
+		"}\n"
+		"@keyframes lp-rainbow-rotate {\n"
+		"	from { filter: hue-rotate(0deg); }\n"
+		"	to   { filter: hue-rotate(360deg); }\n"
 		"}\n"
 		"#lines {\n"
 		"	position: relative;\n"
@@ -1233,10 +1229,6 @@ std::string card_html(const LiedplanCard &card)
 		"\timage-rendering: pixelated;\n"
 		"}\n"
 		"</style>\n"
-		"<style id=\"lp-rainbow\">";
-	if (card.rainbow_corners)
-		html += kRainbowCssFallback;
-	html += "</style>\n"
 		"</head>\n"
 		"<body>\n";
 	if (box_alpha <= 0) {
@@ -1266,16 +1258,9 @@ std::string card_html(const LiedplanCard &card)
 	html += "\t</div>\n"
 		"</div>\n"
 		"<script>\n"
-		"var RAINBOW_CSS = \"" +
-		escape_js_string(kRainbowCssFallback) +
-		"\";\n"
 		"var currentAnimFile = \"\";\n"
-		"function applyRainbow(v) {\n"
-		"\tvar el = document.getElementById(\"lp-rainbow\");\n"
-		"\tif (el) el.textContent = v ? RAINBOW_CSS : \"\";\n"
-		"}\n"
 		"function setVar(name, value) {\n"
-		"\tdocument.documentElement.style.setProperty(name, value);\n"
+		"	document.documentElement.style.setProperty(name, value);\n"
 		"\tvar box = document.getElementById(\"box\");\n"
 		"\tif (box) box.style.setProperty(name, value);\n"
 		"}\n"
@@ -1361,7 +1346,10 @@ std::string card_html(const LiedplanCard &card)
 		"\tif (d.text_color != null && lines) lines.style.color = d.text_color;\n"
 		"\tif (d.triangle_color_a != null) setVar(\"--triangle-color-a\", d.triangle_color_a);\n"
 		"\tif (d.triangle_color_b != null) setVar(\"--triangle-color-b\", d.triangle_color_b);\n"
-		"\tif (d.rainbow != null) applyRainbow(d.rainbow);\n"
+		"	if (d.rainbow != null) {\n"
+		"		setVar(\"--lp-rainbow\", String(d.rainbow));\n"
+		"		setVar(\"--triangle-background\", Number(d.rainbow) ? \"none\" : \"\");\n"
+		"	}\n"
 		"\tif (d.anim_file != null) setVar(\"--anim-file\", JSON.stringify(d.anim_file));\n"
 		"\tif (d.show_anim != null) setVar(\"--show-anim\", String(d.show_anim));\n"
 		"\tif (d.anim_scale != null) setVar(\"--anim-scale\", String(d.anim_scale));\n"

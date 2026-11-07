@@ -83,6 +83,42 @@
             transition: opacity 0.3s ease;
         }
 
+        /* IMP-U: Regenbogen-Ecken als Pseudo-Elemente — gesteuert über
+           --lp-rainbow (0/1). Bei --lp-rainbow:1 setzt das Plugin
+           --triangle-background: none, die Dreiecke sitzen dann in
+           ::before/::after und rotieren per hue-rotate. */
+        .textbox-container::before,
+        .textbox-container::after {
+            content: "";
+            position: absolute;
+            width: var(--lp-corner-size, 50px);
+            height: var(--lp-corner-size, 50px);
+            pointer-events: none;
+            z-index: 0;
+            opacity: var(--lp-rainbow, 0);
+            animation: rainbow-rotate 12s linear infinite;
+        }
+        .textbox-container::before {
+            top: 0;
+            left: 0;
+            border-top-left-radius: var(--lp-radius, 4px);
+            background: linear-gradient(135deg, var(--triangle-color-a) 50%, transparent 50%);
+        }
+        .textbox-container::after {
+            bottom: 0;
+            right: 0;
+            border-bottom-right-radius: var(--lp-radius, 4px);
+            background: linear-gradient(315deg, var(--triangle-color-b) 50%, transparent 50%);
+        }
+        .text-line {
+            position: relative;
+            z-index: 1;
+        }
+        @keyframes rainbow-rotate {
+            from { filter: hue-rotate(0deg); }
+            to   { filter: hue-rotate(360deg); }
+        }
+
         /* Styling der Textzeilen (Anzahl dynamisch; Script erzeugt/entfernt sie) */
         .text-line {
             line-height: 1.2;

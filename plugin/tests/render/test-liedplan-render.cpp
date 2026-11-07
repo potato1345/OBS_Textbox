@@ -280,13 +280,15 @@ int main(int argc, char *argv[])
 				      pos_anim != std::string::npos,
 			      "8h. render_card_html(card, echterRepoInhalt): Injektion vor </head>, Listener vor </body>, .anim-wrapper erhalten");
 
-			// 8i. render_card_html mit REPO-HTML und rainbow=false: <style id="lp-rainbow"></style> vor </head> und leer
-			const std::size_t pos_rb_empty = rendered.find("<style id=\"lp-rainbow\"></style>");
-			check(pos_rb_empty != std::string::npos && pos_rb_empty < pos_head &&
-				      rendered.find("rainbow-rotate") == std::string::npos,
-			      "8i. render_card_html(rainbow=false): <style id=\"lp-rainbow\"></style> vor </head> und leer, kein rainbow-rotate in Datei");
+			// 8i. render_card_html mit REPO-HTML und rainbow=false: --lp-rainbow: 0, kein --triangle-background: none
+			const std::size_t pos_rb0 = rendered.find("--lp-rainbow: 0;");
+			check(pos_rb0 != std::string::npos && pos_rb0 < pos_head &&
+			      rendered.find("--triangle-background: none") == std::string::npos &&
+			      rendered.find("--lp-rainbow: 1") == std::string::npos,
+			      "8i. render_card_html(rainbow=false): --lp-rainbow: 0 vor </head>, kein --triangle-background: none");
 
-			// 8j. render_card_html mit REPO-HTML und rainbow=true: Platzhalter befüllt mit @keyframes rainbow-rotate, ::before und ::after
+			// 8j. render_card_html mit REPO-HTML und rainbow=true: --lp-rainbow: 1 + --triangle-background: none injiziert,
+			//     Listener setzt die Variablen zur Laufzeit via setVar (IMP-U: HTML-Magie via Pseudo-Elemente)
 			LiedplanCard c_rb = c_css;
 			c_rb.rainbow_corners = true;
 			const std::string rendered_rb = liedplan_html::render_card_html(c_rb, repo_content);
@@ -295,19 +297,16 @@ int main(int argc, char *argv[])
 			const std::size_t pos_inject_rb = rendered_rb.find("OBS_TEXTBOX_INJECT_START");
 			const std::size_t pos_listener_rb = rendered_rb.find("liedplan_card_update");
 			const std::size_t pos_anim_rb = rendered_rb.find(".anim-wrapper");
-			const std::size_t pos_lp_rb = rendered_rb.find("<style id=\"lp-rainbow\">");
 			const std::string head_part_rb =
 				(pos_head_rb != std::string::npos) ? rendered_rb.substr(0, pos_head_rb) : "";
 
-			check(pos_lp_rb != std::string::npos && pos_head_rb != std::string::npos &&
-				      pos_lp_rb < pos_head_rb &&
-				      head_part_rb.find("@keyframes rainbow-rotate") != std::string::npos &&
-				      head_part_rb.find(".textbox-container::before") != std::string::npos &&
-				      head_part_rb.find(".textbox-container::after") != std::string::npos &&
-				      head_part_rb.find("12s linear infinite") != std::string::npos &&
-				      pos_inject_rb < pos_head_rb && pos_listener_rb < pos_body_rb &&
-				      pos_anim_rb != std::string::npos,
-			      "8j. render_card_html(rainbow=true): lp-rainbow enthält @keyframes rainbow-rotate, ::before und ::after (12s linear infinite)");
+			check(pos_head_rb != std::string::npos &&
+			      head_part_rb.find("--lp-rainbow: 1;") != std::string::npos &&
+			      head_part_rb.find("--triangle-background: none;") != std::string::npos &&
+			      rendered_rb.find("setVar(\"--lp-rainbow\"") != std::string::npos &&
+			      pos_inject_rb < pos_head_rb && pos_listener_rb < pos_body_rb &&
+			      pos_anim_rb != std::string::npos,
+			      "8j. render_card_html(rainbow=true): --lp-rainbow: 1 + --triangle-background: none vor </head>, Listener setzt --lp-rainbow via setVar");
 		} else {
 			std::cout << "[SKIP] 8h. main/textbox.html nicht vorhanden, überspringe Repo-Inhalt-Test\n";
 		}
@@ -339,20 +338,22 @@ int main(int argc, char *argv[])
 			      css_corners_empty.find("--triangle-color-b: rgba(252,230,71,1);") != std::string::npos,
 		      "8k. build_inject_css: custom Corner-Colors/Opacity -> exakte rgba-Strings; leere Color-Felder -> Default #fce647");
 
-		// 8l. card_html (Fallback): <style id="lp-rainbow">, rainbow=true -> rainbow-rotate + #box::before, applyCard mit box_bg statt box_color
+		// 8l. card_html (Fallback): rainbow=true -> #box::before/::after + lp-rainbow-rotate + --lp-rainbow: 1; rainbow=false -> --lp-rainbow: 0; applyCard mit box_bg statt box_color
 		LiedplanCard c_fb_rb = c;
 		c_fb_rb.rainbow_corners = true;
 		const std::string fb_rb_html = liedplan_html::card_html(c_fb_rb);
 		const std::size_t fb_head_pos = fb_rb_html.rfind("</head>");
 		const std::string fb_head_part =
 			(fb_head_pos != std::string::npos) ? fb_rb_html.substr(0, fb_head_pos) : "";
-		check(html.find("<style id=\"lp-rainbow\"></style>") != std::string::npos &&
-			      fb_head_part.find("<style id=\"lp-rainbow\">") != std::string::npos &&
-			      fb_head_part.find("rainbow-rotate") != std::string::npos &&
-			      fb_head_part.find("#box::before") != std::string::npos &&
-			      fb_rb_html.find("d.box_bg != null") != std::string::npos &&
-			      fb_rb_html.find("d.box_color") == std::string::npos,
-		      "8l. card_html (Fallback): <style id=\"lp-rainbow\">, rainbow=true (#box::before + rainbow-rotate), box_bg-Schema ohne box_color");
+		check(html.find("--lp-rainbow: 0;") != std::string::npos &&
+		      fb_head_part.find("--lp-rainbow: 1;") != std::string::npos &&
+		      fb_head_part.find("lp-rainbow-rotate") != std::string::npos &&
+		      fb_head_part.find("#box::before") != std::string::npos &&
+		      fb_head_part.find("#box::after") != std::string::npos &&
+		      fb_rb_html.find("setVar(\"--lp-rainbow\"") != std::string::npos &&
+		      fb_rb_html.find("d.box_bg != null") != std::string::npos &&
+		      fb_rb_html.find("d.box_color") == std::string::npos,
+		      "8l. card_html (Fallback): rainbow=true (#box::before/::after + lp-rainbow-rotate + --lp-rainbow: 1), rainbow=false (--lp-rainbow: 0), box_bg-Schema ohne box_color");
 	}
 
 	// 9. HTML/CSS-Escape-Tests + write_card()

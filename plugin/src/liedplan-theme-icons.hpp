@@ -19,7 +19,7 @@
 
 namespace liedplan_theme_icons {
 
-static const int kVersion = 2;
+static const int kVersion = 3; // v3: rename.svg (Umbenennen-Icon für Farbprofile) ergänzt
 
 inline const std::vector<std::pair<std::string, std::string>> &icons();
 
@@ -114,6 +114,7 @@ inline const std::vector<std::pair<std::string, std::string>> &icons()
     <path d="m 2 6.007812 c -1.105469 0 -2 0.894532 -2 2 c 0 1.101563 0.894531 2 2 2 s 2 -0.898437 2 -2 c 0 -1.105468 -0.894531 -2 -2 -2 z m 6 0 c -1.105469 0 -2 0.894532 -2 2 c 0 1.101563 0.894531 2 2 2 s 2 -0.898437 2 -2 c 0 -1.105468 -0.894531 -2 -2 -2 z m 6 0 c -1.105469 0 -2 0.894532 -2 2 c 0 1.101563 0.894531 2 2 2 s 2 -0.898437 2 -2 c 0 -1.105468 -0.894531 -2 -2 -2 z m 0 0" fill="#fefefe"/>
 </svg> )SVGICON"},
 		{"close.svg", R"SVGICON(<svg version="1.2" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width="16" height="16"><style>.a{fill:#fefefe}</style><path class="a" d="m1 1h1.8c0.5 0 0.9 0.2 1.3 0.6l4 4.1 4.1-4.1c0.5-0.5 0.8-0.6 1.2-0.6h1.8v1.8c0 0.5 0 1-0.4 1.4l-4.1 4.2 4 4.1c0.4 0.3 0.5 0.8 0.5 1.3v1.8h-1.8c-0.4 0-0.9-0.1-1.2-0.5l-4.1-4.2-4 4.2c-0.4 0.4-0.8 0.5-1.3 0.5h-1.8v-1.8c0-0.5 0.2-1 0.5-1.3l4.1-4.1-4.1-4.2c-0.4-0.4-0.5-0.9-0.5-1.4z"/></svg> )SVGICON"},
+		{"rename.svg", R"SVGICON(<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width="16" height="16"><path fill="#fefefe" fill-rule="evenodd" d="M2 2h8l5 6-5 6H2V2zm3.4 2.2a1.9 1.9 0 1 0 1.9 1.9 1.9 1.9 0 0 0-1.9-1.9z"/></svg> )SVGICON"},
 		{"popout.svg", R"SVGICON(<svg class="feather feather-plus" fill="none" stroke="#FFF" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" version="1.1" viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg"><rect x="2" y="2" width="24" height="20" /><rect x="2" y="2" width="24" height="4" style="fill:#fff" /><rect x="14" y="18" width="24" height="20" /><rect x="14" y="18" width="24" height="4" style="fill:#fff" /></svg> )SVGICON"},
 		{"collapse.svg", R"SVGICON(<?xml version="1.0" encoding="UTF-8"?>
 <svg height="16px" viewBox="0 0 16 16" width="16px" xmlns="http://www.w3.org/2000/svg">
