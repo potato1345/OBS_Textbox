@@ -42,6 +42,7 @@
 #include <QHeaderView>
 #include <QIcon>
 #include <QInputDialog>
+#include <QKeyEvent>
 #include <QKeySequence>
 #include <QLabel>
 #include <QLineEdit>
@@ -100,6 +101,19 @@ struct ActiveJobGuard {
 	~ActiveJobGuard() { --g_active_jobs; }
 	ActiveJobGuard(const ActiveJobGuard &) = delete;
 	ActiveJobGuard &operator=(const ActiveJobGuard &) = delete;
+};
+
+// QTextEdit frisst Tab/Backtab (focusNextPrevChild ist protected). Subklasse
+// reicht die Tasten an die Dialog-Fokus-Kette weiter.
+struct PromptTabEdit : QPlainTextEdit {
+	explicit PromptTabEdit(const QString &text, QWidget *parent = nullptr) : QPlainTextEdit(text, parent) {}
+	void keyPressEvent(QKeyEvent *ke) override {
+		if (ke->key() == Qt::Key_Tab || ke->key() == Qt::Key_Backtab) {
+			if (focusNextPrevChild(ke->key() == Qt::Key_Tab))
+				return;
+		}
+		QPlainTextEdit::keyPressEvent(ke);
+	}
 };
 
 struct DockSaveScheduler {
@@ -2390,8 +2404,8 @@ void LiedplanDock::on_open_import_dialog()
 	const std::string init_prompt = state_.settings.ai_system_prompt.empty()
 						? liedplan_ai::kDefaultSystemPrompt
 						: state_.settings.ai_system_prompt;
-	auto *ai_prompt_edit =
-		new QPlainTextEdit(QString::fromUtf8(init_prompt.c_str()), prompt_body);
+	QPlainTextEdit *ai_prompt_edit =
+		new PromptTabEdit(QString::fromUtf8(init_prompt.c_str()), prompt_body);
 	ai_prompt_edit->setObjectName(QStringLiteral("lpAiSystemPrompt"));
 	ai_prompt_edit->setFixedHeight(110);
 
