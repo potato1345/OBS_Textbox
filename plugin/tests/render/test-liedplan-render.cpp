@@ -307,6 +307,15 @@ int main(int argc, char *argv[])
 			      pos_inject_rb < pos_head_rb && pos_listener_rb < pos_body_rb &&
 			      pos_anim_rb != std::string::npos,
 			      "8j. render_card_html(rainbow=true): --lp-rainbow: 1 + --triangle-background: none vor </head>, Listener setzt --lp-rainbow via setVar");
+
+			// 8m. Template-Token {{rainbow}}: standard.html erwartet class="rainbow"/"0" (CSS body.rainbow .corner).
+			const std::string tpl_rb = "<html><head></head><body class=\"{{rainbow}}\"><div class=\"corner\"></div></body></html>";
+			const std::string tpl_on = liedplan_html::render_card_html(c_rb, tpl_rb);
+			const std::string tpl_off = liedplan_html::render_card_html(c_css, tpl_rb);
+			check(tpl_on.find("class=\"rainbow\"") != std::string::npos &&
+			      tpl_off.find("class=\"0\"") != std::string::npos &&
+			      tpl_on.find("class=\"1\"") == std::string::npos,
+			      "8m. {{rainbow}}-Token: rainbow=true -> class=\"rainbow\", false -> class=\"0\" (body.rainbow-CSS greift)");
 		} else {
 			std::cout << "[SKIP] 8h. main/textbox.html nicht vorhanden, überspringe Repo-Inhalt-Test\n";
 		}

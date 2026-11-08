@@ -74,6 +74,11 @@ def _canonical_key(normalized_title):
         return "zeitstempel"
     if normalized_title in ("Woche", "Tag", "Organist"):
         return normalized_title.lower()
+    # Live-Formular (API): Kopffragen heißen „Datum“ und „Uhrzeit“
+    if normalized_title == "Datum":
+        return "woche"
+    if normalized_title == "Uhrzeit":
+        return "tag"
     if " - " in normalized_title:
         left, right = normalized_title.rsplit(" - ", 1)
         m = re.match(r"^(\d+)\.\s*(.+)$", left)
@@ -259,16 +264,18 @@ def fetch_latest_response():
         raise FormEmptyError("Noch keine Antworten")
 
     def _stamp(r):
-        return (r.get("createTime") or r.get("create_time") or "")
+        return (r.get("lastSubmittedTime") or r.get("createTime")
+                or r.get("create_time") or "")
     newest = max(responses, key=_stamp)
     logger.info("Neueste Antwort ausgewählt (Erstellungszeit: %s)", _stamp(newest))
 
     row = {}
-    for q in newest.get("questions", []):
-        title = id2title.get(q.get("questionId"), "")
-        key = _canonical_key(_norm_title(title))
+    # API-Schema: answers ist ein Dict {questionId: {textAnswers: {answers: [{value}]}}}
+    for qid, ans in (newest.get("answers") or {}).items():
+        key = _canonical_key(_norm_title(id2title.get(qid, "")))
         if key is None:
             continue
-        v = q.get("textValue", "")
-        row[key] = "" if v is None else str(v)
+        values = [a.get("value", "") for a in (ans.get("textAnswers") or {}).get("answers", [])]
+        row[key] = ", ".join(v for v in values if v)
+    row.setdefault("zeitstempel", _stamp(newest))
     return to_gottesdienst(row)

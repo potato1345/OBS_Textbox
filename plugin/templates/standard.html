@@ -54,12 +54,12 @@
         border-radius: 5px;
         display: none;
     }
-    body.rainbow .corner { display: block; animation: corner-rotate 12s linear infinite; }
+    body.rainbow .corner { display: block; animation: rainbow-rotate 12s linear infinite; }
     .c1 { top: -6px; left: -6px; background: var(--lp-corner-1); }
     .c2 { top: -6px; right: -6px; background: var(--lp-corner-2); }
     .c3 { bottom: -6px; left: -6px; background: var(--lp-corner-3); }
     .c4 { bottom: -6px; right: -6px; background: var(--lp-corner-4); }
-    @keyframes corner-rotate { to { transform: rotate(360deg); } }
+    @keyframes rainbow-rotate { from { filter: hue-rotate(0deg); } to { filter: hue-rotate(360deg); } }
     .anim-wrapper {
         position: absolute;
         bottom: 100%;

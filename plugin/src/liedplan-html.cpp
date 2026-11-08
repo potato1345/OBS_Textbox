@@ -848,7 +848,8 @@ std::string substitute_tokens(const LiedplanCard &card, const std::string &templ
 	const std::string box_op = std::to_string(std::clamp(card.box_opacity, 0, 255));
 	const std::string corner_op_a = std::to_string(std::clamp(card.corner_opacity_a, 0, 255));
 	const std::string corner_op_b = std::to_string(std::clamp(card.corner_opacity_b, 0, 255));
-	const std::string rainbow = card.rainbow_corners ? "1" : "0";
+	// Template-Token: standard.html erwartet class="rainbow"/"0" (CSS body.rainbow).
+	const std::string rainbow = card.rainbow_corners ? "rainbow" : "0";
 	const std::string anim_src =
 		(template_html.find("{{anim_src}}") != std::string::npos)
 			? normalize_anim_src(card.anim_file, settings, copy_dir)

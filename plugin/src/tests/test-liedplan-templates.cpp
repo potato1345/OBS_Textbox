@@ -106,7 +106,7 @@ int main()
 			"|bc=" + liedplan_html::hex_to_rgba("#3C404D", 128) +
 			"|ca=" + liedplan_html::hex_to_rgba("#123456", 200) +
 			"|cb=" + liedplan_html::hex_to_rgba("#654321", 100) +
-			"|top=240|bop=128|rb=1|"
+			"|top=240|bop=128|rb=rainbow|"
 			"asrc=https://example.org/anim.webm|sa=1|asc=6|ax=-40|ay=75|"
 			"clr=0";
 		check(out_norm == expected_norm,
@@ -120,7 +120,7 @@ int main()
 			"|bc=" + liedplan_html::hex_to_rgba("#3C404D", 128) +
 			"|ca=" + liedplan_html::hex_to_rgba("#123456", 200) +
 			"|cb=" + liedplan_html::hex_to_rgba("#654321", 100) +
-			"|top=240|bop=128|rb=1|"
+			"|top=240|bop=128|rb=rainbow|"
 			"asrc=https://example.org/anim.webm|sa=1|asc=6|ax=-40|ay=75|"
 			"clr=1";
 		check(out_clear == expected_clear,

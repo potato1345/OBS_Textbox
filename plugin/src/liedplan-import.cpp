@@ -436,6 +436,11 @@ std::optional<std::string> header_key(std::string_view raw)
 		return std::string("tag");
 	if (lower == "organist")
 		return std::string("organist");
+	// Live-Formular (API): Kopffragen heißen „Datum“ und „Uhrzeit“
+	if (lower == "datum")
+		return std::string("woche");
+	if (lower == "uhrzeit")
+		return std::string("tag");
 
 	// Punkt-Pattern: ^(\d{1,2})\.\s*(.+?)\s+-\s+(.+)$
 	std::size_t pos = 0;

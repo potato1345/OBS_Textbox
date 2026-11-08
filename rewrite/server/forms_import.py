@@ -39,6 +39,8 @@ POINT_FIELDS: dict[str, str] = {"GL-Nummer": "gl", "Verse": "verse", "Liedtitel"
 HEADER_FIELDS: dict[str, str] = {
     "zeitstempel": "zeitstempel", "timestamp": "zeitstempel",
     "woche": "woche", "tag": "tag", "organist": "organist",
+    # Live-Formular (API): Kopffragen heißen „Datum“ und „Uhrzeit“
+    "datum": "woche", "uhrzeit": "tag",
 }
 SUPPORTED_EXTENSIONS = (".csv", ".xlsx", ".zip")
 
