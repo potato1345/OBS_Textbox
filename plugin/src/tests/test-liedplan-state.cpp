@@ -11,6 +11,7 @@
 #define _SILENCE_CXX20_U8PATH_DEPRECATION_WARNING
 #endif
 
+#include "../liedplan-events.hpp"
 #include "../liedplan-profiles.hpp"
 #include "../liedplan-state.hpp"
 
@@ -858,6 +859,87 @@ colors:
 		      err + " " + leg_err);
 	}
 
+	// 29. (IMP-X4/X2) settings.kopf_fields JSON-Roundtrip, operator== und Backward-Compat + leere Default-Form-ID
+	{
+		const std::string path = (temp_dir / "roundtrip_x4_kopf_fields.json").u8string();
+		LiedplanState s1;
+		s1.settings.kopf_fields = {"Tag", "Organist", "Raum"};
+		const std::string save_err = s1.save(path);
+
+		LiedplanState s2;
+		const std::string load_err = s2.load(path);
+
+		LiedplanSettings diff = s1.settings;
+		diff.kopf_fields = {"Tag", "Organist"};
+
+		LiedplanState s_legacy;
+		const std::string leg_err =
+			s_legacy.load((temp_dir / "legacy_m4_no_anim.json").u8string());
+
+		const LiedplanSettings def_settings;
+		const bool ok = save_err.empty() && load_err.empty() && (s1 == s2) &&
+				(s2.settings.kopf_fields == std::vector<std::string>{"Tag", "Organist", "Raum"}) &&
+				!(s1.settings == diff) &&
+				leg_err.empty() && s_legacy.settings.kopf_fields.empty() &&
+				def_settings.google_form_id.empty();
+		check(ok, "29. IMP-X4/X2 settings.kopf_fields Round-trip, operator==, Alt-State -> leer, Default google_form_id -> \"\"",
+		      save_err + " " + load_err + " " + leg_err);
+	}
+
+	// 30. (IMP-X5) lp_event_log: ISO-Zeitstempel, Append und >1-MB-Trim auf <= 400 Zeilen
+	{
+		const std::filesystem::path log_dir = temp_dir / "event_log_test";
+		lp_event_log(log_dir, "Erste Meldung");
+		lp_event_log(log_dir, "Zweite Meldung");
+
+		const std::filesystem::path log_file = log_dir / "events.log";
+		std::vector<std::string> initial_lines;
+		{
+			std::ifstream in(log_file);
+			std::string line;
+			while (std::getline(in, line)) {
+				if (!line.empty() && line.back() == '\r')
+					line.pop_back();
+				if (!line.empty())
+					initial_lines.push_back(line);
+			}
+		}
+		const bool init_ok = (initial_lines.size() == 2) &&
+				     (initial_lines[0].size() > 23) &&
+				     (initial_lines[0][4] == '-') &&
+				     (initial_lines[0][7] == '-') &&
+				     (initial_lines[0][10] == 'T') &&
+				     (initial_lines[0][19] == 'Z') &&
+				     (initial_lines[0].find(" | Erste Meldung") != std::string::npos) &&
+				     (initial_lines[1].find(" | Zweite Meldung") != std::string::npos);
+
+		// Schreibe > 1 MB direkt in events.log und rufe lp_event_log erneut auf
+		{
+			std::ofstream out(log_file, std::ios::binary | std::ios::app);
+			const std::string filler(100, 'x');
+			for (int i = 0; i < 11000; ++i)
+				out << "2026-10-20T00:00:00Z | " << filler << "\n";
+		}
+		lp_event_log(log_dir, "Nach Trim");
+
+		std::vector<std::string> trimmed_lines;
+		{
+			std::ifstream in(log_file);
+			std::string line;
+			while (std::getline(in, line)) {
+				if (!line.empty() && line.back() == '\r')
+					line.pop_back();
+				if (!line.empty())
+					trimmed_lines.push_back(line);
+			}
+		}
+		const bool trim_ok = !trimmed_lines.empty() &&
+				     (trimmed_lines.size() <= 400) &&
+				     (trimmed_lines.back().find(" | Nach Trim") != std::string::npos);
+		check(init_ok && trim_ok,
+		      "30. IMP-X5 lp_event_log: ISO-UTC-Format, Append und >1-MB-Trim auf <= 400 Zeilen");
+	}
+
 	std::error_code ec;
 	std::filesystem::remove_all(temp_dir, ec);
 
@@ -865,6 +947,6 @@ colors:
 		std::cerr << g_failures << " test(s) failed.\n";
 		return 1;
 	}
-	std::cout << "All 28 checks passed.\n";
+	std::cout << "All 30 checks passed.\n";
 	return 0;
 }

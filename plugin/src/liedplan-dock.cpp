@@ -1,5 +1,5 @@
 /*
- * liedplan-dock.cpp — Qt-basiertes Hauptbedienpanel für Liedplan in OBS Studio (v3).
+ * liedplan-dock.cpp — Qt-basiertes Hauptbedienpanel für Textbox in OBS Studio (v3).
  *
  * Zweck:
  *   - Implementiert die Benutzeroberfläche LiedplanDock für das OBS Studio QDockWidget.
@@ -13,6 +13,7 @@
 #endif
 
 #include "liedplan-dock.hpp"
+#include "liedplan-events.hpp"
 #include "liedplan-html.hpp"
 #include "liedplan-profiles.hpp"
 #include "liedplan-scene.hpp"
@@ -135,7 +136,7 @@ void capture_undo_snapshot(const LiedplanDock *dock, LiedplanState &state)
 	}
 }
 
-// Zählt die belegten Programmpunkte (Lieder) eines Gottesdienstes.
+// Zählt die belegten Einträge einer Einreichung.
 std::size_t count_service_songs(const liedplan_import::LiedplanService &svc)
 {
 	std::size_t count = 0;
@@ -149,6 +150,7 @@ std::size_t count_service_songs(const liedplan_import::LiedplanService &svc)
 void push_card_live(const LiedplanCard &card, const LiedplanSettings &settings)
 {
 	const std::string name = liedplan_scene::source_name(card.id);
+	const std::string legacy_name = "Liedplan " + card.id;
 	std::vector<obs_scene_t *> scenes;
 	auto cb = [](void *param, obs_source_t *source) -> bool {
 		if (source && obs_source_is_scene(source)) {
@@ -165,6 +167,8 @@ void push_card_live(const LiedplanCard &card, const LiedplanSettings &settings)
 	const std::string dir = liedplan_html::cards_dir();
 	for (obs_scene_t *scene : scenes) {
 		obs_sceneitem_t *item = obs_scene_find_source(scene, name.c_str());
+		if (!item)
+			item = obs_scene_find_source(scene, legacy_name.c_str());
 		if (!item)
 			continue;
 		obs_source_t *src = obs_sceneitem_get_source(item);
@@ -221,7 +225,7 @@ LiedplanCard make_default_card(std::size_t i)
 	return c;
 }
 
-// Prüft, ob zeile1 der Karte i einem Standard-Programmpunkt entspricht.
+// Prüft, ob zeile1 der Karte i einem Standard-Eintrag entspricht.
 bool is_standard_card(const LiedplanCard &c, std::size_t i)
 {
 	return i < liedplan_import::PROGRAM_POINTS.size() &&
@@ -671,12 +675,16 @@ LiedplanDock::LiedplanDock(const std::string &state_path, QWidget *parent)
 		// Profiles kommen bewusst nicht zurück).
 		liedplan_ensure_profiles_available(state_.color_profiles);
 		save_state();
+		set_dock_status(QStringLiteral("Standardprofile nachgesät"), false);
 	}
 	// IMP-N: dangling Profilreferenzen (profil/active_profile zeigen auf
 	// einen gelöschten Namen) beim Start bereinigen.
 	reconcile_profiles_after_delete(state_);
 
 	rebuild_rows();
+
+	lp_event_log(lp_event_log_dir_from_state_path(state_path_),
+		     "Dock geöffnet/registriert");
 
 	// Spec F2b: Karten-HTML ab Start aus Zustand + Vorlagen neu erzeugen und die
 	// Browser-Dokumente neu laden — so wirken Vorlagen (auch Vorlagen-Ordner-
@@ -2153,6 +2161,7 @@ void LiedplanDock::on_clear_all()
 		    std::filesystem::u8path(liedplan_html::cards_dir() + "/" + liedplan_html::sanitize_card_id(id) + ".html"), ec);
 		liedplan_scene::remove_everywhere(id);
 	}
+	set_dock_status(QStringLiteral("Alle Karten gelöscht"), false);
 }
 
 void LiedplanDock::sync_all_cards_live(const std::vector<std::string> &previous_ids)
@@ -2180,6 +2189,10 @@ void LiedplanDock::sync_all_cards_live(const std::vector<std::string> &previous_
 
 void LiedplanDock::set_dock_status(const QString &msg, bool is_error)
 {
+	if (!msg.isEmpty()) {
+		lp_event_log(lp_event_log_dir_from_state_path(state_path_),
+			     msg.toUtf8().toStdString());
+	}
 	if (!dock_status_lbl_)
 		return;
 	dock_status_lbl_->setText(msg);
@@ -2208,7 +2221,7 @@ void LiedplanDock::apply_import_result(const liedplan_import::LiedplanImportResu
 {
 	capture_undo_snapshot(this, state_);
 	const auto &punkte = !res.punkte.empty() ? res.punkte : res.service.punkte;
-	blog(LOG_INFO, "[liedplan] Import übernommen: %zu Programmpunkte", punkte.size());
+	blog(LOG_INFO, "[liedplan] Import übernommen: %zu Einträge", punkte.size());
 	const std::size_t total_items = punkte.size();
 	while (state_.cards.size() < total_items) {
 		state_.add_card(); // IMP-T: next_id-vergabene IDs — indexbasierte IDs kollidierten mit bestehenden Karten nach Löschungen
@@ -2235,7 +2248,7 @@ void LiedplanDock::apply_import_result(const liedplan_import::LiedplanImportResu
 		// sonst in effective_rows und der Import wäre unsichtbar).
 		state_.cards[i].rows.clear();
 	}
-	// Überzählige Bestandskarten bereinigen, damit keine Lieder der Vorwoche stehen bleiben.
+	// Überzählige Bestandskarten bereinigen, damit keine alten Einträge stehen bleiben.
 	for (std::size_t i = total_items; i < state_.cards.size(); ++i) {
 		if (!is_standard_card(state_.cards[i], i))
 			state_.cards[i].zeile1.clear();
@@ -2255,9 +2268,11 @@ void LiedplanDock::apply_import_result(const liedplan_import::LiedplanImportResu
 
 void LiedplanDock::on_open_import_dialog()
 {
+	set_dock_status(QStringLiteral("Datenarchiv geöffnet"), false);
+
 	QDialog dlg(this);
 	dlg.setObjectName(QStringLiteral("lpImportDialog"));
-	dlg.setWindowTitle(QStringLiteral("Liedplan-Import"));
+	dlg.setWindowTitle(QStringLiteral("Datenarchiv"));
 	dlg.setStyleSheet(liedplan_theme::stylesheet(icon_dir_));
 	dlg.setMinimumWidth(540);
 
@@ -2265,24 +2280,22 @@ void LiedplanDock::on_open_import_dialog()
 	root->setContentsMargins(16, 16, 16, 16);
 	root->setSpacing(12);
 
-	// Gruppe 1: Von Google holen (+ Form-ID & Token-Pfad Einstellungen)
-	auto *google_group = new QGroupBox(QStringLiteral("Von Google holen"), &dlg);
+	// Gruppe 1: Daten von Google (+ Kopfdaten-Auswahl)
+	auto *google_group = new QGroupBox(QStringLiteral("Daten von Google"), &dlg);
 	auto *google_layout = new QVBoxLayout(google_group);
 	google_layout->setContentsMargins(12, 16, 12, 12);
 	google_layout->setSpacing(8);
 
 	auto *google_info = new QLabel(
-		QStringLiteral("Neueste Antwort aus dem Google-Formular laden"), google_group);
+		QStringLiteral("Antworten aus einem Google-Formular laden"), google_group);
 	google_info->setWordWrap(true);
 
 	auto *lbl_form_id = new QLabel(QStringLiteral("FORM-ID"), google_group);
 	lbl_form_id->setObjectName(QStringLiteral("lpFieldLabel"));
-	const std::string init_form_id = state_.settings.google_form_id.empty()
-						 ? liedplan_import::kDefaultFormId
-						 : state_.settings.google_form_id;
+	const std::string init_form_id = state_.settings.google_form_id;
 	auto *edit_form_id =
 		new QLineEdit(QString::fromUtf8(init_form_id.c_str()), google_group);
-	edit_form_id->setPlaceholderText(QString::fromUtf8(liedplan_import::kDefaultFormId));
+	edit_form_id->setPlaceholderText(QStringLiteral("Google-Form-ID"));
 
 	auto *lbl_token_path = new QLabel(QStringLiteral("TOKEN-PFAD"), google_group);
 	lbl_token_path->setObjectName(QStringLiteral("lpFieldLabel"));
@@ -2294,20 +2307,26 @@ void LiedplanDock::on_open_import_dialog()
 	edit_token_path->setPlaceholderText(QString::fromUtf8(liedplan_import::default_token_path_str()));
 
 	connect(edit_form_id, &QLineEdit::editingFinished, this, [this, edit_form_id]() {
-		state_.settings.google_form_id = edit_form_id->text().trimmed().toUtf8().toStdString();
-		if (state_.settings.google_form_id.empty())
-			state_.settings.google_form_id = liedplan_import::kDefaultFormId;
-		save_state();
+		const std::string new_id = edit_form_id->text().trimmed().toUtf8().toStdString();
+		if (state_.settings.google_form_id != new_id) {
+			state_.settings.google_form_id = new_id;
+			save_state();
+			set_dock_status(QStringLiteral("Form-ID geändert"), false);
+		}
 	});
 
 	connect(edit_token_path, &QLineEdit::editingFinished, this, [this, edit_token_path]() {
-		state_.settings.token_path = edit_token_path->text().trimmed().toUtf8().toStdString();
-		if (state_.settings.token_path.empty())
-			state_.settings.token_path = liedplan_import::default_token_path_str();
-		save_state();
+		std::string new_tp = edit_token_path->text().trimmed().toUtf8().toStdString();
+		if (new_tp.empty())
+			new_tp = liedplan_import::default_token_path_str();
+		if (state_.settings.token_path != new_tp) {
+			state_.settings.token_path = new_tp;
+			save_state();
+			set_dock_status(QStringLiteral("Token-Pfad geändert"), false);
+		}
 	});
 
-	auto *api_btn = new QPushButton(QStringLiteral("Neueste Antwort laden"), google_group);
+	auto *api_btn = new QPushButton(QStringLiteral("Daten von Google holen"), google_group);
 	api_btn->setObjectName(QStringLiteral("lpBtnApiImport"));
 	api_btn->setIcon(theme_icon("download.svg"));
 	api_btn->setIconSize(QSize(16, 16));
@@ -2316,6 +2335,54 @@ void LiedplanDock::on_open_import_dialog()
 	status_lbl->setObjectName(QStringLiteral("lpImportStatus"));
 	status_lbl->setWordWrap(true);
 
+	// Kopfdaten-Container innerhalb Gruppe 1 (erst nach erfolgreichem Laden sichtbar)
+	auto *kopf_group = new QWidget(google_group);
+	kopf_group->setObjectName(QStringLiteral("lpKopfContainer"));
+	auto *kopf_layout = new QVBoxLayout(kopf_group);
+	kopf_layout->setContentsMargins(0, 6, 0, 0);
+	kopf_layout->setSpacing(6);
+
+	auto *lbl_service_select = new QLabel(QStringLiteral("EINREICHUNG AUSWÄHLEN"), kopf_group);
+	lbl_service_select->setObjectName(QStringLiteral("lpFieldLabel"));
+	auto *service_combo = new QComboBox(kopf_group);
+	service_combo->setObjectName(QStringLiteral("lpServiceSelect"));
+	service_combo->setFixedHeight(34);
+
+	auto *lbl_service_preview = new QLabel(kopf_group);
+	lbl_service_preview->setObjectName(QStringLiteral("lpServicePreview"));
+	lbl_service_preview->setWordWrap(true);
+
+	auto *kopf_fields_row = new QHBoxLayout();
+	kopf_fields_row->setContentsMargins(0, 0, 0, 0);
+	kopf_fields_row->setSpacing(6);
+
+	auto *kopf_fields_box = new QWidget(kopf_group);
+	kopf_fields_box->setObjectName(QStringLiteral("lpKopfFieldsBox"));
+	auto *kopf_fields_layout = new QVBoxLayout(kopf_fields_box);
+	kopf_fields_layout->setContentsMargins(0, 0, 0, 0);
+	kopf_fields_layout->setSpacing(4);
+
+	auto *kopf_edit_btn = new QPushButton(kopf_group);
+	kopf_edit_btn->setObjectName(QStringLiteral("lpBtnKopfEdit"));
+	kopf_edit_btn->setFixedSize(34, 34);
+	kopf_edit_btn->setIcon(theme_icon("rename.svg"));
+	kopf_edit_btn->setIconSize(QSize(16, 16));
+	kopf_edit_btn->setToolTip(QStringLiteral("Anzuzeigende Kopfdaten-Felder auswählen"));
+
+	kopf_fields_row->addWidget(kopf_fields_box, 1);
+	kopf_fields_row->addWidget(kopf_edit_btn, 0, Qt::AlignTop);
+
+	auto *service_apply_btn =
+		new QPushButton(QStringLiteral("In Karten übernehmen"), kopf_group);
+	service_apply_btn->setObjectName(QStringLiteral("lpBtnServiceApply"));
+
+	kopf_layout->addWidget(lbl_service_select);
+	kopf_layout->addWidget(service_combo);
+	kopf_layout->addWidget(lbl_service_preview);
+	kopf_layout->addLayout(kopf_fields_row);
+	kopf_layout->addWidget(service_apply_btn);
+	kopf_group->setVisible(false);
+
 	google_layout->addWidget(google_info);
 	google_layout->addWidget(lbl_form_id);
 	google_layout->addWidget(edit_form_id);
@@ -2323,6 +2390,7 @@ void LiedplanDock::on_open_import_dialog()
 	google_layout->addWidget(edit_token_path);
 	google_layout->addWidget(api_btn);
 	google_layout->addWidget(status_lbl);
+	google_layout->addWidget(kopf_group);
 	root->addWidget(google_group);
 
 	// Gruppe 2: Datei-Import (CSV / XLSX / ZIP)
@@ -2387,11 +2455,11 @@ void LiedplanDock::on_open_import_dialog()
 		                                  : QStringLiteral("Key verbergen"));
 	});
 
-	// Einklappbarer System-Prompt
-	auto *prompt_group = new QGroupBox(QStringLiteral("System-Prompt"), ai_group);
+	// Einklappbarer Master-Prompt (default ausgeklappt)
+	auto *prompt_group = new QGroupBox(QStringLiteral("Master-Prompt"), ai_group);
 	prompt_group->setObjectName(QStringLiteral("lpAnimGroup"));
 	prompt_group->setCheckable(true);
-	prompt_group->setChecked(false);
+	prompt_group->setChecked(true);
 	auto *prompt_group_layout = new QVBoxLayout(prompt_group);
 	prompt_group_layout->setContentsMargins(8, 8, 8, 8);
 	prompt_group_layout->setSpacing(6);
@@ -2414,7 +2482,7 @@ void LiedplanDock::on_open_import_dialog()
 	ai_prompt_reset_btn->setObjectName(QStringLiteral("lpBtnAiPromptReset"));
 	prompt_body_layout->addWidget(ai_prompt_edit);
 	prompt_body_layout->addWidget(ai_prompt_reset_btn);
-	prompt_body->setVisible(false);
+	prompt_body->setVisible(true);
 	prompt_group_layout->addWidget(prompt_body);
 	connect(prompt_group, &QGroupBox::toggled, prompt_body, &QWidget::setVisible);
 	ai_layout->addWidget(prompt_group);
@@ -2450,7 +2518,7 @@ void LiedplanDock::on_open_import_dialog()
 		});
 
 	// AI-Preview-Box (Tabelle + Quellen-Label + Übernehmen)
-	auto *ai_preview_group = new QGroupBox(QStringLiteral("Programmvorschau"), ai_group);
+	auto *ai_preview_group = new QGroupBox(QStringLiteral("Vorschau"), ai_group);
 	auto *ai_preview_layout = new QVBoxLayout(ai_preview_group);
 	ai_preview_layout->setContentsMargins(10, 14, 10, 10);
 	ai_preview_layout->setSpacing(8);
@@ -2485,46 +2553,6 @@ void LiedplanDock::on_open_import_dialog()
 
 	root->addWidget(ai_group);
 
-	// Gruppe 4: Kopfdaten & Mehr-Gottesdienste-Auswahl (erst nach erfolgreichem Laden sichtbar)
-	auto *kopf_group = new QGroupBox(QStringLiteral("Kopfdaten"), &dlg);
-	auto *kopf_layout = new QVBoxLayout(kopf_group);
-	kopf_layout->setContentsMargins(12, 16, 12, 12);
-	kopf_layout->setSpacing(6);
-
-	auto *lbl_service_select = new QLabel(QStringLiteral("GOTTESDIENST AUSWÄHLEN"), kopf_group);
-	lbl_service_select->setObjectName(QStringLiteral("lpFieldLabel"));
-	auto *service_combo = new QComboBox(kopf_group);
-	service_combo->setObjectName(QStringLiteral("lpServiceSelect"));
-	service_combo->setFixedHeight(34);
-
-	auto *lbl_service_preview = new QLabel(kopf_group);
-	lbl_service_preview->setObjectName(QStringLiteral("lpServicePreview"));
-	lbl_service_preview->setWordWrap(true);
-
-	auto *lbl_woche = new QLabel(QStringLiteral("Woche: —"), kopf_group);
-	lbl_woche->setObjectName(QStringLiteral("lpKopfWochen"));
-	auto *lbl_tag = new QLabel(QStringLiteral("Tag: —"), kopf_group);
-	lbl_tag->setObjectName(QStringLiteral("lpKopfTag"));
-	auto *lbl_organist = new QLabel(QStringLiteral("Organist: —"), kopf_group);
-	lbl_organist->setObjectName(QStringLiteral("lpKopfOrganist"));
-	auto *lbl_zeitstempel = new QLabel(QStringLiteral("Zeitstempel: —"), kopf_group);
-	lbl_zeitstempel->setObjectName(QStringLiteral("lpKopfZeitstempel"));
-
-	auto *service_apply_btn =
-		new QPushButton(QStringLiteral("In Karten übernehmen"), kopf_group);
-	service_apply_btn->setObjectName(QStringLiteral("lpBtnServiceApply"));
-
-	kopf_layout->addWidget(lbl_service_select);
-	kopf_layout->addWidget(service_combo);
-	kopf_layout->addWidget(lbl_service_preview);
-	kopf_layout->addWidget(lbl_woche);
-	kopf_layout->addWidget(lbl_tag);
-	kopf_layout->addWidget(lbl_organist);
-	kopf_layout->addWidget(lbl_zeitstempel);
-	kopf_layout->addWidget(service_apply_btn);
-	kopf_group->setVisible(false);
-	root->addWidget(kopf_group);
-
 	// Ergebnis-/Fehler-Label unterhalb
 	auto *error_lbl = new QLabel(&dlg);
 	error_lbl->setObjectName(QStringLiteral("lpImportError"));
@@ -2536,17 +2564,197 @@ void LiedplanDock::on_open_import_dialog()
 	auto loaded_services =
 		std::make_shared<std::vector<liedplan_import::LiedplanService>>();
 
-	// Aktualisiert die Kopfdaten-Anzeige für den gewählten Gottesdienst.
-	auto update_kopf_labels = [lbl_woche, lbl_tag, lbl_organist, lbl_zeitstempel](
-					  const liedplan_import::LiedplanService &svc) {
-		lbl_woche->setText(QStringLiteral("Woche: ") +
-				   QString::fromUtf8(svc.woche.c_str()));
-		lbl_tag->setText(QStringLiteral("Tag: ") + QString::fromUtf8(svc.tag.c_str()));
-		lbl_organist->setText(QStringLiteral("Organist: ") +
-				      QString::fromUtf8(svc.organist.c_str()));
-		lbl_zeitstempel->setText(QStringLiteral("Zeitstempel: ") +
-					 QString::fromUtf8(svc.zeitstempel.c_str()));
+	auto get_service_fields =
+		[](const liedplan_import::LiedplanService &svc)
+		-> std::vector<std::pair<std::string, std::string>> {
+		if (!svc.fields.empty())
+			return svc.fields;
+		std::vector<std::pair<std::string, std::string>> fb;
+		if (!svc.zeitstempel.empty())
+			fb.emplace_back("Zeitstempel", svc.zeitstempel);
+		if (!svc.woche.empty())
+			fb.emplace_back("Woche", svc.woche);
+		if (!svc.tag.empty())
+			fb.emplace_back("Tag", svc.tag);
+		if (!svc.organist.empty())
+			fb.emplace_back("Organist", svc.organist);
+		return fb;
 	};
+
+	auto collect_all_field_names =
+		[loaded_services, get_service_fields]() -> std::vector<std::string> {
+		std::vector<std::string> names;
+		for (const auto &svc : *loaded_services) {
+			for (const auto &kv : get_service_fields(svc)) {
+				if (!kv.first.empty() &&
+				    std::find(names.begin(), names.end(), kv.first) ==
+					    names.end()) {
+					names.push_back(kv.first);
+				}
+			}
+		}
+		return names;
+	};
+
+	auto get_selected_fields_for_service =
+		[this, get_service_fields, collect_all_field_names](
+			const liedplan_import::LiedplanService &svc)
+		-> std::vector<std::pair<std::string, std::string>> {
+		const auto all_svc_fields = get_service_fields(svc);
+		const auto &cfg = state_.settings.kopf_fields;
+		if (cfg.empty())
+			return all_svc_fields;
+		const auto all_names = collect_all_field_names();
+		bool any_match = false;
+		for (const auto &n : all_names) {
+			if (std::find(cfg.begin(), cfg.end(), n) != cfg.end()) {
+				any_match = true;
+				break;
+			}
+		}
+		if (!any_match)
+			return all_svc_fields;
+		std::vector<std::pair<std::string, std::string>> out;
+		for (const auto &kv : all_svc_fields) {
+			if (std::find(cfg.begin(), cfg.end(), kv.first) != cfg.end())
+				out.push_back(kv);
+		}
+		return out;
+	};
+
+	auto format_service_joined =
+		[get_selected_fields_for_service](
+			const liedplan_import::LiedplanService &svc) -> QString {
+		const auto sel = get_selected_fields_for_service(svc);
+		QStringList parts;
+		for (const auto &kv : sel) {
+			parts.append(QStringLiteral("%1: %2").arg(
+				QString::fromUtf8(kv.first.c_str()),
+				QString::fromUtf8(kv.second.c_str())));
+		}
+		return parts.join(QStringLiteral(" · "));
+	};
+
+	// Aktualisiert die dynamischen Kopfdaten-Labels für die gewählte Einreichung.
+	auto update_kopf_labels =
+		[kopf_fields_box, kopf_fields_layout, get_selected_fields_for_service](
+			const liedplan_import::LiedplanService &svc) {
+			while (QLayoutItem *it = kopf_fields_layout->takeAt(0)) {
+				if (QWidget *w = it->widget())
+					delete w;
+				delete it;
+			}
+			const auto sel = get_selected_fields_for_service(svc);
+			for (const auto &kv : sel) {
+				auto *lbl = new QLabel(
+					QStringLiteral("%1: %2").arg(
+						QString::fromUtf8(kv.first.c_str()),
+						QString::fromUtf8(kv.second.c_str())),
+					kopf_fields_box);
+				lbl->setWordWrap(true);
+				kopf_fields_layout->addWidget(lbl);
+			}
+		};
+
+	auto refresh_services_view =
+		[loaded_services, service_combo, lbl_service_preview, format_service_joined,
+		 update_kopf_labels](int keep_index = 0) {
+			if (loaded_services->empty())
+				return;
+			const int clamped_idx = std::clamp(
+				keep_index, 0,
+				static_cast<int>(loaded_services->size()) - 1);
+			{
+				const QSignalBlocker blocker(service_combo);
+				service_combo->clear();
+				QStringList preview_lines;
+				for (const auto &svc : *loaded_services) {
+					const QString joined = format_service_joined(svc);
+					service_combo->addItem(
+						joined.isEmpty() ? QStringLiteral("—") : joined);
+					const std::size_t n_entries = count_service_songs(svc);
+					if (joined.isEmpty()) {
+						preview_lines.append(
+							QStringLiteral("• %1 Einträge")
+								.arg(n_entries));
+					} else {
+						preview_lines.append(
+							QStringLiteral("• %1 · %2 Einträge")
+								.arg(joined)
+								.arg(n_entries));
+					}
+				}
+				service_combo->setCurrentIndex(clamped_idx);
+				lbl_service_preview->setText(
+					preview_lines.join(QLatin1Char('\n')));
+			}
+			update_kopf_labels(
+				(*loaded_services)[static_cast<std::size_t>(clamped_idx)]);
+		};
+
+	connect(kopf_edit_btn, &QPushButton::clicked, &dlg,
+		[this, &dlg, service_combo, collect_all_field_names, refresh_services_view]() {
+			const auto all_names = collect_all_field_names();
+			QDialog edit_dlg(&dlg);
+			edit_dlg.setObjectName(QStringLiteral("lpKopfEditDialog"));
+			edit_dlg.setWindowTitle(QStringLiteral("Kopfdaten-Felder auswählen"));
+			edit_dlg.setStyleSheet(liedplan_theme::stylesheet(icon_dir_));
+			edit_dlg.setMinimumWidth(340);
+
+			auto *lay = new QVBoxLayout(&edit_dlg);
+			lay->setContentsMargins(14, 14, 14, 14);
+			lay->setSpacing(8);
+
+			const auto &cfg = state_.settings.kopf_fields;
+			bool has_overlap = false;
+			for (const auto &n : all_names) {
+				if (std::find(cfg.begin(), cfg.end(), n) != cfg.end()) {
+					has_overlap = true;
+					break;
+				}
+			}
+
+			std::vector<std::pair<std::string, QCheckBox *>> checks;
+			for (const auto &n : all_names) {
+				auto *cb = new QCheckBox(
+					QString::fromUtf8(n.c_str()), &edit_dlg);
+				const bool checked =
+					cfg.empty() || !has_overlap ||
+					(std::find(cfg.begin(), cfg.end(), n) != cfg.end());
+				cb->setChecked(checked);
+				lay->addWidget(cb);
+				checks.emplace_back(n, cb);
+			}
+
+			auto *btn_row = new QHBoxLayout();
+			btn_row->setSpacing(8);
+			auto *cancel_btn =
+				new QPushButton(QStringLiteral("Abbrechen"), &edit_dlg);
+			cancel_btn->setObjectName(QStringLiteral("lpBtnKopfEditCancel"));
+			auto *ok_btn = new QPushButton(QStringLiteral("OK"), &edit_dlg);
+			ok_btn->setObjectName(QStringLiteral("lpBtnKopfEditOk"));
+			btn_row->addStretch(1);
+			btn_row->addWidget(cancel_btn);
+			btn_row->addWidget(ok_btn);
+			lay->addLayout(btn_row);
+
+			connect(cancel_btn, &QPushButton::clicked, &edit_dlg,
+				&QDialog::reject);
+			connect(ok_btn, &QPushButton::clicked, &edit_dlg, &QDialog::accept);
+
+			if (edit_dlg.exec() == QDialog::Accepted) {
+				std::vector<std::string> chosen;
+				for (const auto &pr : checks) {
+					if (pr.second->isChecked())
+						chosen.push_back(pr.first);
+				}
+				state_.settings.kopf_fields = std::move(chosen);
+				save_state();
+				refresh_services_view(service_combo->currentIndex());
+				set_dock_status(
+					QStringLiteral("Kopfdaten-Felder gespeichert"), false);
+			}
+		});
 
 	connect(service_combo, QOverload<int>::of(&QComboBox::currentIndexChanged), &dlg,
 		[loaded_services, update_kopf_labels](int idx) {
@@ -2558,7 +2766,8 @@ void LiedplanDock::on_open_import_dialog()
 		});
 
 	connect(service_apply_btn, &QPushButton::clicked, &dlg,
-		[this, service_combo, loaded_services, status_lbl, update_kopf_labels]() {
+		[this, service_combo, loaded_services, status_lbl, update_kopf_labels,
+		 format_service_joined]() {
 			const int idx = service_combo->currentIndex();
 			if (idx < 0 ||
 			    static_cast<std::size_t>(idx) >= loaded_services->size())
@@ -2574,18 +2783,18 @@ void LiedplanDock::on_open_import_dialog()
 			single_res.services = {svc};
 			apply_import_result(single_res);
 			update_kopf_labels(svc);
+			const QString joined = format_service_joined(svc);
 			const QString msg =
-				QStringLiteral("Gottesdienst übernommen: Woche %1 · %2 · Org: %3")
-					.arg(QString::fromUtf8(svc.woche.c_str()),
-					     QString::fromUtf8(svc.tag.c_str()),
-					     QString::fromUtf8(svc.organist.c_str()));
+				joined.isEmpty()
+					? QStringLiteral("Übernommen")
+					: QStringLiteral("Übernommen: %1").arg(joined);
 			status_lbl->setText(msg);
 			set_dock_status(msg, false);
 		});
 
 	connect(ai_file_btn, &QPushButton::clicked, &dlg, [&dlg, ai_file_edit]() {
 		const QString chosen = QFileDialog::getOpenFileName(
-			&dlg, QStringLiteral("Liedplan-Dokument auswählen"),
+			&dlg, QStringLiteral("Dokument auswählen"),
 			ai_file_edit->text(),
 			QStringLiteral("Dokumente (*.pdf *.docx);;Alle Dateien (*.*)"),
 			nullptr, dialog_options());
@@ -2598,8 +2807,8 @@ void LiedplanDock::on_open_import_dialog()
 	QPointer<LiedplanDock> self_ptr(this);
 	const auto cancel = cancel_;
 
-	auto handle_success = [cancel, self_ptr, kopf_group, service_combo, lbl_service_preview,
-			       loaded_services, update_kopf_labels, status_lbl, error_lbl](
+	auto handle_success = [cancel, self_ptr, kopf_group, loaded_services,
+			       refresh_services_view, status_lbl, error_lbl](
 				      const liedplan_import::LiedplanImportResult &res,
 				      const QString &source_name = QString()) {
 		if (*cancel || !self_ptr)
@@ -2623,44 +2832,19 @@ void LiedplanDock::on_open_import_dialog()
 			loaded_services->push_back(std::move(fallback_svc));
 		}
 
-		{
-			const QSignalBlocker blocker(service_combo);
-			service_combo->clear();
-			QStringList preview_lines;
-			for (const auto &svc : *loaded_services) {
-				const QString zeit_q = QString::fromUtf8(
-					svc.zeitstempel.empty() ? "—" : svc.zeitstempel.c_str());
-				const QString woche_q = QString::fromUtf8(
-					svc.woche.empty() ? "—" : svc.woche.c_str());
-				const QString tag_q = QString::fromUtf8(
-					svc.tag.empty() ? "—" : svc.tag.c_str());
-				const QString org_q = QString::fromUtf8(
-					svc.organist.empty() ? "—" : svc.organist.c_str());
-				service_combo->addItem(
-					QStringLiteral("%1 · Woche %2 · %3 · Org: %4")
-						.arg(zeit_q, woche_q, tag_q, org_q));
-				preview_lines.append(
-					QStringLiteral("• Woche %1 · %2 · Org: %3 · %4 Lieder")
-						.arg(woche_q, tag_q, org_q)
-						.arg(count_service_songs(svc)));
-			}
-			service_combo->setCurrentIndex(0);
-			lbl_service_preview->setText(preview_lines.join(QLatin1Char('\n')));
-		}
-
-		update_kopf_labels(loaded_services->front());
+		refresh_services_view(0);
 		kopf_group->setVisible(true);
 		error_lbl->clear();
 		error_lbl->setVisible(false);
 		const std::size_t svc_count = loaded_services->size();
 		const QString count_str =
-			QStringLiteral("%1 Gottesdienste gefunden").arg(svc_count);
+			QStringLiteral("%1 Einreichungen gefunden").arg(svc_count);
 		const QString msg =
 			source_name.isEmpty()
 				? QStringLiteral(
 					  "%1 — 12 Karten befüllt — im Dock editierbar, „Zu Szene“ legt sie in die Szene.")
 					  .arg(count_str)
-				: QStringLiteral("%1 — Importiert: %2 Punkte (Quelle: %3)")
+				: QStringLiteral("%1 — Importiert: %2 Einträge (Quelle: %3)")
 					  .arg(count_str)
 					  .arg(res.punkte.size())
 					  .arg(source_name);
@@ -2685,7 +2869,7 @@ void LiedplanDock::on_open_import_dialog()
 			QString doc_file = ai_file_edit->text().trimmed();
 			if (doc_file.isEmpty()) {
 				doc_file = QFileDialog::getOpenFileName(
-					&dlg, QStringLiteral("Liedplan-Dokument auswählen"),
+					&dlg, QStringLiteral("Dokument auswählen"),
 					QString(),
 					QStringLiteral(
 						"Dokumente (*.pdf *.docx);;Alle Dateien (*.*)"),
@@ -2702,6 +2886,12 @@ void LiedplanDock::on_open_import_dialog()
 			save_state();
 
 			const std::string file_utf8 = doc_file.toUtf8().toStdString();
+			const std::filesystem::path doc_fsp = std::filesystem::u8path(file_utf8);
+			set_dock_status(
+				QStringLiteral("AI-Import gestartet: %1")
+					.arg(QString::fromUtf8(
+						doc_fsp.filename().u8string().c_str())),
+				false);
 			const std::string api_key =
 				ai_key_edit->text().trimmed().toUtf8().toStdString();
 			const std::string sys_prompt =
@@ -2792,7 +2982,7 @@ void LiedplanDock::on_open_import_dialog()
 							liedplan_ai::parse_liedplan_locally(text);
 						if (local_items.empty()) {
 							throw std::runtime_error(
-								"Weder API-Key vorhanden noch konnte der lokale Parser Programmpunkte erkennen.");
+								"Weder API-Key vorhanden noch konnte der lokale Parser Einträge erkennen.");
 						}
 						ai_res.items = std::move(local_items);
 						ai_res.model_label = "Lokal (ohne API-Key)";
@@ -2811,7 +3001,7 @@ void LiedplanDock::on_open_import_dialog()
 
 					if (ai_res.items.empty()) {
 						throw std::runtime_error(
-							"Keine Programmpunkte erkannt.");
+							"Keine Einträge erkannt.");
 					}
 				} catch (const std::exception &ex) {
 					fatal_err = ex.what();
@@ -2876,7 +3066,7 @@ void LiedplanDock::on_open_import_dialog()
 						ai_preview_group->setVisible(true);
 						const QString ok_msg =
 							QStringLiteral(
-								"Vorschau: %1 Punkte (%2)")
+								"Vorschau: %1 Einträge (%2)")
 								.arg(pending_ai_res->items.size())
 								.arg(src_tag);
 						ai_status_lbl->setText(ok_msg);
@@ -2910,7 +3100,7 @@ void LiedplanDock::on_open_import_dialog()
 				// IMP-R: rows fallen auf die neuen zeile1..3 zurueck.
 				state_.cards[i].rows.clear();
 			}
-			// Überzählige Bestandskarten bereinigen, damit keine Lieder der Vorwoche stehen bleiben.
+			// Überzählige Bestandskarten bereinigen, damit keine alten Einträge stehen bleiben.
 			for (std::size_t i = n; i < state_.cards.size(); ++i) {
 				if (!is_standard_card(state_.cards[i], i))
 					state_.cards[i].zeile1.clear();
@@ -2931,11 +3121,11 @@ void LiedplanDock::on_open_import_dialog()
 			const QString label_q =
 				QString::fromUtf8(pending_ai_res->model_label.c_str());
 			QString dock_msg =
-				QStringLiteral("AI-Import: %1 Punkte (Quelle: %2)")
+				QStringLiteral("AI-Import: %1 Einträge (Quelle: %2)")
 					.arg(n)
 					.arg(label_q);
 			if (ignored > 0) {
-				dock_msg += QStringLiteral(" — Übernommen: %1 Punkte (%2 weitere ignoriert)")
+				dock_msg += QStringLiteral(" — Übernommen: %1 Einträge (%2 weitere ignoriert)")
 						    .arg(n)
 						    .arg(ignored);
 			}
@@ -2944,8 +3134,22 @@ void LiedplanDock::on_open_import_dialog()
 		});
 
 	connect(api_btn, &QPushButton::clicked, &dlg,
-		[this, cancel, dlg_ptr, self_ptr, api_btn, csv_btn, status_lbl, error_lbl,
-		 handle_success, handle_error]() {
+		[this, cancel, dlg_ptr, self_ptr, api_btn, csv_btn, edit_form_id, status_lbl,
+		 error_lbl, handle_success, handle_error]() {
+			const std::string form_id =
+				edit_form_id->text().trimmed().toUtf8().toStdString();
+			state_.settings.google_form_id = form_id;
+			save_state();
+			if (form_id.empty()) {
+				const QString msg =
+					QStringLiteral("Bitte zuerst eine FORM-ID eintragen");
+				status_lbl->setText(msg);
+				error_lbl->setText(msg);
+				error_lbl->setVisible(true);
+				set_dock_status(msg, true);
+				return;
+			}
+
 			api_btn->setEnabled(false);
 			csv_btn->setEnabled(false);
 			error_lbl->clear();
@@ -2959,10 +3163,6 @@ void LiedplanDock::on_open_import_dialog()
 					     "google_access_token.json";
 			}
 
-			const std::string form_id =
-				state_.settings.google_form_id.empty()
-					? liedplan_import::kDefaultFormId
-					: state_.settings.google_form_id;
 			const std::filesystem::path token_path = std::filesystem::u8path(
 				state_.settings.token_path.empty()
 					? liedplan_import::default_token_path_str()
@@ -3005,7 +3205,7 @@ void LiedplanDock::on_open_import_dialog()
 		[&dlg, cancel, dlg_ptr, self_ptr, api_btn, csv_btn, status_lbl, error_lbl,
 		 handle_success, handle_error]() {
 			const QString file_name = QFileDialog::getOpenFileName(
-				&dlg, QStringLiteral("Liedplan-Datei importieren"), QString(),
+				&dlg, QStringLiteral("Datei importieren"), QString(),
 				QStringLiteral(
 					"CSV-Dateien (*.csv);;Excel-Dateien (*.xlsx);;ZIP-Archive (*.zip);;Alle Dateien (*.*)"),
 				nullptr, dialog_options());
@@ -3050,7 +3250,15 @@ void LiedplanDock::on_open_import_dialog()
 						if (err == liedplan_import::ImportError::None) {
 							handle_success(res, source_basename);
 						} else {
-							handle_error(err_msg);
+							const std::string base_utf8 =
+								source_basename.toUtf8().toStdString();
+							const std::string full_err =
+								(!base_utf8.empty() &&
+								 err_msg.find(base_utf8) ==
+									 std::string::npos)
+									? (base_utf8 + ": " + err_msg)
+									: err_msg;
+							handle_error(full_err);
 						}
 					},
 					Qt::QueuedConnection);
@@ -3058,6 +3266,12 @@ void LiedplanDock::on_open_import_dialog()
 		});
 
 	dlg.exec();
+	if (dlg.result() == QDialog::Accepted) {
+		lp_event_log(lp_event_log_dir_from_state_path(state_path_),
+			     "Datenarchiv geschlossen");
+	} else {
+		set_dock_status(QStringLiteral("Datenarchiv geschlossen"), false);
+	}
 }
 
 void LiedplanDock::on_open_quick_profiles_dialog()
@@ -3305,6 +3519,8 @@ void LiedplanDock::on_restore_state()
 
 void LiedplanDock::on_open_settings_dialog()
 {
+	set_dock_status(QStringLiteral("Einstellungen geöffnet"), false);
+
 	QDialog dlg(this);
 	dlg.setObjectName(QStringLiteral("lpSettingsDialog"));
 	dlg.setWindowTitle(QStringLiteral("Einstellungen"));
@@ -3324,11 +3540,9 @@ void LiedplanDock::on_open_settings_dialog()
 
 	auto *lbl_form = new QLabel(QStringLiteral("GOOGLE-FORM-ID"), oauth_group);
 	lbl_form->setObjectName(QStringLiteral("lpFieldLabel"));
-	const std::string cur_form_id = state_.settings.google_form_id.empty()
-						? liedplan_import::kDefaultFormId
-						: state_.settings.google_form_id;
+	const std::string cur_form_id = state_.settings.google_form_id;
 	auto *edit_form = new QLineEdit(QString::fromUtf8(cur_form_id.c_str()), oauth_group);
-	edit_form->setPlaceholderText(QString::fromUtf8(liedplan_import::kDefaultFormId));
+	edit_form->setPlaceholderText(QStringLiteral("Google-Form-ID"));
 
 	auto *lbl_token = new QLabel(QStringLiteral("OAUTH-TOKEN-PFAD"), oauth_group);
 	lbl_token->setObjectName(QStringLiteral("lpFieldLabel"));
@@ -3431,7 +3645,7 @@ void LiedplanDock::on_open_settings_dialog()
 
 	QPushButton *browse_lieder_btn = nullptr;
 	auto *edit_lieder_path = make_path_row(
-		m5_layout, QStringLiteral("LIEDER-REFERENZ-PFAD (lieder.md)"),
+		m5_layout, QStringLiteral("REFERENZ-INDEX"),
 		state_.settings.lieder_path, def_settings.lieder_path,
 		browse_lieder_btn);
 
@@ -3707,7 +3921,7 @@ void LiedplanDock::on_open_settings_dialog()
 
 	connect(browse_lieder_btn, &QPushButton::clicked, &dlg, [&dlg, edit_lieder_path]() {
 		const QString chosen = QFileDialog::getOpenFileName(
-			&dlg, QStringLiteral("Lieder-Referenzdatei (lieder.md) wählen"),
+			&dlg, QStringLiteral("Referenz-Index-Datei wählen"),
 			edit_lieder_path->text(),
 			QStringLiteral("Markdown-Dateien (*.md);;Alle Dateien (*.*)"));
 		if (!chosen.isEmpty())
@@ -3717,7 +3931,7 @@ void LiedplanDock::on_open_settings_dialog()
 	connect(reset_btn, &QPushButton::clicked, &dlg,
 		[edit_form, edit_token, edit_key_path, edit_py_path, edit_anim_dir,
 		 edit_lieder_path, def_settings]() {
-			edit_form->setText(QString::fromUtf8(liedplan_import::kDefaultFormId));
+			edit_form->setText(QString());
 			edit_token->setText(QString::fromUtf8(liedplan_import::default_token_path_str()));
 			edit_key_path->setText(
 				QString::fromUtf8(def_settings.openrouter_key_path.c_str()));
@@ -3744,8 +3958,7 @@ void LiedplanDock::on_open_settings_dialog()
 			const std::string lpath =
 				edit_lieder_path->text().trimmed().toUtf8().toStdString();
 
-			state_.settings.google_form_id =
-				fid.empty() ? liedplan_import::kDefaultFormId : fid;
+			state_.settings.google_form_id = fid;
 			state_.settings.token_path =
 				tpath.empty() ? liedplan_import::default_token_path_str() : tpath;
 			state_.settings.openrouter_key_path =

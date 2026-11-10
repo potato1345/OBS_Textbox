@@ -2,7 +2,7 @@
  * liedplan-import.hpp — Import-Funktionen für Google Forms, CSV, XLSX und ZIP (v3).
  *
  * Zweck:
- *   - Definiert LiedplanPoint und LiedplanImportResult für 12 liturgische Programmpunkte.
+ *   - Definiert LiedplanPoint und LiedplanImportResult für 12 strukturierte Einträge.
  *   - Deklariert Parser für Google Forms API JSON-Antworten und CSV-/Tabellenexporte.
  *   - Implementiert OAuth-Token-Refresh und HTTP-Aufrufe via Windows WinINet.
  *
@@ -19,11 +19,12 @@
 #include <optional>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 namespace liedplan_import {
 
-/** Die 12 standardmäßigen Programmpunkte des Liedplans in fester liturgischer Reihenfolge. */
+/** Die 12 standardmäßigen Einträge in fester Reihenfolge. */
 inline constexpr std::array<std::string_view, 12> PROGRAM_POINTS = {
 	"Eröffnung",      "Kyrie",  "Gloria",    "Zwischengesang", "Halleluja", "Credo",
 	"Gabenbereitung", "Heilig", "Agnus Dei", "Kommunion",      "Danklied",  "Schlusslied",
@@ -56,8 +57,6 @@ inline std::filesystem::path default_client_secret_path()
 	}
 	return std::filesystem::path();
 }
-inline constexpr const char *kDefaultFormId =
-	"1jreAuzd-jt1x48WDmjaP7v0OusdVO2lb55Kt4JrhEgY";
 
 struct LiedplanPoint {
 	std::string gl;
@@ -70,18 +69,20 @@ struct LiedplanPoint {
 	}
 };
 
-// Einzelner eingereichter Gottesdienst mit Kopfdaten und 12 Programmpunkten.
+// Einzelne eingereichte Antwort mit Kopfdaten, generischen Feldern und 12 Einträgen.
 struct LiedplanService {
 	std::string woche;
 	std::string tag;
 	std::string organist;
 	std::string zeitstempel;
 	std::vector<LiedplanPoint> punkte; // exakt 12 Einträge (fehlende leer)
+	std::vector<std::pair<std::string, std::string>> fields; // geordnete Nicht-Punkt-Spalten
 
 	bool operator==(const LiedplanService &other) const
 	{
 		return woche == other.woche && tag == other.tag && organist == other.organist &&
-		       zeitstempel == other.zeitstempel && punkte == other.punkte;
+		       zeitstempel == other.zeitstempel && punkte == other.punkte &&
+		       fields == other.fields;
 	}
 };
 
@@ -91,8 +92,8 @@ struct LiedplanImportResult {
 	std::string organist;
 	std::string zeitstempel;
 	std::vector<LiedplanPoint> punkte; // exakt 12 Einträge (fehlende leer)
-	LiedplanService service; // neuester Gottesdienst (Abwärtskompatibilität)
-	std::vector<LiedplanService> services; // alle Gottesdienste, neueste zuerst
+	LiedplanService service; // neueste Einreichung (Abwärtskompatibilität)
+	std::vector<LiedplanService> services; // alle Einreichungen, neueste zuerst
 
 	bool operator==(const LiedplanImportResult &other) const
 	{
@@ -105,7 +106,10 @@ using ImportResult = LiedplanImportResult;
 
 enum class ImportError { None, Format, NoResponses, File };
 
-using Record = std::map<std::string, std::string>;
+struct Record : std::map<std::string, std::string> {
+	using std::map<std::string, std::string>::map;
+	std::vector<std::pair<std::string, std::string>> fields;
+};
 
 // Spaltenkopf-Normalisierung und Mapping
 std::string normalize_header(std::string_view raw);
@@ -197,6 +201,6 @@ std::optional<LiedplanImportResult> import_from_api(
 	std::string *out_error = nullptr,
 	const std::filesystem::path &cache_path = {},
 	const std::filesystem::path &token_path = default_token_path(),
-	const std::string &form_id = kDefaultFormId);
+	const std::string &form_id = "");
 
 } // namespace liedplan_import

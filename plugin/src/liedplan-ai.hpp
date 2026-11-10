@@ -1,11 +1,11 @@
 /*
- * liedplan-ai.hpp — LLM-gestützte und deterministische Liedplan-Extraktion (v3).
+ * liedplan-ai.hpp — LLM-gestützte und deterministische Dokument-Extraktion (v3).
  *
  * Zweck:
- *   - Definiert AiPoint und AiResult zur Repräsentation strukturierter Liedplan-Daten.
+ *   - Definiert AiPoint und AiResult zur Repräsentation strukturierter Kartendaten.
  *   - Deklariert Methoden für Dokument-Textextraktion (via markitdown Python-Subprozess).
  *   - Deklariert OpenRouter-API-Kommunikation und kostenlose Modell-Erkennung (:free).
- *   - Deklariert deterministischen Offline-Fallback-Parser und Gotteslob-Titel-Anreicherung (lieder.md).
+ *   - Deklariert deterministischen Offline-Fallback-Parser und Referenz-Titel-Anreicherung.
  *
  * Hinweis: Qt- und libobs-frei; wird auch in Standalone-Tests (test-liedplan-ai) verwendet.
  */
@@ -21,7 +21,7 @@
 
 namespace liedplan_ai {
 
-/** Ein einzelner erkannter Programmpunkt mit bis zu 3 Textzeilen. */
+/** Ein einzelner erkannter Eintrag mit bis zu 3 Textzeilen. */
 struct AiPoint {
 	std::string zeile1;
 	std::string zeile2;
@@ -39,21 +39,11 @@ struct AiResult {
 };
 
 constexpr const char *kDefaultSystemPrompt =
-	"Du bist ein Parser für Gottesdienstprogramme (Liedpläne).\n"
-	"Du erhältst den Text eines Liedplans und erzeugst daraus die Programmpunkte der Feier, in Dokumentreihenfolge.\n"
-	"\n"
-	"Regeln:\n"
-	"- Ignoriere Kopfzeilen: Ort/Titel (z. B. \"Liedplan …\"), Datum/Woche, Tagesangaben (Dienstag/Donnerstag/Sonntag), \"Organist …\", Personen-Namen.\n"
-	"- Ein Programmpunkt ist z. B.: Eröffnung/Einzug, Kyrie, Gloria, Credo, Halleluja, Zwischengesang, Gabenbereitung, Heilig, Agnus Dei, Kommunion, Lesung, Predigt, Gebet, Danklied, Schlusslied, Segen.\n"
-	"- Pro Programmpunkt genau drei Felder:\n"
-	"  zeile1 = Bezeichnung des Programmpunkts (z. B. \"Eröffnung\", \"Kyrie\", \"Schlusslied\").\n"
-	"  zeile2 = Gotteslob-Nummer mit Versen, exakt wie im Text (z. B. \"144, 1+4+6\"). Keine Nummer => \"\".\n"
-	"  zeile3 = Liedtitel, falls vorhanden (z. B. \"Nun jauchzt dem Herren, aller Welt\"). Kein Lied (z. B. nur Orgel) => \"\".\n"
-	"- \"Kommunion Orgel\" => zeile1=\"Kommunion\", zeile2=\"Orgel\", zeile3=\"\".\n"
-	"- Zerlege Programmpunkt, Nummer und Titel auch dann korrekt, wenn sie auf einer Zeile stehen.\n"
-	"\n"
-	"Gib AUSSCHLIESSLICH gültiges JSON zurück, ohne Markdown und ohne zusätzlichen Text:\n"
-	"{\"items\":[{\"zeile1\":\"...\",\"zeile2\":\"...\",\"zeile3\":\"...\"}]}";
+	"Du bist ein Parser für strukturierte Dokumente. Du erhältst Dokumenttext und erzeugst daraus die "
+	"Datenzeilen in Dokumentreihenfolge. Regeln: ignoriere Kopfzeilen/Meta (Titel, Datum, Personen). "
+	"Pro Eintrag genau drei Felder: zeile1 = Bezeichnung, zeile2 = Nummer/Kürzel (z. B. „144, 1+4+6“), sonst leer, "
+	"zeile3 = Titel/Name, sonst leer. Zerlege Bezeichnung/Nummer/Titel auch, wenn sie auf einer Zeile stehen. "
+	"Gib AUSSCHLIESSLICH gültiges JSON zurück, ohne Markdown: {\"items\":[{\"zeile1\":\"...\",\"zeile2\":\"...\",\"zeile3\":\"...\"}]}";
 
 constexpr const char *kModelPriorities[] = {
 	"gemma-4-31b",           "gemma-4-26b", "nemotron-3-super-120b",

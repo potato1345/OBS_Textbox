@@ -1,9 +1,9 @@
 /*
- * plugin-main.cpp — Haupteinstiegspunkt für das Liedplan OBS Studio Plugin (v3).
+ * plugin-main.cpp — Haupteinstiegspunkt für das Textbox OBS Studio Plugin (v3).
  *
  * Zweck:
  *   - Registriert das OBS-Modul (OBS_DECLARE_MODULE, obs_module_load, obs_module_unload).
- *   - Registriert die native Liedplan-Kartenquelle (liedplan_card_source_info).
+ *   - Registriert die native Kartenquelle.
  *   - Erzeugt und bindet das benutzerdefinierte QDockWidget (LiedplanDock) über die
  *     OBS-Frontend-API ein.
  *   - Unterstützt abgerundete Ecken im Floating-Fensterzustand via Event-Filter (LiedplanFloatRoundedHelper).
@@ -125,7 +125,7 @@ bool obs_module_load(void)
 		QWidget *mw = static_cast<QWidget *>(obs_frontend_get_main_window());
 		g_dock = new QDockWidget(mw);
 		g_dock->setObjectName(QStringLiteral("liedplan"));
-		g_dock->setWindowTitle(QStringLiteral("Liedplan"));
+		g_dock->setWindowTitle(QStringLiteral("Textbox"));
 		g_dock->setWidget(new LiedplanDock(state_path, g_dock));
 		/* M7h: runde untere Ecken im Floating-Zustand (liefert sich selbst) */
 		new LiedplanFloatRoundedHelper(g_dock);
@@ -142,7 +142,7 @@ bool obs_module_load(void)
 			/* IMP-L: geschlossene Docks brauchen einen Wiederoeffnungs-
 			 * weg; OBS legt fuer custom-Docks keinen Menueeintrag an. */
 			obs_frontend_add_tools_menu_item(
-				"Liedplan-Dock anzeigen",
+				"Textbox-Dock anzeigen",
 				[](void *param) {
 					auto *d = static_cast<QDockWidget *>(param);
 					d->show();
@@ -191,7 +191,7 @@ bool obs_module_load(void)
 				}
 			});
 		}
-		blog(LOG_INFO, "[liedplan] Liedplan-Dock registriert (Erfolg=%s)", ok ? "ja" : "nein");
+		blog(LOG_INFO, "[liedplan] Textbox-Dock registriert (Erfolg=%s)", ok ? "ja" : "nein");
 	}
 #endif
 #endif

@@ -43,8 +43,7 @@ namespace liedplan_import {
 namespace {
 
 constexpr const char *kFormatErrorMsg =
-	"Unbekanntes Dateiformat: Es wurden keine Programmpunkt-Spalten des "
-	"Liedplan-Formulars gefunden (erwartet z. B. „1. Eröffnung – GL-Nummer“).";
+	"Unbekanntes Dateiformat: keine Datenspalten gefunden (erwartet Tabellen-Columns mit Antworten).";
 constexpr const char *kNoResponsesCsvMsg =
 	"Die Datei enthält keine Antworten (nur die Kopfzeile).";
 constexpr const char *kEmptyCsvMsg = "Die CSV-Datei ist leer.";
@@ -273,7 +272,7 @@ std::optional<HttpResponse> winhttp_request(const std::string &method,
 		return std::nullopt;
 	}
 
-	WinHttpHandle session(WinHttpOpen(L"Liedplan-OBS/1.0",
+	WinHttpHandle session(WinHttpOpen(L"OBS-Textbox/1.0",
 					  WINHTTP_ACCESS_TYPE_DEFAULT_PROXY,
 					  WINHTTP_NO_PROXY_NAME,
 					  WINHTTP_NO_PROXY_BYPASS, 0));
@@ -631,6 +630,26 @@ ImportError parse_records(const std::vector<std::string> &header,
 			const std::size_t pos = kv.second;
 			rec[key] = (pos < row.size()) ? trim_str(row[pos]) : std::string{};
 		}
+		for (std::size_t pos = 0; pos < header.size(); ++pos) {
+			const auto key = header_key(header[pos]);
+			const bool is_point =
+				key.has_value() && !key->empty() &&
+				std::isdigit(static_cast<unsigned char>(key->front()));
+			if (is_point)
+				continue;
+			std::string_view hdr_sv(header[pos]);
+			if (hdr_sv.size() >= 3 &&
+			    static_cast<unsigned char>(hdr_sv[0]) == 0xEF &&
+			    static_cast<unsigned char>(hdr_sv[1]) == 0xBB &&
+			    static_cast<unsigned char>(hdr_sv[2]) == 0xBF) {
+				hdr_sv.remove_prefix(3);
+			}
+			const std::string col_name = trim_str(hdr_sv);
+			const std::string val =
+				(pos < row.size()) ? trim_str(row[pos]) : std::string{};
+			if (!col_name.empty() && !val.empty())
+				rec.fields.emplace_back(col_name, val);
+		}
 		out_records.push_back(std::move(rec));
 	}
 
@@ -645,7 +664,7 @@ ImportError parse_records(const std::vector<std::string> &header,
 	return ImportError::None;
 }
 
-// Konvertiert einen einzelnen Record in eine LiedplanService-Struktur (12 Programmpunkte).
+// Konvertiert einen einzelnen Record in eine LiedplanService-Struktur (12 Einträge).
 LiedplanService to_service(const Record &record)
 {
 	LiedplanService svc;
@@ -661,10 +680,21 @@ LiedplanService to_service(const Record &record)
 		svc.punkte[i].verse = get_record_trimmed(record, prefix + "verse");
 		svc.punkte[i].titel = get_record_trimmed(record, prefix + "titel");
 	}
+	svc.fields = record.fields;
+	if (svc.fields.empty()) {
+		if (!svc.zeitstempel.empty())
+			svc.fields.emplace_back("Zeitstempel", svc.zeitstempel);
+		if (!svc.woche.empty())
+			svc.fields.emplace_back("Woche", svc.woche);
+		if (!svc.tag.empty())
+			svc.fields.emplace_back("Tag", svc.tag);
+		if (!svc.organist.empty())
+			svc.fields.emplace_back("Organist", svc.organist);
+	}
 	return svc;
 }
 
-// Baut ein LiedplanImportResult aus einem einzelnen Gottesdienst (inkl. service und services).
+// Baut ein LiedplanImportResult aus einer einzelnen Einreichung (inkl. service und services).
 LiedplanImportResult to_import_result(const LiedplanService &service)
 {
 	LiedplanImportResult res;
@@ -688,7 +718,7 @@ LiedplanImportResult to_import_result(const std::vector<Record> &records)
 	if (records.empty())
 		return to_import_result(Record{});
 
-	// Alle gefundenen Gottesdienste sammeln und neueste zuerst nach Zeitstempel sortieren.
+	// Alle gefundenen Einreichungen sammeln und neueste zuerst nach Zeitstempel sortieren.
 	std::vector<LiedplanService> services;
 	services.reserve(records.size());
 	for (auto it = records.rbegin(); it != records.rend(); ++it) {
@@ -1756,6 +1786,9 @@ Record api_response_to_record(const nlohmann::json &response,
 		}
 	}
 	record["zeitstempel"] = ts;
+	const std::string trimmed_ts = trim_str(ts);
+	if (!trimmed_ts.empty())
+		record.fields.emplace_back("Zeitstempel", trimmed_ts);
 
 	if (!response.is_object() || !response.contains("answers") ||
 	    !response["answers"].is_object()) {
@@ -1772,8 +1805,6 @@ Record api_response_to_record(const nlohmann::json &response,
 			raw_title = title_map[question_id].get<std::string>();
 		}
 		const auto key = header_key(raw_title);
-		if (!key)
-			continue;
 
 		std::string joined;
 		if (answer.is_object() && answer.contains("textAnswers") &&
@@ -1794,7 +1825,16 @@ Record api_response_to_record(const nlohmann::json &response,
 				}
 			}
 		}
-		record[*key] = std::move(joined);
+		const bool is_point = key.has_value() && !key->empty() &&
+				      std::isdigit(static_cast<unsigned char>(key->front()));
+		if (!is_point) {
+			const std::string clean_title = trim_str(raw_title);
+			const std::string clean_val = trim_str(joined);
+			if (!clean_title.empty() && !clean_val.empty())
+				record.fields.emplace_back(clean_title, clean_val);
+		}
+		if (key)
+			record[*key] = std::move(joined);
 	}
 
 	return record;
@@ -2058,6 +2098,12 @@ std::optional<LiedplanImportResult> import_from_api(std::string *out_error,
 						    const std::filesystem::path &token_path,
 						    const std::string &form_id)
 {
+	if (trim_str(form_id).empty()) {
+		if (out_error)
+			*out_error = "Bitte zuerst eine FORM-ID eintragen";
+		return std::nullopt;
+	}
+
 	auto token = get_access_token(token_path, cache_path, out_error);
 	if (!token)
 		return std::nullopt;

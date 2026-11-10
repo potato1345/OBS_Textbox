@@ -482,6 +482,88 @@ int main()
 		      csv_err + " " + zip_err);
 	}
 
+	// 22. (IMP-X4) CSV mit generischen Spalten + Kirchen-Schema befüllt fields in Quellreihenfolge (ohne Punkt-Spalten / leere Werte)
+	{
+		const std::string csv_gen =
+			"Zeitstempel,Woche,Tag,Organist,Raum,Technik,LeerSpalte,1. Eröffnung – GL-Nummer,1. Eröffnung – Liedtitel\n"
+			"20.10.2026 09:15:32,KW 42,Sonntag,E. Stolper,Halle A,Licht,,144,Sonntags-Lied\n";
+		ImportResult gen_res;
+		std::size_t gen_count = 0;
+		std::string gen_err;
+		const ImportError err = parse_csv_string(csv_gen, gen_res, &gen_count, &gen_err);
+		const std::vector<std::pair<std::string, std::string>> expected_fields = {
+			{"Zeitstempel", "20.10.2026 09:15:32"},
+			{"Woche", "KW 42"},
+			{"Tag", "Sonntag"},
+			{"Organist", "E. Stolper"},
+			{"Raum", "Halle A"},
+			{"Technik", "Licht"},
+		};
+		const bool ok = (err == ImportError::None) && (gen_count == 1) &&
+				(gen_res.service.fields == expected_fields) &&
+				(gen_res.services.size() == 1) &&
+				(gen_res.services[0].fields == expected_fields);
+		check(ok, "22. IMP-X4 CSV fields: Quellreihenfolge inkl. generischer Spalten, ohne Punkt-/Leerspalten", gen_err);
+	}
+
+	// 23. (IMP-X4) API-Response fields: Zeitstempel + Fragetitel inkl. generischer Frage, ohne Punkt-Fragen
+	{
+		const nlohmann::json title_map = {
+			{"q_woche", "Woche"},
+			{"q_tag", "Tag"},
+			{"q_organist", "Organist"},
+			{"q_p1_gl", "1. Eröffnung \xE2\x80\x93 GL-Nummer"},
+			{"q_unbekannt", "Sonstige Bemerkungen"},
+		};
+		const nlohmann::json response = {
+			{"lastSubmittedTime", "2026-10-20T09:15:32Z"},
+			{"answers",
+			 {
+				 {"q_woche", {{"textAnswers", {{"answers", {{{"value", "KW 42"}}}}}}}},
+				 {"q_tag", {{"textAnswers", {{"answers", {{{"value", "Sonntag"}}}}}}}},
+				 {"q_organist", {{"textAnswers", {{"answers", {{{"value", "E. Stolper"}}}}}}}},
+				 {"q_p1_gl", {{"textAnswers", {{"answers", {{{"value", "144"}}}}}}}},
+				 {"q_unbekannt", {{"textAnswers", {{"answers", {{{"value", "Wichtig"}}}}}}}},
+			 }},
+		};
+		const Record rec = api_response_to_record(response, title_map);
+		const LiedplanService svc = to_service(rec);
+		bool has_zs = false, has_bem = false, has_p1 = false;
+		for (const auto &kv : svc.fields) {
+			if (kv.first == "Zeitstempel" && kv.second == "2026-10-20T09:15:32Z")
+				has_zs = true;
+			if (kv.first == "Sonstige Bemerkungen" && kv.second == "Wichtig")
+				has_bem = true;
+			if (kv.first.find("Eröffnung") != std::string::npos)
+				has_p1 = true;
+		}
+		const bool ok = (svc.fields.size() == 5) && has_zs && has_bem && !has_p1;
+		check(ok, "23. IMP-X4 API fields: Zeitstempel + Fragetitel (inkl. generisch), ohne Punkt-Fragen");
+	}
+
+	// 24. (IMP-X4/X2) fields in XLSX & ZIP + import_from_api mit leerer form_id liefert Pflichthinweis
+	{
+		const std::filesystem::path xlsx_path =
+			std::filesystem::u8path(std::string(kSamplesDir) + "antwort.xlsx");
+		ImportResult xlsx_res;
+		const ImportError xerr = parse_xlsx_file(xlsx_path, xlsx_res);
+		const std::string zip_bytes =
+			build_zip_archive({{"antwort.csv", ref_csv_bytes}}, true);
+		ImportResult zip_res;
+		const ImportError zerr = parse_zip_bytes(zip_bytes, zip_res);
+
+		std::string api_err;
+		const auto api_opt = import_from_api(&api_err, temp_dir, temp_dir, "");
+
+		const bool ok = (xerr == ImportError::None) && !xlsx_res.service.fields.empty() &&
+				(xlsx_res.service.fields == ref_csv_res.service.fields) &&
+				(zerr == ImportError::None) &&
+				(zip_res.service.fields == ref_csv_res.service.fields) &&
+				!api_opt.has_value() &&
+				(api_err == "Bitte zuerst eine FORM-ID eintragen");
+		check(ok, "24. IMP-X4/X2 fields in XLSX/ZIP identisch + leere FORM-ID Fehlermeldung", api_err);
+	}
+
 	{
 		std::error_code ec;
 		std::filesystem::remove_all(temp_dir, ec);
@@ -491,6 +573,6 @@ int main()
 		std::cerr << g_failures << " test(s) failed.\n";
 		return 1;
 	}
-	std::cout << "All 21 checks passed.\n";
+	std::cout << "All 24 checks passed.\n";
 	return 0;
 }

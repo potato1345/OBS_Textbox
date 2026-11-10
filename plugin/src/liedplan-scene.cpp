@@ -1,10 +1,10 @@
 /*
- * liedplan-scene.cpp — OBS-Szenen-Integration für Liedplan-Karten (v3).
+ * liedplan-scene.cpp — OBS-Szenen-Integration für Textbox-Karten (v3).
  *
  * Zweck:
- *   - Verwaltet OBS-Browserquellen für Liedplan-Karten in aktuellen oder allen Szenen.
+ *   - Verwaltet OBS-Browserquellen für Textbox-Karten in aktuellen oder allen Szenen.
  *   - Erzeugt die Quellen mit CEF-freundlichen Standardparametern (Breite, Höhe, FPS).
- *   - Behandelt automatische Migration alter Quellentypen (z.B. liedplan_card -> browser_source).
+ *   - Behandelt automatische Migration alter Quellentypen und Präfixe (Liedplan -> Textbox).
  *   - Aktualisiert Karten-Inhalte (HTML/CSS) oder blendet diese bei Leeren/Löschen aus.
  */
 
@@ -61,11 +61,36 @@ std::vector<obs_scene_t *> collect_all_scenes()
 	return scenes;
 }
 
+std::string legacy_source_name(const std::string &card_id)
+{
+	return "Liedplan " + card_id;
+}
+
+obs_sceneitem_t *find_card_sceneitem(obs_scene_t *scene, const std::string &card_id,
+				     bool migrate_name = true)
+{
+	const std::string name = source_name(card_id);
+	obs_sceneitem_t *item = obs_scene_find_source(scene, name.c_str());
+	if (item)
+		return item;
+	const std::string legacy = legacy_source_name(card_id);
+	item = obs_scene_find_source(scene, legacy.c_str());
+	if (item && migrate_name) {
+		obs_source_t *src = obs_sceneitem_get_source(item);
+		if (src && is_browser_source(src)) {
+			obs_source_set_name(src, name.c_str());
+			blog(LOG_INFO, "[liedplan] Quelle '%s' umbenannt in '%s'",
+			     legacy.c_str(), name.c_str());
+		}
+	}
+	return item;
+}
+
 } // namespace
 
 std::string source_name(const std::string &card_id)
 {
-	return "Liedplan " + card_id;
+	return "Textbox " + card_id;
 }
 
 obs_data_t *make_settings(const LiedplanCard &card, const std::string &local_file)
@@ -113,7 +138,7 @@ void send_to_current_scene(const LiedplanCard &card, const LiedplanSettings &set
 	}
 
 	const std::string name = source_name(card.id);
-	obs_sceneitem_t *item = obs_scene_find_source(scene, name.c_str());
+	obs_sceneitem_t *item = find_card_sceneitem(scene, card.id, true);
 	if (item) {
 		obs_source_t *src = obs_sceneitem_get_source(item);
 		if (is_browser_source(src)) {
@@ -196,7 +221,7 @@ void update_everywhere(const LiedplanCard &card, bool clear, const LiedplanSetti
 	const std::vector<obs_scene_t *> scenes = collect_all_scenes();
 
 	for (obs_scene_t *scene : scenes) {
-		obs_sceneitem_t *item = obs_scene_find_source(scene, name.c_str());
+		obs_sceneitem_t *item = find_card_sceneitem(scene, card.id, true);
 		if (!item)
 			continue;
 
@@ -216,7 +241,7 @@ void push_all_scenes(const LiedplanCard &card, const LiedplanSettings &settings)
 	const std::vector<obs_scene_t *> scenes = collect_all_scenes();
 	const std::string dir = liedplan_html::cards_dir();
 	for (obs_scene_t *scene : scenes) {
-		obs_sceneitem_t *item = obs_scene_find_source(scene, name.c_str());
+		obs_sceneitem_t *item = find_card_sceneitem(scene, card.id, true);
 		if (!item)
 			continue;
 		obs_source_t *src = obs_sceneitem_get_source(item);
@@ -247,7 +272,7 @@ void reload_everywhere(const LiedplanCard &card, const LiedplanSettings &setting
 
 	int reloaded = 0;
 	for (obs_scene_t *scene : scenes) {
-		obs_sceneitem_t *item = obs_scene_find_source(scene, name.c_str());
+		obs_sceneitem_t *item = find_card_sceneitem(scene, card.id, true);
 		if (!item)
 			continue;
 		obs_source_t *src = obs_sceneitem_get_source(item);
@@ -263,30 +288,34 @@ void reload_everywhere(const LiedplanCard &card, const LiedplanSettings &setting
 void remove_everywhere(const std::string &card_id)
 {
 	const std::string name = source_name(card_id);
+	const std::string legacy = legacy_source_name(card_id);
 	blog(LOG_INFO, "[liedplan] Entferne Quelle '%s' aus allen Szenen", name.c_str());
 	const std::vector<obs_scene_t *> scenes = collect_all_scenes();
 
 	for (obs_scene_t *scene : scenes) {
-		obs_sceneitem_t *item = obs_scene_find_source(scene, name.c_str());
-		if (!item)
-			continue;
-
 		// WICHTIG (32.2.2, in .deps verifiziert): obs_scene_find_source und
 		// obs_sceneitem_get_source geben BORROWTE Pointer zurueck (kein addref).
 		// obs_sceneitem_remove entlaedt das Item (ref 1->0) und das Item gibt
 		// beim Destroys seine Source-Ref frei. Eine weitere obs_source_release
 		// hier waere ein Double-Release (Crash). Daher: kein Release.
-		obs_sceneitem_remove(item);
+		if (obs_sceneitem_t *item = obs_scene_find_source(scene, name.c_str()))
+			obs_sceneitem_remove(item);
+		if (obs_sceneitem_t *legacy_item = obs_scene_find_source(scene, legacy.c_str()))
+			obs_sceneitem_remove(legacy_item);
 	}
 }
 
 bool source_exists(const std::string &card_id)
 {
 	const std::string name = source_name(card_id);
+	const std::string legacy = legacy_source_name(card_id);
 	const std::vector<obs_scene_t *> scenes = collect_all_scenes();
 	for (obs_scene_t *scene : scenes) {
 		obs_sceneitem_t *item = obs_scene_find_source(scene, name.c_str());
 		if (item && is_browser_source(obs_sceneitem_get_source(item)))
+			return true;
+		obs_sceneitem_t *legacy_item = obs_scene_find_source(scene, legacy.c_str());
+		if (legacy_item && is_browser_source(obs_sceneitem_get_source(legacy_item)))
 			return true;
 	}
 	return false;

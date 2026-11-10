@@ -234,6 +234,7 @@ nlohmann::json state_to_json(const LiedplanState &s)
 			 {"lieder_path", s.settings.lieder_path},
 			 {"textbox_path", s.settings.textbox_path},
 			 {"ai_system_prompt", s.settings.ai_system_prompt},
+			 {"kopf_fields", s.settings.kopf_fields},
 		 }},
 		{"quick_profiles", std::move(qp_json)},
 		{"profiles_seeded", s.profiles_seeded},
@@ -287,6 +288,12 @@ std::string state_from_json(LiedplanState &s, const nlohmann::json &root)
 			loaded_settings.textbox_path = st["textbox_path"].get<std::string>();
 		if (st.contains("ai_system_prompt") && st["ai_system_prompt"].is_string())
 			loaded_settings.ai_system_prompt = st["ai_system_prompt"].get<std::string>();
+		if (st.contains("kopf_fields") && st["kopf_fields"].is_array()) {
+			for (const auto &kf : st["kopf_fields"]) {
+				if (kf.is_string())
+					loaded_settings.kopf_fields.push_back(kf.get<std::string>());
+			}
+		}
 	}
 
 	std::vector<LiedplanQuickProfile> loaded_quick_profiles;

@@ -24,9 +24,9 @@
  */
 struct LiedplanCard {
 	std::string id; // z. B. "box1"
-	std::string zeile1; // GL-Nummer
-	std::string zeile2; // Verse
-	std::string zeile3; // Liedtitel
+	std::string zeile1; // Zeile 1
+	std::string zeile2; // Zeile 2
+	std::string zeile3; // Zeile 3
 	std::string profile = "Karte Dunkel";
 	std::string text_color = "#000000";
 	int text_opacity = 255;
@@ -82,7 +82,7 @@ std::string default_animation_dir();
 void liedplan_set_module_lieder_path(const std::string &path);
 
 struct LiedplanSettings {
-	std::string google_form_id = "1jreAuzd-jt1x48WDmjaP7v0OusdVO2lb55Kt4JrhEgY";
+	std::string google_form_id = "";
 	std::string token_path = default_google_token_path();
 	// IMP-T: keine benutzerspezifischen Absolutpfade als Defaults — auf anderen
 	// Rechnern waren sie defekt und leakten die Benutzerstruktur. Persistierte
@@ -93,6 +93,7 @@ struct LiedplanSettings {
 	std::string lieder_path = default_lieder_path();
 	std::string textbox_path = ""; // leer = obs_module_file("index.html") -> Dev-Fallback kRepoTextboxPath
 	std::string ai_system_prompt = ""; // leer = LiedplanAi::kDefaultSystemPrompt verwenden
+	std::vector<std::string> kopf_fields; // leer = alle verfügbaren Felder anzeigen
 
 	bool operator==(const LiedplanSettings &other) const
 	{
@@ -101,7 +102,8 @@ struct LiedplanSettings {
 		       markitdown_python == other.markitdown_python &&
 		       animation_dir == other.animation_dir && lieder_path == other.lieder_path &&
 		       textbox_path == other.textbox_path &&
-		       ai_system_prompt == other.ai_system_prompt;
+		       ai_system_prompt == other.ai_system_prompt &&
+		       kopf_fields == other.kopf_fields;
 	}
 };
 

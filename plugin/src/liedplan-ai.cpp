@@ -1,12 +1,12 @@
 /*
- * liedplan-ai.cpp — Implementierung der KI- und Offline-Liedplan-Analyse (v3).
+ * liedplan-ai.cpp — Implementierung der KI- und Offline-Dokument-Analyse (v3).
  *
  * Zweck:
  *   - Ruft markitdown als Python-Subprozess auf, um Text aus PDF/Word/Bild-Dateien zu extrahieren.
  *   - Fragt OpenRouter nach kostenlosen Modellen ab (:free) und steuert Abfrage-Wiederholungen.
  *   - Säubert und parst JSON-Modellausgaben robust aus Markdown-Umgebungen.
  *   - Bietet einen deterministischen Regex-Offline-Parser bei Ausfall der KI-Schnittstelle.
- *   - Gleicht Liednummern mit lieder.md ab und ergänzt offizielle Gotteslob-Titel.
+ *   - Gleicht Nummern mit der Referenzdatei ab und ergänzt offizielle Titel.
  *
  * Hinweis: Qt- und libobs-frei; wird auch in Standalone-Tests (test-liedplan-ai) verwendet.
  */
@@ -255,7 +255,7 @@ HttpResp winhttp_call(const std::string &method, const std::string &url,
 		return result;
 	}
 
-	WinHttpHandle session(WinHttpOpen(L"Liedplan-OBS/1.0", WINHTTP_ACCESS_TYPE_DEFAULT_PROXY,
+	WinHttpHandle session(WinHttpOpen(L"OBS-Textbox/1.0", WINHTTP_ACCESS_TYPE_DEFAULT_PROXY,
 					  WINHTTP_NO_PROXY_NAME, WINHTTP_NO_PROXY_BYPASS, 0));
 	if (!session) {
 		result.net_err = "WinHttpOpen fehlgeschlagen (" + std::to_string(GetLastError()) + ")";
@@ -792,7 +792,7 @@ AiResult process_with_llm(const std::string &api_key, const std::string &documen
 
 	const std::string sys_prompt =
 		trim_str(system_prompt).empty() ? std::string(kDefaultSystemPrompt) : system_prompt;
-	const std::string user_text = "Liedplan-Text:\n" + document_text;
+	const std::string user_text = "Daten:\n" + document_text;
 	const std::wstring post_hdrs =
 		L"Authorization: Bearer " + utf8_to_wide(api_key) +
 		L"\r\nContent-Type: application/json\r\nHTTP-Referer: http://localhost\r\nX-Title: OBS-Textbox\r\n";
@@ -891,7 +891,7 @@ AiResult process_with_llm(const std::string &api_key, const std::string &documen
 				if (!parsed.is_object() || !parsed.contains("items") ||
 				    !parsed["items"].is_array() || parsed["items"].empty()) {
 					throw std::runtime_error(
-						"Antwort enthielt keine Programmpunkte (items).");
+						"Antwort enthielt keine Einträge (items).");
 				}
 
 				std::vector<AiPoint> items;
@@ -910,7 +910,7 @@ AiResult process_with_llm(const std::string &api_key, const std::string &documen
 
 				if (items.empty()) {
 					throw std::runtime_error(
-						"Antwort enthielt keine Programmpunkte (items).");
+						"Antwort enthielt keine Einträge (items).");
 				}
 
 				const std::string lieder_md = read_file_utf8(lieder_path);
