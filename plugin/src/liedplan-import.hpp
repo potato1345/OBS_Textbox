@@ -175,10 +175,6 @@ ImportError parse_answers_file(const std::filesystem::path &path,
 			       std::size_t *out_count = nullptr,
 			       std::string *out_error = nullptr);
 
-// Hilfsfunktion zum Erzeugen eines ZIP-Archivs im Speicher (Store oder Deflate, für Tests)
-std::string build_zip_archive(const std::vector<std::pair<std::string, std::string>> &entries,
-			      bool use_deflate);
-
 // Google-Forms-API JSON->Record Mapping (offline testbar)
 Record api_response_to_record(const nlohmann::json &response,
 			      const nlohmann::json &title_map);

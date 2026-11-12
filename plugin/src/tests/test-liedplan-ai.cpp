@@ -242,18 +242,26 @@ Schlusslied 868, 1+6 Ave Maria klare
 		const std::filesystem::path py_exe =
 			"C:/Users/Johann/Desktop/GitHub/OBS_Textbox/.venv/Scripts/python.exe";
 #endif
+		// M5-2: ohne Repo-Venv (markitdown installiert) ist 10a maschinenabhängig
+		// -> sauber übersprungen statt rot. 10b (fehlende Exe -> Fehler) läuft immer.
+		const bool venv_present =
+			std::filesystem::exists(py_exe) && std::filesystem::exists(py_exe.parent_path());
+		if (!venv_present)
+			std::cout << "[SKIP] 10a. extract_document_text (Repo-Venv nicht vorhanden)\n";
 		const std::filesystem::path doc_txt = temp_dir / "test_doc.txt";
 		{
 			std::ofstream out(doc_txt, std::ios::binary | std::ios::trunc);
 			out << "Liedplan Test 144, 1+4+6\n";
 		}
 
-		std::string err_ok;
-		const std::string extracted =
-			extract_document_text(doc_txt.u8string(), py_exe.u8string(), err_ok);
-		check(err_ok.empty() && extracted.find("144") != std::string::npos,
-		      "10a. extract_document_text mit Repo-Venv: extrahiert '144' aus test_doc.txt",
-		      err_ok);
+		if (venv_present) {
+			std::string err_ok;
+			const std::string extracted =
+				extract_document_text(doc_txt.u8string(), py_exe.u8string(), err_ok);
+			check(err_ok.empty() && extracted.find("144") != std::string::npos,
+			      "10a. extract_document_text mit Repo-Venv: extrahiert '144' aus test_doc.txt",
+			      err_ok);
+		}
 
 		std::string err_missing;
 		const std::string ext_missing = extract_document_text(

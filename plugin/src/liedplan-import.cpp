@@ -814,19 +814,8 @@ std::uint32_t read_le32(std::string_view data, std::size_t pos)
 	       (static_cast<std::uint32_t>(static_cast<unsigned char>(data[pos + 3])) << 24);
 }
 
-void write_le16(std::string &out, std::uint16_t val)
-{
-	out.push_back(static_cast<char>(val & 0xFF));
-	out.push_back(static_cast<char>((val >> 8) & 0xFF));
-}
-
-void write_le32(std::string &out, std::uint32_t val)
-{
-	out.push_back(static_cast<char>(val & 0xFF));
-	out.push_back(static_cast<char>((val >> 8) & 0xFF));
-	out.push_back(static_cast<char>((val >> 16) & 0xFF));
-	out.push_back(static_cast<char>((val >> 24) & 0xFF));
-}
+// M4-T1: write_le16/write_le32 + build_zip_archive wurden in die Test-Translation
+// verschoben — die Produktions-DLL exportiert keinen ZIP-Writer mehr.
 
 struct ZipMember {
 	std::string name;
@@ -1658,117 +1647,6 @@ ImportError parse_answers_file(const std::filesystem::path &path,
 	return ImportError::Format;
 }
 
-std::string build_zip_archive(const std::vector<std::pair<std::string, std::string>> &entries,
-			      bool use_deflate)
-{
-	struct BuiltEntry {
-		std::string name;
-		std::uint16_t method = 0;
-		std::uint32_t crc = 0;
-		std::uint32_t comp_size = 0;
-		std::uint32_t uncomp_size = 0;
-		std::uint32_t local_offset = 0;
-	};
-
-	std::string archive;
-	std::vector<BuiltEntry> dir;
-	dir.reserve(entries.size());
-
-	for (const auto &kv : entries) {
-		const std::string &name = kv.first;
-		const std::string &raw = kv.second;
-
-		BuiltEntry be;
-		be.name = name;
-		be.uncomp_size = static_cast<std::uint32_t>(raw.size());
-		be.crc = static_cast<std::uint32_t>(
-			crc32(0L, reinterpret_cast<const Bytef *>(raw.data()),
-			      static_cast<uInt>(raw.size())));
-		be.local_offset = static_cast<std::uint32_t>(archive.size());
-
-		std::string payload;
-		if (use_deflate) {
-			z_stream zs{};
-			if (deflateInit2(&zs, Z_DEFAULT_COMPRESSION, Z_DEFLATED, -MAX_WBITS, 8,
-					 Z_DEFAULT_STRATEGY) == Z_OK) {
-				zs.next_in = reinterpret_cast<Bytef *>(const_cast<char *>(raw.data()));
-				zs.avail_in = static_cast<uInt>(raw.size());
-				char buf[16384];
-				int ret = Z_OK;
-				while (ret == Z_OK) {
-					zs.next_out = reinterpret_cast<Bytef *>(buf);
-					zs.avail_out = static_cast<uInt>(sizeof(buf));
-					ret = deflate(&zs, Z_FINISH);
-					if (ret != Z_OK && ret != Z_STREAM_END)
-						break;
-					payload.append(buf, sizeof(buf) - zs.avail_out);
-				}
-				deflateEnd(&zs);
-				be.method = 8;
-			} else {
-				payload = raw;
-				be.method = 0;
-			}
-		} else {
-			payload = raw;
-			be.method = 0;
-		}
-		be.comp_size = static_cast<std::uint32_t>(payload.size());
-
-		// Local file header (PK\x03\x04)
-		archive.append("PK\x03\x04", 4);
-		write_le16(archive, 20); // version needed
-		write_le16(archive, 0);  // flags
-		write_le16(archive, be.method);
-		write_le16(archive, 0);  // mod time
-		write_le16(archive, 0);  // mod date
-		write_le32(archive, be.crc);
-		write_le32(archive, be.comp_size);
-		write_le32(archive, be.uncomp_size);
-		write_le16(archive, static_cast<std::uint16_t>(be.name.size()));
-		write_le16(archive, 0);  // extra len
-		archive.append(be.name);
-		archive.append(payload);
-
-		dir.push_back(std::move(be));
-	}
-
-	const std::uint32_t cd_offset = static_cast<std::uint32_t>(archive.size());
-	for (const auto &be : dir) {
-		// Central directory header (PK\x01\x02)
-		archive.append("PK\x01\x02", 4);
-		write_le16(archive, 20); // version made by
-		write_le16(archive, 20); // version needed
-		write_le16(archive, 0);  // flags
-		write_le16(archive, be.method);
-		write_le16(archive, 0);  // mod time
-		write_le16(archive, 0);  // mod date
-		write_le32(archive, be.crc);
-		write_le32(archive, be.comp_size);
-		write_le32(archive, be.uncomp_size);
-		write_le16(archive, static_cast<std::uint16_t>(be.name.size()));
-		write_le16(archive, 0);  // extra len
-		write_le16(archive, 0);  // comment len
-		write_le16(archive, 0);  // disk number
-		write_le16(archive, 0);  // internal attrs
-		write_le32(archive, 0);  // external attrs
-		write_le32(archive, be.local_offset);
-		archive.append(be.name);
-	}
-	const std::uint32_t cd_size = static_cast<std::uint32_t>(archive.size()) - cd_offset;
-
-	// EOCD (PK\x05\x06)
-	archive.append("PK\x05\x06", 4);
-	write_le16(archive, 0); // disk number
-	write_le16(archive, 0); // start disk
-	write_le16(archive, static_cast<std::uint16_t>(dir.size()));
-	write_le16(archive, static_cast<std::uint16_t>(dir.size()));
-	write_le32(archive, cd_size);
-	write_le32(archive, cd_offset);
-	write_le16(archive, 0); // comment len
-
-	return archive;
-}
 
 Record api_response_to_record(const nlohmann::json &response,
 			      const nlohmann::json &title_map)

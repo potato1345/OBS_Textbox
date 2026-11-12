@@ -42,7 +42,7 @@ Ergebnis: **Approve, kein Blocker.** ctest 4/4, import 19/19, state 15/15. E2E p
 - [x] **M4-K1:** `inflate_data()` in `liedplan-import.cpp` — harte Obergrenze (64 MB pro Eintrag + Archiv-Budget) in IMP-A ergänzt.
 
 ### Trimmen (niedrige Priorität, als Batch)
-- [ ] **M4-T1:** `build_zip_archive()` ist nur Test-Hilfe, steht aber im öffentlichen `liedplan-import.hpp` (exportiert von der Produktions-DLL). Können in Test-Helper wandern.
+- [x] **M4-T1:** `build_zip_archive()` + `write_le16/32` aus productions-header/cpp entfernt und in die Test-Translation (tests/test-liedplan-import.cpp) verschoben — Produktions-DLL exportiert keinen ZIP-Writer mehr. Build + ctest 8/8 grün (RelWithDebInfo, 2026-11-12).
 - [x] **M4-T2:** Import-Dialog: Form-ID/Token-Pfad-Fields speichern auf `editingFinished` statt `textChanged` (IMP-C).
 - [x] **M4-T3:** `decode_xml_entities()`: Surrogate-CPs (0xD800–0xDFFF) werden abgefangen und durch `U+FFFD` ersetzt (IMP-A).
 
@@ -60,7 +60,7 @@ Ergebnis: **Approve, kein Blocker.** ctest 5/5 (neu `liedplan-ai`), state-Suite 
 
 ### Korrektheit (minor, nicht blockierend)
 - [x] **M5-1:** `path_to_file_url()` in `liedplan-html.cpp` percent-encodiert alle Nicht-Unreserved-Zeichen inkl. Umlaute (`%C3%BC`, M5.1).
-- [ ] **M5-2:** AI-Test 10a (`extract_document_text`) verlangt Repo-`.venv` + markitdown — ohne Venv wird ctest rot (maschinenabhängig). Besser: Venv-Check → Test sauber skippen (PASS mit Vermerk).
+- [x] **M5-2:** AI-Test 10a prüft jetzt `fs::exists(py_exe)` und gibt `[SKIP]` aus, wenn die Repo-Venv fehlt; 10b (fehlende Exe -> Fehler) läuft immer. ctest grün.
 - [x] **M5-3:** Worker-Threads über `cancel_`-Token + `ActiveJobGuard` / `g_active_jobs` in `obs_module_unload()` abgesichert (IMP-E).
 - [x] **M5-4:** `extract_document_text()` in `liedplan-ai.cpp`: sicheres Win32-Argument-Quoting (`quote_win32_arg`, IMP-A).
 
@@ -86,8 +86,8 @@ Ergebnis: **Approve, kein Blocker.** ctest 7/7 (inkl. `liedplan-theme-icons` und
 - [x] **M7h (`1ea454f`):** Abgerundete untere Fensterecken des Docks (10px, inkl. `LiedplanFloatRoundedHelper` im Floating-Zustand).
 
 ### Trimmen (niedrige Priorität, Batch-Kandidat)
-- [ ] **M7-1:** Label-Format `"id · titel"` (20-Zeichen-Truncation) ist 2× dupliziert (zeile3-`textChanged`-Lambda + `refresh_top_row`) — kleiner Helper `card_search_label(card)` in dock.cpp deduplizieren.
-- [ ] **M7-2:** `flash_row` testet `style_section`-Äquivalent via `isVisible()` statt `isHidden()` (Chevron-Toggle-Lambda) — bei verstecktem Dock (Parent-Chain) flippt das Icon vor dem tatsächlichen State-Change; self-correcting, aber `isHidden()` wäre robuster.
+- [x] **M7-1:** Helper `card_search_label(id, title)` in dock.cpp — beide Aufrufstellen (textChanged-Lambda + refresh_top_row) nutzen ihn einheitlich.
+- [x] **M7-2:** Chevron-Toggle-Lambda nutzt `style_section->isHidden()` statt `!isVisible()`. Live im Dock verifiziert (UIA lpStyleToggle: einklappen -> Section verschwindet, re-expand -> rect zurück).
 - [x] **M7-3:** Quick-Profiles-Status-Feedback im Header beim Laden ergänzt (`Profil "…" geladen`, IMP-A).
 
 ### Positiv (NICHT antasten)

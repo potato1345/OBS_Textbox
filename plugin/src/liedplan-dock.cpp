@@ -86,6 +86,17 @@ namespace {
 
 constexpr int kDefaultCardCount = 12;
 
+// M7-1: Label-Format der Karten-Suche ("id · titel", Titel getrimmt + auf 20
+// Zeichen gekürzt; leer = nur id). Ein Helper für beide Aufrufstellen
+// (textChanged-Lambda + refresh_top_row).
+QString card_search_label(const QString &id, const QString &title)
+{
+	QString t = title.trimmed();
+	if (t.size() > 20)
+		t = t.left(20);
+	return t.isEmpty() ? id : QStringLiteral("%1 · %2").arg(id, t);
+}
+
 // IMP-L4: Dialog-Optionen. LIEDPLAN_NO_NATIVE_DIALOG=1 -> Qt-eigene Dialogen
 // (UIA-automatisierbar, auch für Skripte/Tests). Default: native Dialogen.
 QFileDialog::Options dialog_options()
@@ -956,12 +967,7 @@ void LiedplanDock::create_row_widget(const LiedplanCard &card)
 		const QString id_q = QString::fromUtf8(card_id.c_str());
 		for (int j = 0; j < card_search_->count(); ++j) {
 			if (card_search_->itemData(j).toString() == id_q) {
-				QString t = text.trimmed();
-				if (t.size() > 20)
-					t = t.left(20);
-				card_search_->setItemText(
-					j, t.isEmpty() ? id_q
-				   : QStringLiteral("%1 · %2").arg(id_q, t));
+				card_search_->setItemText(j, card_search_label(id_q, text));
 				break;
 			}
 		}
@@ -1553,7 +1559,10 @@ void LiedplanDock::create_row_widget(const LiedplanCard &card)
 
 	connect(style_toggle_btn, &QToolButton::clicked, this,
 		[this, style_section, style_toggle_btn]() {
-			const bool expand = !style_section->isVisible();
+			// M7-2: isHidden() statt isVisible() — isVisible() ist auch bei
+			// verstecktem Dock-Parent false und flippt das Chevron-Icon vor dem
+			// echten State-Change.
+			const bool expand = style_section->isHidden();
 			style_section->setVisible(expand);
 			style_toggle_btn->setIcon(
 				theme_icon(expand ? "chevron_down.svg" : "chevron_right.svg"));
@@ -2052,12 +2061,8 @@ void LiedplanDock::refresh_top_row()
 		card_search_->clear();
 		for (const auto &card : state_.cards) {
 			const QString id_q = QString::fromUtf8(card.id.c_str());
-			QString t3 = QString::fromUtf8(card.zeile3.c_str()).trimmed();
-			if (t3.size() > 20)
-				t3 = t3.left(20);
-			const QString label =
-				t3.isEmpty() ? id_q : QStringLiteral("%1 · %2").arg(id_q, t3);
-			card_search_->addItem(label, id_q);
+			card_search_->addItem(
+				card_search_label(id_q, QString::fromUtf8(card.zeile3.c_str())), id_q);
 		}
 		card_search_->setCurrentIndex(-1);
 		if (card_search_->lineEdit())
