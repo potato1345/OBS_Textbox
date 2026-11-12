@@ -30,7 +30,7 @@ Details zur Bewertung: `hermes-memory/notes/rewrite-bewertung.md` (F1–F18) —
 
 - [x] **T7 — Standalone OBS-Plugin:** `plugin/` mit C++/CMake/MSVC-Umsetzung (Karten-Anzeige + Import), KEIN lokaler Python-Server, externe Verbindungen erlaubt (Google Forms API, OpenRouter); README mit Build-Anleitung. → **FERTIG (M0–M7h + Ui1–Ui4 + IMP-A–E; Feature-Parität vollständig, README hat Build-/Deploy-Anleitung)**; offener Rest nur: OpenRouter-Key in `main/api.env` (User-Aktion; Offline-Fallback aktiv).
 - [x] ~~**T6 (Repo-Außen):** Vollständige Repo-Kopie auf den Desktop~~ — **vom User verworfen (2026-10-23)**, nicht umsetzen.
-- [ ] **Echtes Formular-End-to-End:** Liedplan-Formular einmal ausfüllen → `GET /api/forms/responses` mit echten Daten testen + echten CSV-Export aus Google importieren.
+- [x] **Echtes Formular-End-to-End (12.11.2026):** Liedplan-Formular live ausgefüllt (2 Kurz-Einreichungen, API verifiziert: total 5). `GET /api/form-responses` auf Server (Port 8081, 8080 von Fremddienst belegt) liefert echten Gottesdienst (2026-11-16 / 10:00 / xy / Punkte 101–112). Plugin-Datenarchiv: Live-Fetch '5 Einreichungen gefunden — 12 Karten befüllt' + 'In Karten übernehmen' verifiziert; Datei-Import-Pfad live mit aus Responses rekonstruierter CSV getestet (Picker → state.json 12 Karten 101–112). Original-Liedplan aus Backup restauriert, OBS neu gestartet, box33 = 144/1+4+6.
 - [x] **Optional (nur auf Wunsch):** Wochenplan-Auswahl — mehrere Gottesdienste pro Woche parallel auswählen (in IMP-B via `ImportResult.services` + Auswahl-ComboBox umgesetzt).
 
 ## 🔎 M4 5-Achsen-Review (2026-10-26, Hermes selbst — Gemini-Free-Tier-Sperre)
