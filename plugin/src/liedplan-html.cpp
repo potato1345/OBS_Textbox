@@ -49,36 +49,6 @@ constexpr const char *kRepoTextboxPath = "C:/Users/Johann/Desktop/GitHub/OBS_Tex
 // Fallback-Template) und wird über --lp-rainbow / --triangle-background
 // gesteuert; das Plugin injectiert nur noch Variablen.
 
-std::string escape_js_string(const char *input)
-{
-	std::string out;
-	if (!input)
-		return out;
-	for (const char *p = input; *p != '\0'; ++p) {
-		switch (*p) {
-		case '\\':
-			out += "\\\\";
-			break;
-		case '"':
-			out += "\\\"";
-			break;
-		case '\n':
-			out += "\\n";
-			break;
-		case '\r':
-			out += "\\r";
-			break;
-		case '-':
-			out += "\\x2d";
-			break;
-		default:
-			out += *p;
-			break;
-		}
-	}
-	return out;
-}
-
 std::string build_repo_listener_script()
 {
 	std::string s =
@@ -276,19 +246,6 @@ std::string read_utf8_file(const char *utf8_path)
 	if (!file.good() && !file.eof())
 		return "";
 	return ss.str();
-}
-
-std::string render_line_div(const char *id, const std::string &text)
-{
-	std::string out = "\t\t<div id=\"";
-	out += id;
-	out += "\"";
-	if (text.empty())
-		out += " style=\"display:none;\"";
-	out += ">";
-	out += escape_html(text);
-	out += "</div>\n";
-	return out;
 }
 
 bool starts_with_icase(const std::string &s, const char *prefix)

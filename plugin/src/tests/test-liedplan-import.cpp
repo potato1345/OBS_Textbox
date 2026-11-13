@@ -28,8 +28,11 @@ std::optional<std::string> inflate_data(std::string_view compressed,
 
 namespace {
 
-const char *kSamplesDir =
-	"C:/Users/Johann/Desktop/GitHub/OBS_Textbox/rewrite/tests/samples/";
+#ifdef LIEDPLAN_REPO_ROOT
+const char *kSamplesDir = LIEDPLAN_REPO_ROOT "/main/tests/samples/";
+#else
+const char *kSamplesDir = "main/tests/samples/";
+#endif
 
 int g_failures = 0;
 

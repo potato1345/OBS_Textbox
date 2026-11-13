@@ -123,6 +123,8 @@ target_link_libraries(liedplan-import-tests PRIVATE nlohmann_json::nlohmann_json
 if(WIN32)
   target_link_libraries(liedplan-import-tests PRIVATE winhttp)
 endif()
+target_compile_definitions(liedplan-import-tests PRIVATE
+  LIEDPLAN_REPO_ROOT="${CMAKE_CURRENT_SOURCE_DIR}/..")
 add_test(NAME liedplan-import COMMAND liedplan-import-tests)
 
 add_executable(

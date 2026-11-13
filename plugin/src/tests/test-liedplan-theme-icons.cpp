@@ -43,7 +43,7 @@ std::string read_file(const std::filesystem::path &p)
 int main()
 {
 	const auto icons = liedplan_theme_icons::icons();
-	check(icons.size() >= 10, "icon-list non-trivial size",
+	check(icons.size() >= 12, "icon-list non-trivial size",
 	      "size=" + std::to_string(icons.size()));
 
 	// Namen: ASCII, leer-frei, .svg-Endung (CP1252-Pitfall s. HPP-Kommentar)

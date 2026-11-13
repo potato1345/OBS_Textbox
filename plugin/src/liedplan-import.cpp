@@ -16,6 +16,7 @@
 
 #include "liedplan-import.hpp"
 #include "liedplan-state.hpp"
+#include "liedplan-text-util.hpp"
 
 #include <algorithm>
 #include <chrono>
@@ -42,6 +43,17 @@ namespace liedplan_import {
 
 namespace {
 
+// Text-Helfer (trim_str/utf8_casefold/...) und WinHTTP-RAII kommen aus
+// liedplan-text-util.hpp — früher hier und in liedplan-ai.cpp kopiert.
+using liedplan_text::is_ascii_space;
+using liedplan_text::split_char;
+using liedplan_text::trim_str;
+using liedplan_text::utf8_casefold;
+#ifdef _WIN32
+using liedplan_text::utf8_to_wide;
+using liedplan_text::WinHttpHandle;
+#endif
+
 constexpr const char *kFormatErrorMsg =
 	"Unbekanntes Dateiformat: keine Datenspalten gefunden (erwartet Tabellen-Columns mit Antworten).";
 constexpr const char *kNoResponsesCsvMsg =
@@ -49,67 +61,6 @@ constexpr const char *kNoResponsesCsvMsg =
 constexpr const char *kEmptyCsvMsg = "Die CSV-Datei ist leer.";
 constexpr const char *kNoResponsesApiMsg =
 	"Im Google-Formular liegen noch keine Antworten vor.";
-
-bool is_ascii_space(unsigned char c)
-{
-	return c == ' ' || c == '\t' || c == '\n' || c == '\r' || c == '\v' || c == '\f';
-}
-
-std::string trim_str(std::string_view sv)
-{
-	std::size_t start = 0;
-	while (start < sv.size()) {
-		if (is_ascii_space(static_cast<unsigned char>(sv[start]))) {
-			++start;
-		} else if (start + 1 < sv.size() &&
-			   static_cast<unsigned char>(sv[start]) == 0xC2 &&
-			   static_cast<unsigned char>(sv[start + 1]) == 0xA0) {
-			start += 2;
-		} else {
-			break;
-		}
-	}
-
-	std::size_t end = sv.size();
-	while (end > start) {
-		if (is_ascii_space(static_cast<unsigned char>(sv[end - 1]))) {
-			--end;
-		} else if (end >= start + 2 &&
-			   static_cast<unsigned char>(sv[end - 2]) == 0xC2 &&
-			   static_cast<unsigned char>(sv[end - 1]) == 0xA0) {
-			end -= 2;
-		} else {
-			break;
-		}
-	}
-
-	return std::string(sv.substr(start, end - start));
-}
-
-std::string utf8_casefold(std::string_view sv)
-{
-	std::string out;
-	out.reserve(sv.size());
-	for (std::size_t i = 0; i < sv.size(); ++i) {
-		const unsigned char c = static_cast<unsigned char>(sv[i]);
-		if (c >= 'A' && c <= 'Z') {
-			out.push_back(static_cast<char>(c + ('a' - 'A')));
-		} else if (c == 0xC3 && i + 1 < sv.size()) {
-			const unsigned char next = static_cast<unsigned char>(sv[i + 1]);
-			// U+00C4 (Ä) -> U+00E4 (ä), U+00D6 (Ö) -> U+00F6 (ö), U+00DC (Ü) -> U+00FC (ü)
-			if (next >= 0x80 && next <= 0x9E && next != 0x97) {
-				out.push_back(static_cast<char>(0xC3));
-				out.push_back(static_cast<char>(next + 0x20));
-				++i;
-			} else {
-				out.push_back(sv[i]);
-			}
-		} else {
-			out.push_back(sv[i]);
-		}
-	}
-	return out;
-}
 
 bool row_has_content(const std::vector<std::string> &row)
 {
@@ -181,34 +132,6 @@ std::string sortable_timestamp_key(std::string_view raw_ts)
 }
 
 #ifdef _WIN32
-
-struct WinHttpHandle {
-	HINTERNET h = nullptr;
-	WinHttpHandle() = default;
-	explicit WinHttpHandle(HINTERNET handle) : h(handle) {}
-	~WinHttpHandle()
-	{
-		if (h)
-			WinHttpCloseHandle(h);
-	}
-	WinHttpHandle(const WinHttpHandle &) = delete;
-	WinHttpHandle &operator=(const WinHttpHandle &) = delete;
-	operator HINTERNET() const { return h; }
-	explicit operator bool() const { return h != nullptr; }
-};
-
-std::wstring utf8_to_wide(std::string_view sv)
-{
-	if (sv.empty())
-		return {};
-	const int len = MultiByteToWideChar(CP_UTF8, 0, sv.data(), static_cast<int>(sv.size()),
-					    nullptr, 0);
-	if (len <= 0)
-		return {};
-	std::wstring out(static_cast<std::size_t>(len), L'\0');
-	MultiByteToWideChar(CP_UTF8, 0, sv.data(), static_cast<int>(sv.size()), out.data(), len);
-	return out;
-}
 
 std::string url_encode(std::string_view sv)
 {

@@ -113,15 +113,6 @@ obs_data_t *make_settings(const LiedplanCard &card, const std::string &local_fil
 	return settings;
 }
 
-obs_data_t *make_settings(const LiedplanCard &card)
-{
-	const std::string dir = liedplan_html::cards_dir();
-	const std::string local_file =
-		dir.empty() ? (liedplan_html::sanitize_card_id(card.id) + ".html")
-			: (dir + "/" + liedplan_html::sanitize_card_id(card.id) + ".html");
-	return make_settings(card, local_file);
-}
-
 void send_to_current_scene(const LiedplanCard &card, const LiedplanSettings &settings)
 {
 #ifdef ENABLE_FRONTEND_API

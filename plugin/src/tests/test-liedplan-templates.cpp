@@ -9,7 +9,7 @@
  *   5. write_card() mit template_id: schreibt substituiertes Template ohne INJECT-Marker;
  *      fehlendes Template -> Fallback auf classic-Weg (OBS_TEXTBOX_INJECT_START vorhanden).
  *   6. write_card() mit leerem template_id: classic-Weg unverändert.
- *   7. State-Roundtrip für template_id + Alt-State-Migration (fehlendes Feld -> "").
+ *   (State-Roundtrip für template_id deckt der State-Test #28 ab — hier weggelassen.)
  *   8. push_update(): alle 14 bestehenden Keys unverändert + template_id.
  */
 
@@ -289,42 +289,6 @@ int main()
 		std::filesystem::remove_all(tmp_dir, ec);
 	}
 
-	// 7. State round-trip: serialize->deserialize mit template_id="rounded" -> identical (operator==);
-	//    alter State ohne template_id-Key -> "" ohne Fehler
-	{
-		LiedplanState s1;
-		LiedplanCard &c = s1.add_card();
-		c.zeile1 = "Eröffnung";
-		c.zeile2 = "Grüße 1+4";
-		c.template_id = "rounded";
-
-		const std::string dumped = s1.serialize_json();
-		LiedplanState s2;
-		const std::string err = s2.deserialize_json(dumped);
-		check(err.empty() && (s1 == s2) && s2.cards.size() == 1 &&
-			      s2.cards[0].template_id == "rounded",
-		      "7a. State Round-trip: serialize->deserialize mit template_id=\"rounded\" identisch (operator==)",
-		      err);
-
-		const std::string old_json = R"({
-  "version": 1,
-  "next_id": 2,
-  "cards": [
-    {
-      "id": "box1",
-      "zeile1": "100",
-      "zeile2": "1-3",
-      "zeile3": "Alt-Karte ohne template_id"
-    }
-  ]
-})";
-		LiedplanState s_old;
-		const std::string err_old = s_old.deserialize_json(old_json);
-		check(err_old.empty() && s_old.cards.size() == 1 &&
-			      s_old.cards[0].template_id.empty(),
-		      "7b. State Migration: alter State ohne template_id-Key lädt mit template_id=\"\" ohne Fehler",
-		      err_old);
-	}
 
 	// 8. push_update: letztes JSON enthält alle 14 alten Keys UNVERÄNDERT + template_id mit Kartentext
 	{

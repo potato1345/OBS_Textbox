@@ -55,6 +55,24 @@ unmittelbar in der OBS-Oberflaeche zeigen (rechts, neben "controls").
 static QDockWidget *g_dock = nullptr;
 
 /*
+IMP-L2: schwebende Docks koennen hoeher als der Bildschirm werden; dann liegt
+die untere Werkzeugleiste (Gear/Undo/Export) unterhalb des Viewports und ist
+unerreichbar. Auf die sichtbare Screen-Hoehe beschneiden. Wird beim Load und
+im Spaet-Timer gebraucht (war vorher zweimal kopiert).
+*/
+static void clamp_dock_to_screen(QDockWidget *d)
+{
+	if (!d->isFloating())
+		return;
+	const QRect avail = QGuiApplication::primaryScreen()->availableGeometry();
+	QRect geom = d->geometry();
+	if (geom.bottom() > avail.bottom()) {
+		geom.setBottom(avail.bottom());
+		d->setGeometry(geom);
+	}
+}
+
+/*
 M7h: Runde untere Fensterecken im Floating-Zustand.
 Ein floatender QDockWidget ist ein opak-rechteckiges Top-Level-Fenster;
 ein QSS border-radius am Kind (LiedplanDock) rundet nur die gemalte
@@ -156,14 +174,7 @@ bool obs_module_load(void)
 			 * werden; dann liegt die untere Werkzeugleiste (Gear/Undo/
 			 * Export) unterhalb des Viewports und ist unerreichbar.
 			 * Auf die sichtbare Screen-Hoehe beschneiden. */
-			if (g_dock->isFloating()) {
-				const QRect avail = QGuiApplication::primaryScreen()->availableGeometry();
-				QRect geom = g_dock->geometry();
-				if (geom.bottom() > avail.bottom()) {
-					geom.setBottom(avail.bottom());
-					g_dock->setGeometry(geom);
-				}
-			}
+			clamp_dock_to_screen(g_dock);
 			/* OBS versteckt Custom-Docks evtl. verzoegert nach dem Load;
 			 * Show erneut nach 1s und 3s erzwingen. QPointer statt Roh-Pointer:
 			 * nach obs_plugin_unload ist g_dock geloescht, die Timer duerfen
@@ -181,14 +192,7 @@ bool obs_module_load(void)
 					return;
 				d->show();
 				d->raise();
-				if (d->isFloating()) {
-					const QRect avail = QGuiApplication::primaryScreen()->availableGeometry();
-					QRect geom = d->geometry();
-					if (geom.bottom() > avail.bottom()) {
-						geom.setBottom(avail.bottom());
-						d->setGeometry(geom);
-					}
-				}
+				clamp_dock_to_screen(d);
 			});
 		}
 		blog(LOG_INFO, "[liedplan] Textbox-Dock registriert (Erfolg=%s)", ok ? "ja" : "nein");

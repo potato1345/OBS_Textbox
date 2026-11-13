@@ -19,8 +19,7 @@ namespace liedplan_scene {
 /** Quellenname in OBS: "Liedplan " + card_id (z. B. "Liedplan box1"). */
 std::string source_name(const std::string &card_id);
 
-/** Erzeugt obs_data_t mit den Einstellungen für eine native Kartenquelle oder Browser-Quelle. */
-obs_data_t *make_settings(const LiedplanCard &card);
+/** Erzeugt obs_data_t mit den Einstellungen für eine Browser-Quelle. */
 obs_data_t *make_settings(const LiedplanCard &card, const std::string &local_file);
 
 /** Legt die Text-Quelle in der aktuellen Szene an oder aktualisiert sie dort. */

@@ -16,6 +16,7 @@
 #endif
 
 #include "liedplan-ai.hpp"
+#include "liedplan-text-util.hpp"
 
 #include <algorithm>
 #include <atomic>
@@ -47,81 +48,16 @@ namespace liedplan_ai {
 
 namespace {
 
-bool is_ascii_space(unsigned char c)
-{
-	return c == ' ' || c == '\t' || c == '\n' || c == '\r' || c == '\v' || c == '\f';
-}
-
-std::string trim_str(std::string_view sv)
-{
-	std::size_t start = 0;
-	while (start < sv.size()) {
-		if (is_ascii_space(static_cast<unsigned char>(sv[start]))) {
-			++start;
-		} else if (start + 1 < sv.size() &&
-			   static_cast<unsigned char>(sv[start]) == 0xC2 &&
-			   static_cast<unsigned char>(sv[start + 1]) == 0xA0) {
-			start += 2;
-		} else {
-			break;
-		}
-	}
-
-	std::size_t end = sv.size();
-	while (end > start) {
-		if (is_ascii_space(static_cast<unsigned char>(sv[end - 1]))) {
-			--end;
-		} else if (end >= start + 2 &&
-			   static_cast<unsigned char>(sv[end - 2]) == 0xC2 &&
-			   static_cast<unsigned char>(sv[end - 1]) == 0xA0) {
-			end -= 2;
-		} else {
-			break;
-		}
-	}
-
-	return std::string(sv.substr(start, end - start));
-}
-
-std::string utf8_casefold(std::string_view sv)
-{
-	std::string out;
-	out.reserve(sv.size());
-	for (std::size_t i = 0; i < sv.size(); ++i) {
-		const unsigned char c = static_cast<unsigned char>(sv[i]);
-		if (c >= 'A' && c <= 'Z') {
-			out.push_back(static_cast<char>(c + ('a' - 'A')));
-		} else if (c == 0xC3 && i + 1 < sv.size()) {
-			const unsigned char next = static_cast<unsigned char>(sv[i + 1]);
-			if (next >= 0x80 && next <= 0x9E && next != 0x97) {
-				out.push_back(static_cast<char>(0xC3));
-				out.push_back(static_cast<char>(next + 0x20));
-				++i;
-			} else {
-				out.push_back(sv[i]);
-			}
-		} else {
-			out.push_back(sv[i]);
-		}
-	}
-	return out;
-}
-
-std::vector<std::string> split_char(std::string_view sv, char delim)
-{
-	std::vector<std::string> parts;
-	std::size_t start = 0;
-	while (true) {
-		const std::size_t pos = sv.find(delim, start);
-		if (pos == std::string_view::npos) {
-			parts.emplace_back(sv.substr(start));
-			break;
-		}
-		parts.emplace_back(sv.substr(start, pos - start));
-		start = pos + 1;
-	}
-	return parts;
-}
+// Text-Helfer und WinHTTP-RAII aus liedplan-text-util.hpp — waren hier und in
+// liedplan-import.cpp identisch kopiert.
+using liedplan_text::is_ascii_space;
+using liedplan_text::split_char;
+using liedplan_text::trim_str;
+using liedplan_text::utf8_casefold;
+#ifdef _WIN32
+using liedplan_text::utf8_to_wide;
+using liedplan_text::WinHttpHandle;
+#endif
 
 std::string strip_leading_commas_spaces(std::string_view sv)
 {
@@ -174,34 +110,6 @@ std::string read_file_utf8(const std::string &path)
 }
 
 #ifdef _WIN32
-
-struct WinHttpHandle {
-	HINTERNET h = nullptr;
-	WinHttpHandle() = default;
-	explicit WinHttpHandle(HINTERNET handle) : h(handle) {}
-	~WinHttpHandle()
-	{
-		if (h)
-			WinHttpCloseHandle(h);
-	}
-	WinHttpHandle(const WinHttpHandle &) = delete;
-	WinHttpHandle &operator=(const WinHttpHandle &) = delete;
-	operator HINTERNET() const { return h; }
-	explicit operator bool() const { return h != nullptr; }
-};
-
-std::wstring utf8_to_wide(std::string_view sv)
-{
-	if (sv.empty())
-		return {};
-	const int len = MultiByteToWideChar(CP_UTF8, 0, sv.data(), static_cast<int>(sv.size()),
-					    nullptr, 0);
-	if (len <= 0)
-		return {};
-	std::wstring out(static_cast<std::size_t>(len), L'\0');
-	MultiByteToWideChar(CP_UTF8, 0, sv.data(), static_cast<int>(sv.size()), out.data(), len);
-	return out;
-}
 
 // Maskiert ein Argument für Win32 CreateProcessW (Backslashes vor " und am Ende verdoppeln, " als \").
 std::wstring quote_win32_arg(const std::wstring &arg)
