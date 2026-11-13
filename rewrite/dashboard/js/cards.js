@@ -11,7 +11,7 @@
  * Eingeklappt zeigen die Karten kompakt nur die drei Textzeilen und die Aktionsbuttons.
  */
 
-import { LP_DEBUG, createDefaultBox, uniqueBoxId } from './box-utils.js';
+import { LP_DEBUG, createDefaultBox, uniqueBoxId, escapeHtml } from './box-utils.js';
 import { getState, updateState } from './storage.js';
 import { pushStateToOBS } from './obs-sync.js';
 import { showToast } from './toast.js';
@@ -344,17 +344,13 @@ function clampOpacity(val) {
 
 /**
  * Maskiert HTML-Sonderzeichen für die sichere Verwendung in HTML-Attributen.
+ * Nutzt den zentralen escapeHtml-Helper aus box-utils.js (identische Maskierung).
  *
  * @param {string} str - Unbereinigter Eingabestring.
  * @returns {string} Attributsicherer HTML-String.
  */
 function escapeAttr(str) {
-    return String(str || '')
-        .replace(/&/g, '&amp;')
-        .replace(/"/g, '&quot;')
-        .replace(/'/g, '&#39;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;');
+    return escapeHtml(str || '');
 }
 
 /**

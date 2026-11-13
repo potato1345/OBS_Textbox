@@ -53,15 +53,6 @@ if os.name == 'nt':
     mode.value |= 0x0004
     kernel32.SetConsoleMode(handle, mode)
 
-BANNER = f"""{C_GREEN}
- ██████╗ ██████╗ ███████╗     ████████╗███████╗██╗  ██╗████████╗██████╗  ██████╗ ██╗  ██╗
-██╔════╝ ██╔══██╗██╔════╝     ╚══██╔══╝██╔════╝╚██╗██╔╝╚══██╔══╝██╔══██╗██╔═══██╗╚██╗██╔╝
-██║  ███╗██████╔╝███████╗        ██║   █████╗   ╚███╔╝    ██║   ██████╔╝██║   ██║ ╚███╔╝ 
-██║   ██║██╔══██╗╚════██║        ██║   ██╔══╝   ██╔██╗    ██║   ██╔══██╗██║   ██║ ██╔██╗ 
-╚██████╔╝██████╔╝███████║███████╗██║   ███████╗██╔╝ ██╗   ██║   ██████╔╝╚██████╔╝██╔╝ ██╗
- ╚═════╝ ╚═════╝ ╚══════╝╚══════╝╚═╝   ╚══════╝╚═╝  ╚═╝   ╚═╝   ╚═════╝  ╚═════╝ ╚═╝  ╚═╝{C_RESET}
-"""
-
 stats = {
     "start_time": time.time(),
     "total_requests": 0,
@@ -394,7 +385,11 @@ def draw_dashboard(port, lan_ip):
     # Wechseln in den "Alternate Screen Buffer", damit die normale Terminal-Historie nicht zugespammt wird!
     sys.stdout.write('\033[?1049h\033[2J\033[H')
     sys.stdout.flush()
-    
+
+    # Helper to format a line with clear-to-end-of-line (\033[K) and newline
+    def line(text=""):
+        return text + '\033[K\n'
+
     while True:
         with stats_lock:
             uptime = format_uptime(time.time() - stats["start_time"])
@@ -415,10 +410,6 @@ def draw_dashboard(port, lan_ip):
             recent = list(stats["recent_activity"])[-10:]
 
         out = '\033[H' # Cursor to top-left
-        
-        # Helper to format a line with clear-to-end-of-line (\033[K) and newline
-        def line(text=""):
-            return text + '\033[K\n'
         
         # Banner (ohne leere Zeilen am Anfang/Ende)
         out += line(f"{C_WHITE} ██████╗ ██████╗ ███████╗     ████████╗███████╗██╗  ██╗████████╗██████╗  ██████╗ ██╗  ██╗{C_RESET}")

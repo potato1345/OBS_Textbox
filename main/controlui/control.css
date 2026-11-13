@@ -106,16 +106,6 @@ body {
     border-left-color: var(--accent-blue);
 }
 
-.obs-ws-config {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    background: var(--panel-bg);
-    padding: 6px;
-    border-radius: var(--radius);
-    border: 1px solid var(--border);
-}
-
 .password-input-wrap {
     position: relative;
     display: flex;
@@ -264,8 +254,7 @@ body {
     flex-wrap: wrap;
 }
 
-.toolbar-left,
-.toolbar-right {
+.toolbar-left {
     display: flex;
     align-items: center;
     gap: 10px;
@@ -321,22 +310,6 @@ body {
     min-width: 170px;
 }
 
-.header .toolbar-right {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    flex: 0 0 auto;
-}
-
-/* When there is not enough space for all four controls, wrap Auto-Send to the second line first */
-@media (max-width: 700px) {
-    .header .toolbar-right {
-        width: 100%;
-        margin-top: 8px;
-        justify-content: flex-start;
-    }
-}
-
 /* If the header becomes too narrow for the three primary buttons, make them wrap cleanly. */
 @media (max-width: 560px) {
     .header .toolbar-left .btn {
@@ -356,11 +329,6 @@ body {
     .header .toolbar-left .btn {
         flex: 1 1 100%;
         min-width: 0;
-    }
-
-    .header .toolbar-right {
-        width: 100%;
-        justify-content: flex-start;
     }
 }
 
@@ -667,16 +635,9 @@ body {
 /* ========================================
    MODAL (Save Profile)
    ======================================== */
-.modal-overlay {
-    position: fixed;
-    inset: 0;
-    background: rgba(0, 0, 0, 0.65);
-    z-index: 5000;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-}
-
+/* .modal-overlay Basis-Definition: die SETTINGS-MODAL-Definition weiter unten
+   (mit backdrop-filter + padding) überschreibt alle Werte vollständig —
+   daher hier nur die [hidden]-Regel. */
 .modal-overlay[hidden] {
     display: none;
 }
@@ -720,7 +681,7 @@ body {
     .header { padding: 12px 16px; }
     .dashboard { grid-template-columns: 1fr; }
     .toolbar { flex-direction: column; align-items: stretch; }
-    .toolbar-left, .toolbar-right { justify-content: center; }
+    .toolbar-left { justify-content: center; }
 }
 
 /* ========================================
@@ -917,54 +878,6 @@ body {
     padding: 6px 14px;
     font-size: 0.8rem;
     flex-shrink: 0;
-}
-
-.color-profile-badge {
-    display: inline-block;
-    font-size: 0.65rem;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
-    padding: 2px 6px;
-    border-radius: 4px;
-    margin-left: 6px;
-    vertical-align: middle;
-}
-
-.color-profile-badge.default {
-    background: var(--accent-blue-soft);
-    color: var(--accent-blue);
-}
-
-.color-profile-badge.custom {
-    background: rgba(251, 191, 36, 0.15);
-    color: #fbbf24;
-}
-
-/* ========================================
-   EMPTY STATE
-   ======================================== */
-.empty-state {
-    grid-column: 1 / -1;
-    text-align: center;
-    padding: 60px 20px;
-    color: var(--text-secondary);
-}
-
-.empty-state-icon {
-    font-size: 3rem;
-    margin-bottom: 16px;
-}
-
-.empty-state h3 {
-    font-size: 1.1rem;
-    font-weight: 500;
-    color: var(--text-primary);
-    margin-bottom: 6px;
-}
-
-.empty-state p {
-    font-size: 0.85rem;
 }
 
 /* ========================================
