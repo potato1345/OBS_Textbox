@@ -1,0 +1,42 @@
+{
+    "dependencies": {
+        "obs-studio": {
+            "version": "32.2.2",
+            "baseUrl": "https://github.com/obsproject/obs-studio/archive/refs/tags",
+            "label": "OBS sources",
+            "hashes": {
+                "windows-x64": "f15f001f1fa526405318835f44f9910046502f496ebc3a30d5296a5018b831aa",
+            "macos": "35d3cd0979d65664fada7119fdb612eca7c34b61a1623a330caec74bf72626c4"
+            }
+        },
+        "prebuilt": {
+            "version": "2026-10-23",
+            "baseUrl": "https://github.com/obsproject/obs-deps/releases/download",
+            "label": "Pre-Built obs-deps",
+            "hashes": {
+                "windows-x64": "7508972a867a0ef68c26cd8bdba61fd999edd0a92fa9eb9585774de9bf51bfbe",
+            "macos": "6ded92c5d97f1d1b5effa07be13cc9f539826aa9c65013a15872328e39acffbf"
+            }
+        },
+        "qt6": {
+            "version": "2026-10-23",
+            "baseUrl": "https://github.com/obsproject/obs-deps/releases/download",
+            "label": "Pre-Built Qt6",
+            "hashes": {
+                "windows-x64": "78cd7a138464bb6edcdd3b85fcd63a5a7c69e369629963f3bc395bab74fb3f47",
+            "macos": "b216560cea8497207f9fc350c713716fb84aec6b973bb0ff8ac6add7734abad5"
+            }
+        }
+    },
+    "platformConfig": {
+        "macos": {
+            "bundleId": "com.johann.textbox-studio"
+        }
+    },
+    "name": "textbox-studio",
+    "displayName": "Textbox Studio",
+    "version": "1.0.0",
+    "author": "Johann",
+    "website": "https://obsproject.com",
+    "email": "johann@localhost"
+}

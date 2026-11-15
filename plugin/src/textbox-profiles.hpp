@@ -1,0 +1,355 @@
+/*
+ * textbox-profiles.hpp — Definition und Verwaltung von Farbprofilen (v3).
+ *
+ * Zweck:
+ *   - Definiert die TextboxProfile-Struktur (Farben, Ecken, Deckkräfte, Regenbogen).
+ *   - Hält vordefinierte Karten-Farbpaletten bereit (Karte Dunkel, Karte Hell, etc.).
+ *   - Unterstützt Legacy-Aliase (z. B. "OBS Dark" -> "Karte Dunkel") und wendet Profile auf Karten an.
+ *
+ * Hinweis: Header-only, libobs-frei; wird in Standalone-Tests verwendet.
+ */
+
+#pragma once
+
+#include <algorithm>
+#include <cctype>
+#include <cstddef>
+#include <string>
+#include <vector>
+
+/**
+ * Eine frei benennbare Karten-Zeile (Label nur UI-Metadaten; Value wird gerendert).
+ * Max: kMaxCardRows Zeilen pro Karte.
+ */
+struct TextboxRow {
+	std::string label;
+	std::string value;
+
+	bool operator==(const TextboxRow &other) const
+	{
+		return label == other.label && value == other.value;
+	}
+};
+
+/**
+ * Generelle CSS-Regel: name (Variable-Name, ohne/ mit '--' Prefix) -> value.
+ */
+struct TextboxStyleRule {
+	std::string name;
+	std::string value;
+	std::string type; // "text" | "num" | "hex" | "px" | "bool" ("" = infer aus value)
+
+	bool operator==(const TextboxStyleRule &other) const
+	{
+		return name == other.name && value == other.value;
+	}
+};
+
+inline constexpr size_t kMaxCardRows = 8;
+
+// Standard-Labels der klassischen drei Zeilen.
+inline const char *kTextboxRowLabels[3] = {"--zeile-1", "--zeile-2", "--zeile-3"};
+
+/**
+ * Karten-Farbprofil mit Text-/Box-Farben, Eckfarben, Deckkräften und Regenbogen-Option.
+ */
+struct TextboxProfile {
+	std::string name;
+	std::string text_color;
+	std::string box_color;
+	std::string corner_a = "#fce647";
+	std::string corner_b = "#fce647";
+	int corner_op_a = 255;
+	int corner_op_b = 255;
+	int text_opacity = 255;
+	int box_opacity = 255;
+	bool rainbow = false;
+	std::vector<TextboxStyleRule> style; // generelle CSS-Regeln des Profils
+
+	bool operator==(const TextboxProfile &other) const
+	{
+		return name == other.name && text_color == other.text_color &&
+		       box_color == other.box_color && corner_a == other.corner_a &&
+		       corner_b == other.corner_b && corner_op_a == other.corner_op_a &&
+		       corner_op_b == other.corner_op_b &&
+		       text_opacity == other.text_opacity &&
+		       box_opacity == other.box_opacity && rainbow == other.rainbow &&
+		       style == other.style;
+	}
+
+	bool operator!=(const TextboxProfile &other) const
+	{
+		return !(*this == other);
+	}
+};
+
+inline const std::vector<TextboxProfile> &textbox_profiles()
+{
+	static const std::vector<TextboxProfile> profiles = {
+		{"Karte Dunkel", "#eff0f1", "#3C404D"},
+		{"Karte Hell", "#1a1a1a", "#d5d5d5"},
+		{"Karte Mitternacht", "#c9d1d9", "#252d3a"},
+		{"Karte Wald", "#d4e0d0", "#344530"},
+		{"Karte Sonne", "#f0ddd0", "#3d2a20"},
+		{"Karte Kontrast", "#ffffff", "#222222"},
+	};
+	return profiles;
+}
+
+inline bool textbox_iequals(const std::string &a, const std::string &b)
+{
+	if (a.size() != b.size())
+		return false;
+	for (std::size_t i = 0; i < a.size(); ++i) {
+		if (std::tolower(static_cast<unsigned char>(a[i])) !=
+		    std::tolower(static_cast<unsigned char>(b[i])))
+			return false;
+	}
+	return true;
+}
+
+/**
+ * Mappt alte Profilnamen (v3 vor F1, z. B. "OBS Dark") case-insensitiv auf die
+ * neuen kanonischen Kartennamen ("Karte Dunkel"). Unbekannte/eigene Namen bleiben unverändert.
+ */
+inline std::string profile_name_canonical(const std::string &name)
+{
+	struct LegacyAlias {
+		const char *old_name;
+		const char *new_name;
+	};
+	static constexpr LegacyAlias kAliases[] = {
+		{"OBS Dark", "Karte Dunkel"},
+		{"OBS Light", "Karte Hell"},
+		{"Midnight Blue", "Karte Mitternacht"},
+		{"Forest Green", "Karte Wald"},
+		{"Sunset Warm", "Karte Sonne"},
+		{"High Contrast", "Karte Kontrast"},
+	};
+	for (const auto &a : kAliases) {
+		if (textbox_iequals(name, a.old_name))
+			return a.new_name;
+	}
+	return name;
+}
+
+inline const TextboxProfile *profile_by_name(const std::string &name)
+{
+	const std::string canonical = profile_name_canonical(name);
+	for (const auto &p : textbox_profiles()) {
+		if (p.name == canonical)
+			return &p;
+	}
+	return nullptr;
+}
+
+/**
+ * Lookup-Reihenfolge: custom (materialisierte/editierte Profile) zuerst, dann
+ * Hardcode-Defaults als Fallback. Gelöschte oder umbenannte Standardprofile
+ * werden dadurch nicht mehr gegen die Nutzer-Version ausgewechselt.
+ */
+inline const TextboxProfile *
+textbox_profile_lookup(const std::string &name,
+			const std::vector<TextboxProfile> &custom)
+{
+	const std::string canonical = profile_name_canonical(name);
+	for (const auto &p : custom) {
+		if (p.name == name || p.name == canonical)
+			return &p;
+	}
+	if (const TextboxProfile *std_prof = profile_by_name(name))
+		return std_prof;
+	return nullptr;
+}
+
+inline bool textbox_is_default_profile(const std::string &name)
+{
+	const std::string canonical = profile_name_canonical(name);
+	for (const auto &p : textbox_profiles()) {
+		if (textbox_iequals(p.name, canonical))
+			return true;
+	}
+	return false;
+}
+
+/**
+ * Überträgt sämtliche Farb-, Ecken-, Deckkraft- und Regenbogen-Felder eines Profils auf eine Karte.
+ * Profil-CSS-Regeln werden ergänzt; Karten-Regeln mit gleichem Namen gewinnen.
+ */
+// Typ einer CSS-Regel: aus dem Wert inferiert, wenn kein type gespeichert ist.
+inline std::string infer_style_type(const std::string &value)
+{
+	// IMP-R: echte #RRGGBB-Laenge (ohne value[6]!='x'-Trick) und negative
+	// Zahlen als num klassifizieren.
+	if (value.size() == 7 && value[0] == '#')
+		return "hex";
+	if (value.size() > 2 && value.compare(value.size() - 2, 2, "px") == 0)
+		return "px";
+	const std::size_t start = (!value.empty() && value[0] == '-') ? 1 : 0;
+	bool digits = value.size() > start;
+	for (std::size_t i = start; i < value.size(); ++i) {
+		if (value[i] < '0' || value[i] > '9') {
+			digits = false;
+			break;
+		}
+	}
+	if (digits)
+		return "num";
+	return "text";
+}
+
+// Bekannte Farb-/Deckkraft-Variablen auf die Karten-Felder mappen, damit der
+// klassische Renderer (inline Farben) und die CSS-Regeln konsistent bleiben.
+template <typename CardT>
+inline void apply_style_rules(CardT &card)
+{
+	auto to_int = [](const std::string &v) -> int {
+		int n = 0;
+		for (char ch : v) {
+			if (ch >= '0' && ch <= '9')
+				n = n * 10 + (ch - '0');
+			else if (ch == 'p' || ch == 'x')
+				break;
+		}
+		if (n > 255)
+			n = 255;
+		return n;
+	};
+	// Vorzeichen-behandelter Integer-Parse: leading '-', digits, stop at non-digit.
+	auto parse_int = [](const std::string &v) -> int {
+		size_t i = 0;
+		bool neg = false;
+		if (i < v.size() && v[i] == '-') { neg = true; ++i; }
+		int n = 0;
+		for (; i < v.size(); ++i) {
+			char ch = v[i];
+			if (ch >= '0' && ch <= '9')
+				n = n * 10 + (ch - '0');
+			else
+				break; // "3x", "-120px" → Ziffern vor der Einheit
+		}
+		return neg ? -n : n;
+	};
+	for (const auto &rule : card.style) {
+	if (rule.name == "--tb-color-text")
+		card.text_color = rule.value;
+		else if (rule.name == "--tb-color-box")
+			card.box_color = rule.value;
+		else if (rule.name == "--tb-corner-color-a")
+			card.corner_color_a = rule.value;
+		else if (rule.name == "--tb-corner-color-b")
+			card.corner_color_b = rule.value;
+		else if (rule.name == "--tb-corner-opacity-a")
+			card.corner_opacity_a = to_int(rule.value);
+		else if (rule.name == "--tb-corner-opacity-b")
+			card.corner_opacity_b = to_int(rule.value);
+		else if (rule.name == "--tb-text-opacity")
+			card.text_opacity = to_int(rule.value);
+		else if (rule.name == "--tb-box-opacity")
+			card.box_opacity = to_int(rule.value);
+		else if (rule.name == "--tb-rainbow")
+			card.rainbow_corners = rule.value == "1";
+		else if (rule.name == "--anim-show")
+			card.show_anim = rule.value == "1";
+		else if (rule.name == "--anim-file")
+			card.anim_file = rule.value;
+		else if (rule.name == "--anim-scale") {
+			const int s = parse_int(rule.value);
+			if (s > 0)
+				card.anim_scale = s;
+		} else if (rule.name == "--anim-x") {
+			const int v = parse_int(rule.value);
+			card.anim_x = v < -1200 ? -1200 : (v > 1200 ? 1200 : v);
+		} else if (rule.name == "--anim-y") {
+			const int v = parse_int(rule.value);
+			card.anim_y = v < -1200 ? -1200 : (v > 1200 ? 1200 : v);
+		}
+	}
+}
+
+/**
+ * Die Farb-/Deckkraft-/Regenbogen-Regeln, die ein Profil aus seinen Feldern
+ * erzeugt (typisiert, damit das Dock passende Wert-Widgets zeigt).
+ */
+inline std::vector<TextboxStyleRule> profile_color_rules(const TextboxProfile &prof)
+{
+	std::vector<TextboxStyleRule> rules;
+	rules.push_back({"--tb-color-text", prof.text_color, "hex"});
+	rules.push_back({"--tb-color-box", prof.box_color, "hex"});
+	rules.push_back({"--tb-corner-color-a", prof.corner_a, "hex"});
+	rules.push_back({"--tb-corner-color-b", prof.corner_b, "hex"});
+	rules.push_back({"--tb-corner-opacity-a", std::to_string(prof.corner_op_a), "num"});
+	rules.push_back({"--tb-corner-opacity-b", std::to_string(prof.corner_op_b), "num"});
+	rules.push_back({"--tb-text-opacity", std::to_string(prof.text_opacity), "num"});
+	rules.push_back({"--tb-box-opacity", std::to_string(prof.box_opacity), "num"});
+	rules.push_back({"--tb-rainbow", prof.rainbow ? "1" : "0", "bool"});
+	return rules;
+}
+
+template <typename CardT>
+inline void profile_apply(const TextboxProfile &prof, CardT &card)
+{
+	card.text_color = prof.text_color;
+	card.box_color = prof.box_color;
+	card.text_opacity = prof.text_opacity;
+	card.box_opacity = prof.box_opacity;
+	card.corner_color_a = prof.corner_a;
+	card.corner_color_b = prof.corner_b;
+	card.corner_opacity_a = prof.corner_op_a;
+	card.corner_opacity_b = prof.corner_op_b;
+	card.rainbow_corners = prof.rainbow;
+	for (const auto &rule : prof.style) {
+		bool owned = false;
+		for (const auto &cr : card.style) {
+			if (cr.name == rule.name) {
+				owned = true;
+				break;
+			}
+		}
+		if (!owned)
+			card.style.push_back(rule);
+	}
+	// Karten-eigene Regeln schlagen Profil-Feldwerte (UI ist die Wahrheit).
+	apply_style_rules(card);
+}
+
+/**
+ * Profilwechsel im Dock: Farb-/Deckkraft-Regeln des Profils ÜBERNEHMEN die
+ * Karten-Regeln gleichen Namens (sonst bleibt der Wechsel unsichtbar, weil
+ * Karten-Regeln gewinnen). Nicht-Farb-Regeln der Karte (Radius, Padding,
+ * Fonts ...) bleiben erhalten.
+ */
+template <typename CardT>
+inline void profile_switch(const TextboxProfile &prof, CardT &card)
+{
+	auto upsert = [&card](const TextboxStyleRule &rule) {
+		for (auto &cr : card.style) {
+			if (cr.name == rule.name) {
+				cr = rule;
+				return;
+			}
+		}
+		card.style.push_back(rule);
+	};
+	for (const auto &rule : profile_color_rules(prof))
+		upsert(rule);
+	for (const auto &rule : prof.style)
+		upsert(rule);
+	profile_apply(prof, card);
+}
+
+/**
+ * IMP-N: Nach dem Löschen des letzten Farbprofils wären keine Profile mehr
+ * wählbar (State-Seeding verhindert Nachsaat). Diese Funktion säat die
+ * Standardprofile nach, wenn die Liste leer ist, und liefert true, wenn
+ * nachgesät wurde. Damit bleibt die Profilfunktion nach vollständiger
+ * Löschung nutzbar.
+ */
+inline bool textbox_ensure_profiles_available(std::vector<TextboxProfile> &profiles)
+{
+	if (!profiles.empty())
+		return false;
+	for (const auto &bp : textbox_profiles())
+		profiles.push_back(bp);
+	return true;
+}

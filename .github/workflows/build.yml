@@ -1,0 +1,197 @@
+name: Build & Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+# softprops/action-gh-release braucht Schreibrechte fuer die Release-Assets.
+permissions:
+  contents: write
+
+jobs:
+  windows:
+    name: Windows x64 build
+    # windows-latest resolves zur windows-2025-vs2026-Image (nur VS 2026) —
+    # unser Generator "Visual Studio 17 2022" braucht die windows-2022-Image.
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure (CI preset)
+        working-directory: plugin
+        run: cmake --preset windows-ci-x64
+
+      - name: Build (RelWithDebInfo)
+        run: cmake --build plugin/build_x64 --config RelWithDebInfo
+
+      - name: Unit tests (ctest)
+        run: ctest --test-dir plugin/build_x64 -C RelWithDebInfo --output-on-failure
+
+      - name: Install staging
+        run: cmake --install plugin/build_x64 --config RelWithDebInfo --prefix install
+
+      - name: Package ZIP (OBS layout)
+        run: |
+          $ver = "${{ github.ref_name }}".TrimStart('v')
+          if ($ver -eq 'main' -or $ver -eq '') { $ver = 'ci' }
+          # Staging-Layout (textbox-studio/bin + data) in OBS-Root-Layout umgebaut:
+          # obs-plugins/64bit/ + data/obs-plugins/textbox-studio/ — Nutzer entpackt direkt in OBS.
+          New-Item -ItemType Directory -Force -Path staging/obs-plugins/64bit, staging/data/obs-plugins | Out-Null
+          Copy-Item install/textbox-studio/bin/64bit/* staging/obs-plugins/64bit/
+          Copy-Item install/textbox-studio/data staging/data/obs-plugins/textbox-studio -Recurse
+          Compress-Archive -Path staging/obs-plugins, staging/data -DestinationPath "textbox-studio-$ver-windows-x64.zip"
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: textbox-studio-windows-x64
+          path: '*.zip'
+
+  macos:
+    name: macOS build
+    # Der macOS-Bootstrap laedt obs-studio-Quellcode + obs-deps (universal) und
+    # verifiziert sie gegen die SHA256-Hashes in plugin/buildspec.json (hashes.macos).
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure (CI preset)
+        working-directory: plugin
+        run: cmake --preset macos-ci
+
+      - name: Build (RelWithDebInfo)
+        run: cmake --build plugin/build_macos --config RelWithDebInfo
+
+      - name: Framework symlinks for ctest
+        # Test-Binaries haben Rpath @executable_path/../Frameworks; die Qt- und
+        # libobs-Frameworks liegen in plugin/.deps — per Symlink verknuepft.
+        # Zusätzlich wird der von Qt6Config baked rpath-Pfad (nested .deps der
+        # obs-studio-Dep) auf die tatsächlich heruntergeladene qt6-Dep gemappt.
+        run: |
+          mkdir -p plugin/build_macos/Frameworks
+          echo "DEPS_TREE:"
+          find plugin/.deps -maxdepth 2 -type d | head -30
+          QT_DIR=$(find plugin/.deps -maxdepth 1 -type d -name 'obs-deps-qt6*' | head -1)
+          echo "QT_DIR=$QT_DIR"
+          QT_LIB=$(find "$QT_DIR" -maxdepth 1 -type d -name lib | head -1)
+          echo "QT_LIB=$QT_LIB"
+          for fw in "$QT_LIB"/*.framework; do
+            ln -sfn "$PWD/$fw" "plugin/build_macos/Frameworks/$(basename "$fw")"
+          done
+          for fw in plugin/.deps/Frameworks/*.framework; do
+            ln -sfn "$PWD/$fw" "plugin/build_macos/Frameworks/$(basename "$fw")" 2>/dev/null || true
+          done
+          # Baked rpath: .deps/obs-studio-<ver>/.deps/obs-deps-qt6-<alt-ver>-universal
+          OBS_DIR=$(find plugin/.deps -maxdepth 1 -type d -name 'obs-studio-*' | head -1)
+          if [ -n "$OBS_DIR" ]; then
+            shopt -s nullglob
+            mkdir -p "$OBS_DIR/.deps"
+            for alt in "$OBS_DIR"/.deps/obs-deps-qt6-*; do
+              [ -e "$alt" ] || ln -sfn "../$(basename "$QT_DIR")" "$alt"
+            done
+          fi
+          ls -la plugin/build_macos/Frameworks | head -20
+
+      - name: Unit tests (ctest)
+        # Qt-Frameworks liegen in plugin/.deps; dyld findet sie im Build-Tree
+        # nur über DYLD_FRAMEWORK_PATH (Rpath zeigt auf installiertes Bundle).
+        run: |
+          QT_LIB=$(find plugin/.deps -type d -name lib -path '*qt6*' | head -1)
+          DYLD_FRAMEWORK_PATH="$QT_LIB:$PWD/plugin/.deps/Frameworks" \
+            ctest --test-dir plugin/build_macos -C RelWithDebInfo --output-on-failure
+
+      - name: Install staging
+        run: cmake --install plugin/build_macos --config RelWithDebInfo --prefix install
+
+      - name: Package ZIP (OBS layout)
+        shell: bash
+        run: |
+          ver="${GITHUB_REF_NAME#v}"
+          if [ -z "$ver" ] || [ "$ver" = "main" ]; then ver=ci; fi
+          # Staging-Layout (textbox-studio/bin + data) in OBS-Root-Layout umgebaut:
+          # obs-plugins/ + data/obs-plugins/textbox-studio/ — Nutzer entpackt direkt in OBS.
+          mkdir -p staging/obs-plugins staging/data/obs-plugins
+          # macOS: OBS-32-Plugin-Bundles haben die Endung .plugin (Xcode-Bundle),
+          # nicht .so — als ganzes Bundle-Verzeichnis kopieren.
+          find install -maxdepth 1 -name '*.plugin' -exec cp -R {} staging/obs-plugins/ \;
+          echo "PACKAGED: $(ls staging/obs-plugins)"
+          data_dir="$(find install -type d -name data -path '*textbox-studio*' | head -n 1)"
+          cp -R "$data_dir" staging/data/obs-plugins/textbox-studio
+          (cd staging && zip -r "../textbox-studio-$ver-macos.zip" obs-plugins data)
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: textbox-studio-macos
+          path: '*.zip'
+
+  linux:
+    name: Linux x86_64 build
+    # Linux baut gegen System-Pakete (kein obs-deps-Bootstrap): libobs-dev + Qt6
+    # aus der Ubuntu-Universe; cmake >= 3.28 kommt von Linuxbrew (Presets v8).
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies (apt + brew cmake)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential ninja-build pkg-config \
+            libobs-dev qt6-base-dev libqt6svg6-dev qt6-base-private-dev qt6-webengine-dev \
+            nlohmann-json3-dev zlib1g-dev
+          eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
+          brew install --quiet cmake
+          cmake --version
+
+      - name: Configure (CI preset)
+        working-directory: plugin
+        run: cmake --preset ubuntu-ci-x86_64
+
+      - name: Build (RelWithDebInfo)
+        run: cmake --build plugin/build_x86_64
+
+      - name: Unit tests (ctest)
+        run: ctest --test-dir plugin/build_x86_64 -C RelWithDebInfo --output-on-failure
+
+      - name: Install staging
+        run: cmake --install plugin/build_x86_64 --config RelWithDebInfo --prefix install
+
+      - name: Package ZIP (OBS layout)
+        shell: bash
+        run: |
+          ver="${GITHUB_REF_NAME#v}"
+          if [ -z "$ver" ] || [ "$ver" = "main" ]; then ver=ci; fi
+          # Staging-Layout (textbox-studio/bin + data) in OBS-Root-Layout umgebaut:
+          # obs-plugins/ + data/obs-plugins/textbox-studio/ — Nutzer entpackt direkt in OBS.
+          mkdir -p staging/obs-plugins staging/data/obs-plugins
+          find install -name '*.so' -exec cp {} staging/obs-plugins/ \;
+          data_dir="$(find install -type d -name data -path '*textbox-studio*' | head -n 1)"
+          cp -R "$data_dir" staging/data/obs-plugins/textbox-studio
+          (cd staging && zip -r "../textbox-studio-$ver-linux-x86_64.zip" obs-plugins data)
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: textbox-studio-linux-x86_64
+          path: '*.zip'
+
+  release:
+    name: Publish GitHub Release
+    # Sammelt die ZIP-Assets aller drei Plattform-Jobs und veroeffentlicht sie.
+    needs: [windows, macos, linux]
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download all platform artifacts
+        uses: actions/download-artifact@v4
+        with:
+          merge-multiple: true
+          path: dist
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*.zip
+          generate_release_notes: true
