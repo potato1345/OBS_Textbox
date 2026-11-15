@@ -42,7 +42,7 @@
         height: auto;
         padding: 18px 26px;
         box-sizing: border-box;
-        border-radius: 14px;
+        border-radius: var(--tb-radius, 4px);
         background: var(--tb-bg-color);
         border: var(--tb-border-width) solid var(--tb-border-color);
     }
@@ -51,7 +51,7 @@
         position: absolute;
         width: 18px;
         height: 18px;
-        border-radius: 5px;
+        border-radius: var(--tb-corner-radius, 3px);
         display: none;
     }
     body.rainbow .corner { display: block; animation: rainbow-rotate 12s linear infinite; }

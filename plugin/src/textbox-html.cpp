@@ -487,8 +487,7 @@ std::string normalize_anim_src(const std::string &raw, const TextboxSettings &se
 		const std::string base_dir_str =
 			!settings.animation_dir.empty()
 				? settings.animation_dir
-				: (std::filesystem::u8path(resolve_textbox_path(settings)).parent_path() / "animation")
-					  .u8string();
+				: shipped_animations_dir();
 		std::error_code ec;
 		const std::filesystem::path anim_dir = std::filesystem::u8path(base_dir_str);
 		const std::filesystem::path candidate = anim_dir / std::filesystem::u8path(raw);
@@ -517,8 +516,27 @@ std::string normalize_anim_src(const std::string &raw, const TextboxSettings &se
 				                                     : parent_cand.generic_u8string();
 			}
 		}
+		// 15.11: Fallback auf den mitgelieferten Plugin-Animations-Ordner,
+		// falls die Datei im User-Ordner nicht existiert.
+		bool shipped_inside = false;
+		if (resolved.empty()) {
+			const std::string shipped = shipped_animations_dir();
+			if (!shipped.empty()) {
+				std::error_code sec;
+				const std::filesystem::path shipped_dir = std::filesystem::u8path(shipped);
+				const std::filesystem::path shipped_cand =
+					shipped_dir / std::filesystem::u8path(raw);
+				shipped_inside = path_inside_dir(shipped_cand.u8string(), shipped_dir.u8string());
+				if (shipped_inside && std::filesystem::exists(shipped_cand, sec) && !sec) {
+					const std::filesystem::path abs_cand =
+						std::filesystem::absolute(shipped_cand, sec);
+					resolved = (!sec && !abs_cand.empty()) ? abs_cand.generic_u8string()
+					                                       : shipped_cand.generic_u8string();
+				}
+			}
+		}
 		// Pfad-Guard: relative Pfade müssen nach weakly_canonical im Animation-Base-Ordner bleiben.
-		if (!cand_inside && !parent_inside)
+		if (!cand_inside && !parent_inside && !shipped_inside)
 			return "";
 	}
 	if (resolved.empty())
@@ -939,6 +957,33 @@ std::string builtin_templates_dir()
 	}
 	obs_log(LOG_INFO, "Textbox: kein builtin-Vorlagenordner gefunden");
 	return "";
+#endif
+}
+
+std::string shipped_animations_dir()
+{
+#ifdef TEXTBOX_TEST_NO_OBS
+#if defined(TEXTBOX_REPO_ROOT)
+const std::filesystem::path dir =
+	std::filesystem::u8path(TEXTBOX_REPO_ROOT) / "plugin" / "data" / "animations";
+if (std::filesystem::is_directory(dir))
+	return dir.generic_u8string();
+#endif
+return "";
+#else
+char *mod_file = obs_module_file("animations/sparkle.webp");
+const std::string base = mod_file ? mod_file : "";
+bfree(mod_file);
+if (!base.empty()) {
+	const std::filesystem::path dir = std::filesystem::u8path(base).parent_path();
+	if (std::filesystem::is_directory(dir)) {
+		std::string out = dir.generic_u8string();
+		while (!out.empty() && (out.back() == '/' || out.back() == '\\'))
+			out.pop_back();
+		return out;
+	}
+}
+return "";
 #endif
 }
 

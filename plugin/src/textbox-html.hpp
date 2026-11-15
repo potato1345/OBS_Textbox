@@ -128,6 +128,10 @@ std::string normalize_anim_src(const std::string &raw,
 			       const TextboxSettings &settings = TextboxSettings(),
 			       const std::string &copy_dir = "");
 
+// 15.11: Der mit dem Plugin geshiped Animation-Ordner (Plugin-Data/animations).
+// leer, wenn kein solcher Ordner existiert.
+std::string shipped_animations_dir();
+
 // Erzeugt den CSS-Injektionsblock (:root mit --zeile-1/2/3, --box-bg, --triangle-color-a/b,
 // --text-color, --box-opacity usw.) aus den State-Feldern der Karte.
 // copy_dir wird an normalize_anim_src durchgereicht (Video-Kopien; s. o.).

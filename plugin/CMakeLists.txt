@@ -93,13 +93,23 @@ install(
   OPTIONAL
 )
 
-# IMP-F (F2b): Beispiel-Vorlagen ins Data-Verzeichnis ("Vorlagen-Ordner").
+# IMP-F (F2b): Vorlagen ins Data-Verzeichnis ("Vorlagen-Ordner") — nur die
+# Standard-Vorlage wird geshiped (15.11: Beispiel-Vorlagen entfernt).
 install(
   DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/templates/"
   DESTINATION "${CMAKE_PROJECT_NAME}/data/templates"
   COMPONENT Runtime
   OPTIONAL
   FILES_MATCHING PATTERN "*.html"
+)
+
+# 15.11: Extra Ordner für die mit dem Plugin geshiped Animationen.
+install(
+  DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/data/animations/"
+  DESTINATION "${CMAKE_PROJECT_NAME}/data/animations"
+  COMPONENT Runtime
+  OPTIONAL
+  FILES_MATCHING PATTERN "*.webp" PATTERN "*.gif" PATTERN "*.png" PATTERN "*.md"
 )
 
 enable_testing()

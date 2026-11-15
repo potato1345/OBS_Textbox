@@ -355,13 +355,12 @@ int main()
 
 		const std::vector<std::string> ids = textbox_html::list_template_ids();
 		const bool has_standard = std::find(ids.begin(), ids.end(), "standard") != ids.end();
-		const bool has_minimal = std::find(ids.begin(), ids.end(), "minimal") != ids.end();
-		const bool has_display = std::find(ids.begin(), ids.end(), "display") != ids.end();
+		// 15.11: nur die Standard-Vorlage wird geshiped — keine Beispiel-Vorlagen mehr.
 		std::string id_list;
 		for (const std::string &id : ids)
 			id_list += id + ",";
-		check(has_standard && has_minimal && has_display,
-		      "9b. list_template_ids(): builtin-Vorlagen standard/minimal/display gefunden", id_list);
+		check(has_standard && ids.size() == 1,
+		      "9b. list_template_ids(): nur builtin-Vorlage 'standard' gefunden", id_list);
 
 		TextboxCard c;
 		c.id = "box_builtin";
@@ -394,11 +393,16 @@ int main()
 		      "9c. standard.html: Marker, rainbow-Klasse, rgba-Tokens + Zeilen substituiert, kein Token-Rest",
 		      c_detail);
 
-		// minimal.html: rendert ohne rainbow-Klasse.
-		const std::string html_min = textbox_html::render_template_html(c, "minimal");
-		check(html_min.find("TEXTBOX_TEMPLATE: minimal") != std::string::npos &&
-		      html_min.find("class=\"rainbow\"") == std::string::npos,
-		      "9d. minimal.html: rendert ohne rainbow-Klasse");
+		// standard.html ohne Rainbow: rendert ohne rainbow-Klasse.
+		c.rainbow_corners = false;
+		const std::string html_norain = textbox_html::render_template_html(c, "standard");
+		// Exakt das body-Attribat prüfen (der Vorlagen-Kommentar enthält das
+		// Literal class="rainbow" als Doku, darf nicht als Fehlertreffer zählen).
+		check(html_norain.find("TEXTBOX_TEMPLATE: standard") != std::string::npos &&
+		      html_norain.find("<body class=\"0\">") != std::string::npos &&
+		      html_norain.find("<body class=\"rainbow\">") == std::string::npos,
+		      "9d. standard.html ohne rainbow_corners: body ohne rainbow-Klasse");
+		c.rainbow_corners = true;
 
 		// Live-Push-Contract: builtin-Templates enthalten den Update-Listener.
 		const std::string builtin_dir = textbox_html::builtin_templates_dir();
@@ -407,17 +411,17 @@ int main()
 		check(tpl_raw.find("textbox_card_update") != std::string::npos,
 		      "9e. standard.html enthält textbox_card_update-Listener (reload-free push)", builtin_dir);
 
-		// write_card(template_id="display"): frisches Template + INJECT-Marker
+		// write_card(template_id="standard"): frisches Template + INJECT-Marker
 		// (IMP-L6: CSS-Regeln und Zeilen-Custom-Vars sind im written HTML baked).
-		c.template_id = "display";
+		c.template_id = "standard";
 		std::string out_path;
 		const bool wrote = textbox_html::write_card(c, out_path);
 		const std::string html_disp =
 			wrote ? read_file_utf8(std::filesystem::u8path(out_path)) : "";
 		check(wrote &&
-		      html_disp.find("TEXTBOX_TEMPLATE: display") != std::string::npos &&
+		      html_disp.find("TEXTBOX_TEMPLATE: standard") != std::string::npos &&
 		      html_disp.find("OBS_TEXTBOX_INJECT_START") != std::string::npos,
-		      "9f. write_card(template_id=\"display\"): Template-HTML mit CSS-Injektion (IMP-L6)");
+		      "9f. write_card(template_id=\"standard\"): Template-HTML mit CSS-Injektion (IMP-L6)");
 
 		// Fehlende Vorlage -> classic-Fallback (INJECT-Marker), kein Crash.
 		// Classic-Basis explizit via settings.textbox_path: auf CI-Runners gibt es

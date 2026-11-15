@@ -97,13 +97,10 @@ QString card_search_label(const QString &id, const QString &title)
 	return t.isEmpty() ? id : QStringLiteral("%1 · %2").arg(id, t);
 }
 
-// IMP-L4: Dialog-Optionen. TEXTBOX_NO_NATIVE_DIALOG=1 -> Qt-eigene Dialogen
-// (UIA-automatisierbar, auch für Skripte/Tests). Default: native Dialogen.
+// 15.11 (User-Vorgabe): alle Datei-Picker nutzen den NATIVEN Windows-Dialog.
+// Der Qt-eigene Dialog (TEXTBOX_NO_NATIVE_DIALOG) ist entfernt — nichts Eigenes.
 QFileDialog::Options dialog_options()
 {
-	const QByteArray no_native = qgetenv("TEXTBOX_NO_NATIVE_DIALOG");
-	if (no_native == "1" || no_native == "true")
-		return QFileDialog::DontUseNativeDialog;
 	return QFileDialog::Options();
 }
 

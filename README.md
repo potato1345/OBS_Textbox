@@ -11,23 +11,26 @@ Tools gesteuert.
 
 ## Screenshots
 
-Beispiele einer Karte pro Overlay-Template (Standard, Minimal, Display), gerendert
-als Browser-Source außerhalb von OBS:
+Karte mit dem Standard-Template, gerendert als Browser-Source außerhalb von OBS:
 
 ![Standard-Template](assets/screenshots/standard.png)
-![Minimal-Template](assets/screenshots/minimal.png)
-![Display-Template](assets/screenshots/display.png)
 
 ## Features
 
 - **8 Karten** (`box1`–`box8`), jede als eigenes OBS-Overlay (Browser-Source)
+- **Templates**: eine mitgelieferte Vorlage (`standard.html`) im
+  Vorlagen-Ordner des Plugin-Data-Verzeichnisses; eigene Vorlagen als `.html`
+  per Pfad-Eingabe oder Picker
 - **3 Textzeilen** pro Karte, unabhängig positioniert und sized
   (`zeile1/2/3` mit je `x`, `y`, `w`, `h`, `fsize`)
 - **16 Style-Properties** pro Karte: Schrift (`Arial`, `Comic Sans MS`,
   `Courier`), Farbe und Transparenz je Zeile, Box-Farbe/-Transparenz (0–100),
   Corner-Farbe und -Opacity, Animations-Size und Regenbogen-Ecken
-- **Animations-GIF**: relative Pfade, HTTP/HTTPS-URLs oder Data-URIs
-  (Data-URIs werden als temporäre Datei materialisiert)
+- **Animations**: relative Pfade, HTTP/HTTPS-URLs oder Data-URIs
+  (Data-URIs werden als temporäre Datei materialisiert); mit dem Plugin
+  geshiped: `data/animations/` (`sparkle.webp`, `pulse.webp` — transparent,
+  loopend). Relative Namen werden im eigenen Animations-Ordner und im
+  mitgelieferten Ordner gesucht
 - **Live-Dock**: Karten-Tabs mit allen Feldern, Live-Vorschau der aktuellen
   Karte (QWebEngineView), Undo/Redo mit Undo-History
 - **Import aus Tabellen**: `.xlsx`, `.csv`, `.txt` (UTF-8 oder UTF-16LE mit BOM,
@@ -35,10 +38,10 @@ als Browser-Source außerhalb von OBS:
   Spalten `Block N – Nr`, `Block N – Titel`, `Block N – Zeilen`
 - **Import aus einer URL**: JSON-Antworten von einer Formular-/Tabellen-URL laden
   (OAuth-Token wird unterstützt)
-- **AI-Import**: PDF/DOCX/TXT-Ordner-Import via lokalem LLM (Ollama oder
-  OpenAI-kompatibles HTTP-API); ohne konfigurierten Server bleibt der Button
-  ohne Effekt. Optional kann eine Referenztabelle (`referenz.md`) Nummern zu
-  Titeln ergänzen
+- **AI-Import**: PDF/DOCX via lokalem markitdown-Sidecar (Python) und
+  OpenRouter-LLM (`OPENROUTER_API_KEY` in der konfigurierten Key-Datei);
+  ohne Key/Python bleibt der Button ohne Effekt. Optional kann eine
+  Referenztabelle Nummern zu Titeln ergänzen
 - **OBS-WebSocket**: Steuerung von außen über die Events `textbox_card_update`
   (JSON mit allen Feldern einer Karte) und `textbox_clear`
 - **Persistence**: alle Einstellungen über OBS-Plugin-Settings; Karten-HTML und

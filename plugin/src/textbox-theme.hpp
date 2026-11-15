@@ -31,8 +31,9 @@ QDialog#tbSettingsDialog {
 QWidget#textboxDock {
 	background-color: #1D1F26;
 	border: 1px solid #3C404D;
-	border-bottom-left-radius: 10px;
-	border-bottom-right-radius: 10px;
+	// 15.11: keine eigene Aussen-Rundung — floating Dock fenster wird von
+	// Windows (DWM, 8px) gerundet, exakt wie OBS-eigene Fenster.
+	border-radius: 0px;
 }
 
 QScrollArea {
@@ -85,10 +86,7 @@ QMenu::separator {
 QFrame#tbCardOuter {
 	background-color: transparent;
 	border: 1px solid #3C404D;
-	border-top-left-radius: 4px;
-	border-top-right-radius: 4px;
-	border-bottom-left-radius: 10px;
-	border-bottom-right-radius: 10px;
+	border-radius: 4px;
 }
 
 QFrame#tbCardInner {
@@ -96,8 +94,8 @@ QFrame#tbCardInner {
 	border: none;
 	border-top-left-radius: 0px;
 	border-top-right-radius: 0px;
-	border-bottom-left-radius: 9px;
-	border-bottom-right-radius: 9px;
+	border-bottom-left-radius: 4px;
+	border-bottom-right-radius: 4px;
 }
 
 QFrame#tbCardInner:hover {
