@@ -292,6 +292,15 @@ std::string extract_document_text(const std::string &file_path, const std::strin
 	if (cancel && cancel->load())
 		return "";
 
+	// Feldwerte können Leerzeichen/Zeilenumbrüche enthalten (Paste) -> trimmen
+	std::string path_arg = file_path;
+	while (!path_arg.empty() &&
+	       (path_arg.back() == ' ' || path_arg.back() == '\n' || path_arg.back() == '\r' || path_arg.back() == '	'))
+		path_arg.pop_back();
+	while (!path_arg.empty() &&
+	       (path_arg.front() == ' ' || path_arg.front() == '\n' || path_arg.front() == '\r' || path_arg.front() == '	'))
+		path_arg.erase(0, 1);
+
 	std::error_code ec;
 	const std::filesystem::path py_path = std::filesystem::u8path(python_exe);
 	if (python_exe.empty() || !std::filesystem::exists(py_path, ec) || ec) {
@@ -299,8 +308,8 @@ std::string extract_document_text(const std::string &file_path, const std::strin
 		return "";
 	}
 
-	const std::filesystem::path doc_path = std::filesystem::u8path(file_path);
-	if (file_path.empty() || !std::filesystem::exists(doc_path, ec) || ec) {
+	const std::filesystem::path doc_path = std::filesystem::u8path(path_arg);
+	if (path_arg.empty() || !std::filesystem::exists(doc_path, ec) || ec) {
 		err = "Dokument-Extraktion fehlgeschlagen (Exit 1)";
 		return "";
 	}
@@ -327,7 +336,7 @@ std::string extract_document_text(const std::string &file_path, const std::strin
 
 	std::wstring cmd = quote_win32_arg(utf8_to_wide(python_exe)) +
 			   L" -X utf8 -m markitdown " +
-			   quote_win32_arg(utf8_to_wide(file_path));
+			   quote_win32_arg(utf8_to_wide(path_arg));
 	std::vector<wchar_t> cmd_buf(cmd.begin(), cmd.end());
 	cmd_buf.push_back(L'\0');
 

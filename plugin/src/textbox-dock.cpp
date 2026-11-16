@@ -36,6 +36,8 @@
 #include <QDate>
 #include <QDialog>
 #include <QFile>
+#include <QGuiApplication>
+#include <QScreen>
 #include <QFileDialog>
 #include <QFrame>
 #include <QGroupBox>
@@ -56,6 +58,17 @@
 #include <QPushButton>
 #include <QRegularExpression>
 #include <QScrollArea>
+
+namespace {
+// QScrollArea::minimumSizeHint() = qMax(widget-minimumSizeHint, own minimum):
+// widgetResizable=true propagiert so den Content-min nach oben in den Dialog,
+// der wächst dann über die Bildschirmhöhe. Subclass kappt das Minimum.
+class CappedScrollArea : public QScrollArea {
+public:
+	explicit CappedScrollArea(QWidget *parent = nullptr) : QScrollArea(parent) { setMinimumSize(0, 0); }
+	QSize minimumSizeHint() const override { return QSize(0, 0); }
+};
+}
 #include <QShortcut>
 #include <QSignalBlocker>
 #include <QSizePolicy>
@@ -2265,7 +2278,24 @@ void TextboxDock::on_open_import_dialog()
 	dlg.setStyleSheet(textbox_theme::stylesheet(icon_dir_));
 	dlg.setMinimumWidth(540);
 
-	auto *root = new QVBoxLayout(&dlg);
+	// Inhalt scrollbar machen: nach URL-Import wächst der Detail-Block über
+	// die Bildschirmhöhe hinaus (Dialog > Monitor), Buttons wären off-screen.
+	auto *dlg_layout = new QVBoxLayout(&dlg);
+	dlg_layout->setContentsMargins(0, 0, 0, 0);
+	dlg_layout->setSpacing(0);
+	auto *dlg_scroll = new CappedScrollArea(&dlg);
+	dlg_scroll->setWidgetResizable(true);
+	dlg_scroll->setFrameShape(QFrame::NoFrame);
+	auto *dlg_content = new QWidget();
+	auto *root = new QVBoxLayout(dlg_content);
+	dlg_scroll->setWidget(dlg_content);
+	dlg_layout->addWidget(dlg_scroll);
+	{
+		int avail_h = 780;
+		if (auto *scr = QGuiApplication::primaryScreen())
+			avail_h = scr->availableGeometry().height() - 80;
+		dlg.resize(560, avail_h);
+	}
 	root->setContentsMargins(16, 16, 16, 16);
 	root->setSpacing(12);
 
@@ -2336,6 +2366,12 @@ void TextboxDock::on_open_import_dialog()
 	auto *service_combo = new QComboBox(kopf_group);
 	service_combo->setObjectName(QStringLiteral("tbServiceSelect"));
 	service_combo->setFixedHeight(34);
+	// Sehr lange Einreichungs-Items würden sonst das Content-Widget auf
+	// mehrere tausend Pixel Breite aufblähen (QComboBox::minimumSizeHint =
+	// längstes Item). Items werden vom Combo ohnehin elidiert.
+	service_combo->setMinimumWidth(0);
+	service_combo->setSizeAdjustPolicy(QComboBox::AdjustToMinimumContentsLengthWithIcon);
+	service_combo->setMinimumContentsLength(16);
 
 	auto *lbl_service_preview = new QLabel(kopf_group);
 	lbl_service_preview->setObjectName(QStringLiteral("tbServicePreview"));
