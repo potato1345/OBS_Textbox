@@ -1,0 +1,28 @@
+^C:\USERS\JOHANN\DESKTOP\GITHUB\OBS_TEXTBOX\BUILD_X64\CMAKEFILES\F243AF528623D48D5D64469241D34473\TIMESTAMP_(CONFIG).RULE
+setlocal
+cd C:\Users\Johann\Desktop\Github\OBS_Textbox\build_x64
+if %errorlevel% neq 0 goto :cmEnd
+C:
+if %errorlevel% neq 0 goto :cmEnd
+C:\Users\Johann\AppData\Local\Microsoft\WinGet\Packages\Kitware.CMake_Microsoft.Winget.Source_8wekyb3d8bbwe\cmake-4.4.4-windows-x86_64\bin\cmake.exe -E cmake_autogen C:/Users/Johann/Desktop/Github/OBS_Textbox/build_x64/CMakeFiles/textbox-studio_autogen.dir/AutogenInfo.json RelWithDebInfo
+if %errorlevel% neq 0 goto :cmEnd
+C:\Users\Johann\AppData\Local\Microsoft\WinGet\Packages\Kitware.CMake_Microsoft.Winget.Source_8wekyb3d8bbwe\cmake-4.4.4-windows-x86_64\bin\cmake.exe -E touch C:/Users/Johann/Desktop/Github/OBS_Textbox/build_x64/textbox-studio_autogen/timestamp_RelWithDebInfo
+if %errorlevel% neq 0 goto :cmEnd
+C:\Users\Johann\AppData\Local\Microsoft\WinGet\Packages\Kitware.CMake_Microsoft.Winget.Source_8wekyb3d8bbwe\cmake-4.4.4-windows-x86_64\bin\cmake.exe -E cmake_transform_depfile "Visual Studio 17 2022" MSBuildAdditionalInputs C:/Users/Johann/Desktop/Github/OBS_Textbox/plugin C:/Users/Johann/Desktop/Github/OBS_Textbox/plugin C:/Users/Johann/Desktop/Github/OBS_Textbox/build_x64 C:/Users/Johann/Desktop/Github/OBS_Textbox/build_x64 C:/Users/Johann/Desktop/Github/OBS_Textbox/build_x64/textbox-studio_autogen/deps_RelWithDebInfo C:/Users/Johann/Desktop/Github/OBS_Textbox/build_x64/CMakeFiles/d/a8c32acb5b14c858a055530faa44b6a7695b3c396c899961ef43e36fc7bafe1a.AdditionalInputs
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal & call :cmErrorLevel %errorlevel% & goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd
+^C:\USERS\JOHANN\DESKTOP\GITHUB\OBS_TEXTBOX\PLUGIN\CMAKELISTS.TXT
+setlocal
+C:\Users\Johann\AppData\Local\Microsoft\WinGet\Packages\Kitware.CMake_Microsoft.Winget.Source_8wekyb3d8bbwe\cmake-4.4.4-windows-x86_64\bin\cmake.exe -SC:/Users/Johann/Desktop/Github/OBS_Textbox/plugin -BC:/Users/Johann/Desktop/Github/OBS_Textbox/build_x64 --check-stamp-file C:/Users/Johann/Desktop/Github/OBS_Textbox/build_x64/CMakeFiles/generate.stamp
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal & call :cmErrorLevel %errorlevel% & goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd

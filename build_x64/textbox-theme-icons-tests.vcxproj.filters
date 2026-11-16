@@ -1,0 +1,16 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="17.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <ClCompile Include="C:\Users\Johann\Desktop\Github\OBS_Textbox\plugin\src\tests\test-textbox-theme-icons.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <CustomBuild Include="C:\Users\Johann\Desktop\Github\OBS_Textbox\plugin\CMakeLists.txt" />
+  </ItemGroup>
+  <ItemGroup>
+    <Filter Include="Source Files">
+      <UniqueIdentifier>{6D3C38B3-8E00-3B03-BB74-7FEEB8E103DC}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+</Project>

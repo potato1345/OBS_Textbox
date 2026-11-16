@@ -278,6 +278,23 @@ bool reconcile_profiles_after_delete(TextboxState &state)
 	return reseeded;
 }
 
+// Dünner 1px-Rahmen für Kartenboxen im gedämpften OBS-Stil (#3C404D).
+class CardOutlineFrame : public QFrame {
+public:
+	explicit CardOutlineFrame(QWidget *parent = nullptr) : QFrame(parent) {}
+
+protected:
+	void paintEvent(QPaintEvent *event) override
+	{
+		QFrame::paintEvent(event);
+		QPainter p(this);
+		p.setRenderHint(QPainter::Antialiasing);
+		p.setPen(QPen(QColor("#3C404D"), 1));
+		p.setBrush(Qt::NoBrush);
+		p.drawRoundedRect(QRectF(rect()).adjusted(0.5, 0.5, -0.5, -0.5), 4.0, 4.0);
+	}
+};
+
 } // namespace
 
 #ifdef ENABLE_FRONTEND_API
@@ -299,9 +316,9 @@ void TextboxDock::paintEvent(QPaintEvent *event)
 	QWidget::paintEvent(event);
 	QPainter p(this);
 	p.setRenderHint(QPainter::Antialiasing);
-	p.setPen(QPen(QColor("#7A86A2"), 2));
+	p.setPen(QPen(QColor("#3C404D"), 1));
 	p.setBrush(Qt::NoBrush);
-	p.drawRoundedRect(QRectF(rect()).adjusted(1.0, 1.0, -1.0, -1.0), 6.0, 6.0);
+	p.drawRoundedRect(QRectF(rect()).adjusted(0.5, 0.5, -0.5, -0.5), 6.0, 6.0);
 }
 
 void TextboxDock::ensure_card_sources()
@@ -778,7 +795,7 @@ QIcon TextboxDock::theme_icon(const char *name) const
 
 void TextboxDock::create_row_widget(const TextboxCard &card)
 {
-	auto *row_widget = new QFrame(this);
+	auto *row_widget = new CardOutlineFrame(this);
 	row_widget->setObjectName(QStringLiteral("tbCardOuter"));
 	row_widget->setProperty("tbCardId", QString::fromUtf8(card.id.c_str()));
 	row_widget->setMinimumWidth(320);

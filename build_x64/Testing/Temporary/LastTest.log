@@ -1,0 +1,375 @@
+Start testing: Nov 16 01:51 Mitteleurop�ische Zeit
+----------------------------------------------------------
+1/8 Testing: textbox-state
+1/8 Test: textbox-state
+Command: "C:/Users/Johann/Desktop/Github/OBS_Textbox/build_x64/RelWithDebInfo/textbox-tests.exe"
+Directory: C:/Users/Johann/Desktop/GitHub/OBS_Textbox/build_x64
+"textbox-state" start time: Nov 16 01:51 Mitteleurop�ische Zeit
+Output:
+----------------------------------------------------------
+[PASS] 1. save->load Roundtrip inkl. Umlaut in zeile3
+[PASS] 2. load() auf nicht existierender Datei liefert leeren State und ""
+[PASS] 3. load() mit kaputtem JSON liefert leeren State und Fehler-String
+[PASS] 4. unknown Felder im JSON werden ignoriert, bekannte bleiben erhalten
+[PASS] 4b. F1 Legacy-Migration: Karten-Profil -> kanonischer Name
+[PASS] 4c. F1 Legacy-Migration: active_profile Default -> Karte Dunkel
+[PASS] 5. Box-Id-Regel: box1..box3, box1 löschen, neu -> box4
+[PASS] 6. next_id überlebt save/load
+[PASS] 7. textbox_profiles(): genau 6 Profile "Karte …" mit exakten Farben und Ecken-Defaults
+[PASS] 8. profile_by_name("nicht da") -> nullptr
+[PASS] 8b. Profil-Nachsaat: leer -> 6 Defaults, gefüllt -> unverändert
+[PASS] 9. TextboxState::find() liefert Zeiger bzw. nullptr
+[PASS] 10. load() auf leerer Datei liefert leeren State und ""
+[PASS] 11. Ui2/M2b Roundtrip: Corner-Colors, Opacities und rainbow_corners bleiben erhalten
+[PASS] 12. Ui2/M2b Alte-Datei-Test: fehlende Ecken-Felder erhalten Defaults (#fce647, 255/255, false)
+[PASS] 13. M4 Backup-Roundtrip: Tiefenvergleich (nlohmann == und struct ==)
+[PASS] 14. M4 Schnellprofil-Roundtrip: Speichern, Laden und Apply ersetzt cards komplett
+[PASS] 15. M4 Backward-Compat: JSON ohne active_profile/settings/quick_profiles lädt mit Defaults
+[PASS] 16. M5 Anim- & Settings-Roundtrip: alle 5 Anim-Felder + 5 Settings-Felder identisch nach save/load
+[PASS] 17. M5 Backward-Compat: fehlende Anim-Felder und Settings-Keys erhalten Defaults
+[PASS] 18. M6-B3 YAML-Roundtrip: textbox_profile_to_yaml -> textbox_yaml_to_profile identisch
+[PASS] 19. M6-B3 v2-18-Key-YAML-Import: extrahiert exakt textColor + cardOuterBg, ignoriert übrige 16 Keys
+[PASS] 20. M6-B3 YAML-Fehlerpfade: leerer Name, keine Farben, ungültiges Farbformat
+[PASS] 21. M6-B3 YAML-Defaults/Quoting: 3-Digit-Hex, '-Quotes und #ffffff-Default bei fehlendem cardOuterBg
+[PASS] 22. M6-B2/IMP-H5 Lookup: Custom vor Standard, Custom wird gefunden, Unbekannt -> nullptr
+[PASS] 22b. F1 Alias profile_by_name("OBS Dark") -> Karte Dunkel
+[PASS] 22c. F1 Alias case-insensitive -> Karte Kontrast
+[PASS] 22d. F1 Alias lookup("Forest Green") -> Karte Wald
+[PASS] 22e. IMP-H5 profile_switch: Farb-Regeln werden übernommen, Radius-Regel bleibt
+[PASS] 22f. IMP-H5 Profil-Stil (typisiert) + profiles_seeded JSON-Roundtrip
+[PASS] 22g. IMP-H6 Anim-Regeln (--anim-show/file/scale/x/y) mappen auf Felder
+[PASS] 23. M6-B2 State-Seriale: save->load mit 2 Custom-Profilen, JSON ohne Key -> leer, reset() -> leer
+[PASS] 24. F1 YAML-Roundtrip: erweiterte Felder + 2-Feld-Profil -> Defaults
+[PASS] 25. F1 profile_apply: alle Felder, Legacy-Reset auf Defaults, operator== incl. Ecken
+[PASS] 26. F1 State-JSON: erweiterte color_profiles save->load identisch
+[PASS] 27. F1 Migration active_profile "Sunset Warm" -> Karte Sonne
+[PASS] 28. F2a template_id Round-trip (Cards + QuickProfile + operator==) und Alt-State-Migration -> ""
+[PASS] 29. IMP-X4/X2 settings.kopf_fields Round-trip, operator==, Alt-State -> leer, Default google_form_id -> ""
+[PASS] 30. IMP-X5 tb_event_log: ISO-UTC-Format, Append und >1-MB-Trim auf <= 400 Zeilen
+All 30 checks passed.
+<end of output>
+Test time =   0.19 sec
+----------------------------------------------------------
+Test Passed.
+"textbox-state" end time: Nov 16 01:51 Mitteleurop�ische Zeit
+"textbox-state" time elapsed: 00:00:00
+----------------------------------------------------------
+
+2/8 Testing: textbox-textfmt
+2/8 Test: textbox-textfmt
+Command: "C:/Users/Johann/Desktop/Github/OBS_Textbox/build_x64/RelWithDebInfo/textbox-textfmt-tests.exe"
+Directory: C:/Users/Johann/Desktop/GitHub/OBS_Textbox/build_x64
+"textbox-textfmt" start time: Nov 16 01:51 Mitteleurop�ische Zeit
+Output:
+----------------------------------------------------------
+[PASS] parse_hex_color: "#eff0f1" -> 0xEFF0F1
+[PASS] parse_hex_color: "#000000" -> 0
+[PASS] parse_hex_color: "#ABCDEF" (Groß) -> 0xABCDEF
+[PASS] parse_hex_color: "fff" (ohne #) -> fallback
+[PASS] parse_hex_color: "#12345" -> fallback
+[PASS] parse_hex_color: "#1234567" -> fallback
+[PASS] parse_hex_color: "" -> fallback
+[PASS] parse_hex_color: "#zzzzzz" -> fallback
+[PASS] opacity_pct: 0 -> 0
+[PASS] opacity_pct: 255 -> 100
+[PASS] opacity_pct: 254 -> 100 (99,6 % rundet auf 100)
+[PASS] opacity_pct: 128 -> 50 (gerundet)
+[PASS] opacity_pct: 100 -> 39
+[PASS] opacity_pct: -5 -> 0
+[PASS] opacity_pct: 300 -> 100
+[PASS] card_text: alle 3 gefüllt -> "467\n1+3\nFreu dich sehr"
+[PASS] card_text: nur zeile3 -> "Freu dich sehr"
+[PASS] card_text: zeile1+3 -> "467\nFreu dich sehr"
+[PASS] card_text: alle leer -> ""
+[PASS] card_text: Umlaut/Em-Dash bleiben erhalten ("Übermorgen — 1")
+All 20 checks passed.
+<end of output>
+Test time =   0.03 sec
+----------------------------------------------------------
+Test Passed.
+"textbox-textfmt" end time: Nov 16 01:51 Mitteleurop�ische Zeit
+"textbox-textfmt" time elapsed: 00:00:00
+----------------------------------------------------------
+
+3/8 Testing: textbox-theme-icons
+3/8 Test: textbox-theme-icons
+Command: "C:/Users/Johann/Desktop/Github/OBS_Textbox/build_x64/RelWithDebInfo/textbox-theme-icons-tests.exe"
+Directory: C:/Users/Johann/Desktop/GitHub/OBS_Textbox/build_x64
+"textbox-theme-icons" start time: Nov 16 01:51 Mitteleurop�ische Zeit
+Output:
+----------------------------------------------------------
+[PASS] icon-list non-trivial size
+[PASS] icon names ASCII/non-empty, content non-empty
+[PASS] force write succeeds
+[PASS] all icon files present, >=1 byte
+[PASS] version file matches kVersion
+[PASS] plus.svg contains <svg
+[PASS] chevron_right.svg present and SVG well-formed
+[PASS] chevron_down.svg present and SVG well-formed
+[PASS] no-op on current version
+[PASS] no-op leaves content unchanged
+[PASS] rewrite after corruption
+[PASS] corrupted file rewritten non-empty
+[PASS] rewrite after missing version file
+[PASS] version file recreated
+ALL THEME-ICON TESTS PASSED
+<end of output>
+Test time =   0.06 sec
+----------------------------------------------------------
+Test Passed.
+"textbox-theme-icons" end time: Nov 16 01:51 Mitteleurop�ische Zeit
+"textbox-theme-icons" time elapsed: 00:00:00
+----------------------------------------------------------
+
+4/8 Testing: textbox-import
+4/8 Test: textbox-import
+Command: "C:/Users/Johann/Desktop/Github/OBS_Textbox/build_x64/RelWithDebInfo/textbox-import-tests.exe"
+Directory: C:/Users/Johann/Desktop/GitHub/OBS_Textbox/build_x64
+"textbox-import" start time: Nov 16 01:51 Mitteleurop�ische Zeit
+Output:
+----------------------------------------------------------
+[PASS] 1. normalize_header mit Spaces und Gedankenstrich
+[PASS] 2. normalize_header Woche\u2013Tag == Woche-Tag
+[PASS] 3. header_key Simple-Keys, Blöcke 1..12 und Unbekannte Spalte
+[PASS] 4. antwort_comma.csv inkl. Komma im quoteden Titel
+[PASS] 5. antwort_semicolon.csv Block1.nr == 101
+[PASS] 6. antwort_bom.csv Block1.nr == 101
+[PASS] 7. antwort_timestamp_en.csv zeitstempel == 20.10.2026 09:15:32
+[PASS] 8. Inline-CSV mit ""-Escapes und leeren Zeilen zwischen Daten
+[PASS] 9. Header ohne Block-Spalten liefert ImportError::Format
+[PASS] 10. Nur Kopfzeile liefert ImportError::NoResponses
+[PASS] 11. API-Fixture (offline): Mapping + q_unbekannt ignoriert
+[PASS] 12. API-Multi: zwei textAnswers.answers[]-Werte -> joined "a, b"
+[PASS] 13. XLSX: antwort.xlsx == antwort_comma.csv (inkl. Block 1 & Block 5 Pause)
+[PASS] 14. ZIP-Deflate: antwort.zip == antwort_comma.csv
+[PASS] 15. ZIP-Store: unkomprimiertes ZIP == antwort_comma.csv
+[PASS] 16. ZIP ohne CSV liefert ImportError::Format
+[PASS] 17. XLSX leer (nur Header) liefert ImportError::NoResponses
+[PASS] 18. Falsche Endung (.txt) bei parse_answers liefert ImportError::Format
+[PASS] 19. Shared-Strings-Entity (&amp;, &#x41;, &lt;, &gt;, &quot;, &apos;) in XLSX korrekt dekodiert
+[PASS] 20. Zip-Bomb-Cap: ~100 MB Null-Bytes via compress2 -> inflate_data == std::nullopt
+[PASS] 21. Mehrere Einreichungen: CSV und ZIP mit 2 Services liefern services.size()==2, newest first, service == neuester
+[PASS] 22. IMP-X4 CSV fields: Quellreihenfolge inkl. generischer Spalten, ohne Block-/Leerspalten
+[PASS] 23. IMP-X4 API fields: Zeitstempel + Fragetitel (inkl. generisch), ohne Block-Fragen
+[PASS] 24. IMP-X4/X2 fields in XLSX/ZIP identisch + leere FORM-ID Fehlermeldung
+All 24 checks passed.
+<end of output>
+Test time =   0.78 sec
+----------------------------------------------------------
+Test Passed.
+"textbox-import" end time: Nov 16 01:51 Mitteleurop�ische Zeit
+"textbox-import" time elapsed: 00:00:00
+----------------------------------------------------------
+
+5/8 Testing: textbox-ai
+5/8 Test: textbox-ai
+Command: "C:/Users/Johann/Desktop/Github/OBS_Textbox/build_x64/RelWithDebInfo/textbox-ai-tests.exe"
+Directory: C:/Users/Johann/Desktop/GitHub/OBS_Textbox/build_x64
+"textbox-ai" start time: Nov 16 01:51 Mitteleurop�ische Zeit
+Output:
+----------------------------------------------------------
+[PASS] 1. parse_textbox_locally(sampleText): >=4 Einträge und items[0] exakt
+[PASS] 2. parse_reference_table(referenzSample): exakt 2 Keys (31,1 / 101), kein Key 'Nr'
+[PASS] 3. parse_reference_table(referenzNoHeader): 2 Keys (5 / 6), Separator übersprungen
+[PASS] 4. enrich_titles_from_reference: bekannter Eintrag ergänzt, unbekannter leer, vorhandener unverändert
+[PASS] 5. parse_json_clean: (a) Code-Fence, (b) Präfix/Suffix, (c) kein JSON -> throw
+[PASS] 6. discover_free_models: Ausschlüsse (-vl/content-safety/2.6b) und Prioritätsreihung
+[PASS] 7. read_env_key: Dummy-Key gelesen, fehlende Datei -> err, Datei ohne Key -> leer
+[PASS] 8. parse_textbox_locally: leerer String und reine Kopfzeilen liefern leere Liste
+[PASS] 9a. parse_textbox_locally("Punkt\n310, 1-2"): 1 Punkt zeile1=Punkt, zeile2=310, 1-2
+[PASS] 9b. parse_textbox_locally("Beginn 101, 1-3 Kickoff"): zeile3="Kickoff"
+[PASS] 10a. extract_document_text mit Repo-Venv: extrahiert '101' aus test_doc.txt
+[PASS] 10b. extract_document_text mit fehlender Python-Exe liefert deutschen Fehler
+All AI module checks passed.
+<end of output>
+Test time =   2.33 sec
+----------------------------------------------------------
+Test Passed.
+"textbox-ai" end time: Nov 16 01:51 Mitteleurop�ische Zeit
+"textbox-ai" time elapsed: 00:00:02
+----------------------------------------------------------
+
+6/8 Testing: textbox-render
+6/8 Test: textbox-render
+Command: "C:/Users/Johann/Desktop/Github/OBS_Textbox/build_x64/RelWithDebInfo/textbox-render-tests.exe"
+Directory: C:/Users/Johann/Desktop/GitHub/OBS_Textbox/build_x64
+"textbox-render" start time: Nov 16 01:51 Mitteleurop�ische Zeit
+Output:
+----------------------------------------------------------
+[PASS] 1a. Volle Karte: Format 800x400 ARGB32
+[PASS] 1. Volle Karte (box #ffffff/255): Pixel (600,40) == box_color @ box_opacity
+[PASS] 2. Rundung: Pixel (2,2) alpha == 0 (außerhalb des 24-px-Radii)
+[PASS] 3. box_opacity=0: Pixel (600,40) alpha == 0
+[PASS] 4. Leere Karte (alle zeilen ""): Box bleibt sichtbar (Pixel (600,40) == box_color)
+[PASS] 5. Text vorhanden: zeile3 "Abschluss" -> >=1 Pixel mit Farbe == text_color
+[PASS] 6. text_opacity=0: es existiert KEIN Pixel == text_color (Text unsichtbar)
+[PASS] 7. text_color rot (#ff0000) -> >=1 roter Text-Pixel
+[PASS] 8a. card_html(): enthält alle drei Texte (GL 290 / 1-4 / Großer Glaube)
+[PASS] 8b. card_html(): enthält rgba(0,0,0,1) und rgba(255,255,255,1)
+[PASS] 8c. card_html(): enthält border-radius:24px
+[PASS] 8d. card_html(): enthält Event-Listener-Zeile für textbox_card_update
+[PASS] 8e. build_inject_css(card): enthält alle erwarteten CSS-Variablen und Marker
+[PASS] 8f. build_inject_css(leere Zeilen): --box-opacity: 0
+[PASS] 8g. render_card_html(card, ""): Fallback enthält textbox_card_update und alle drei Texte
+[PASS] 8h. render_card_html(card, echterRepoInhalt): Injektion vor </head>, Listener vor </body>, .anim-wrapper erhalten
+[PASS] 8i. render_card_html(rainbow=false): --tb-rainbow: 0 vor </head>, keine Triangle-/Rainbow-Injektion danach
+[PASS] 8j. render_card_html(rainbow=true): --tb-rainbow: 1 + --triangle-background: none vor </head>, Listener setzt --tb-rainbow via setVar
+[PASS] 8m. {{rainbow}}-Token: rainbow=true -> class="rainbow", false -> class="0" (body.rainbow-CSS greift)
+[PASS] 8k. build_inject_css: custom Corner-Colors/Opacity -> exakte rgba-Strings; leere Color-Felder -> Default #fce647
+[PASS] 8l. card_html (Fallback): rainbow=true (#box::before/::after + tb-rainbow-rotate + --tb-rainbow: 1), rainbow=false (--tb-rainbow: 0), box_bg-Schema ohne box_color
+[PASS] 9a. card_html() Escape-Test: "&<x>" wird zu "&amp;&lt;x&gt;" (kein rohes <)
+[PASS] 9b. card_html() Escape-Test: '"' und '\'' werden escaped
+[PASS] 9c. card_html(): box_opacity=0 setzt display:none auf #box
+[PASS] 9d. card_html(): leere Zeile l3 hat display:none
+[PASS] 9f. build_inject_css Escape-Test: "An & <Bö>\"se" enthält kein rohes '"' oder '<'
+[PASS] 9e. write_card(): schreibt box13.html mit Injektionsblock/Fallback + Listener
+[PASS] 10. (M5 #9) normalize_anim_src: Win-Pfad, URL, existierendes Bild->Data-URI, fehlender Bare-Name, Space->%20
+[PASS] 12a. (M5.1) existierendes GIF → data:image/gif;base64 + Byte-Identität
+[PASS] 12b. (M5.1) MIME pro Endung (png/jpg/webp)
+[PASS] 12c. (M5.1) fehlendes Bild → file-URL-Fallback
+[PASS] 12d. (M5.1) Video → Kopie nach cards/ + file-URL, Inhalte identisch
+[PASS] 12e. (M5.1) Video in copy_dir → direkte file-URL
+[PASS] 12f. (M5-1) Non-ASCII-Name → %C3%BC-Encoded, keine rohen High-Bytes
+[PASS] 12g. (M5.1) http/file/empty Pass-through
+[PASS] 11a. (M5 #13) build_inject_css mit Anim-State: --anim-file/show/scale/x/y exakt + '"' escaped
+[PASS] 11b. (M5 #14) build_inject_css ohne Anim (Defaults): --anim-file: ""; --show-anim: 0;
+All render & HTML checks passed.
+<end of output>
+Test time =   0.14 sec
+----------------------------------------------------------
+Test Passed.
+"textbox-render" end time: Nov 16 01:51 Mitteleurop�ische Zeit
+"textbox-render" time elapsed: 00:00:00
+----------------------------------------------------------
+
+7/8 Testing: test-textbox-html
+7/8 Test: test-textbox-html
+Command: "C:/Users/Johann/Desktop/Github/OBS_Textbox/build_x64/RelWithDebInfo/test-textbox-html.exe"
+Directory: C:/Users/Johann/Desktop/GitHub/OBS_Textbox/build_x64
+"test-textbox-html" start time: Nov 16 01:51 Mitteleurop�ische Zeit
+Output:
+----------------------------------------------------------
+[PASS] 1a. build_inject_css: enthält INJECT_START und INJECT_END Marker
+[PASS] 1b. build_inject_css: enthält alle 3 Textzeilen
+[PASS] 1b2. Zeilen-Labels: -- Präfix => Variablenname (sanisiert), sonst --zeile-N
+[PASS] 1c. build_inject_css (#7): --box-bg trägt Alpha aus box_opacity (128), --box-opacity ist 1 bei Text
+[PASS] 1d. build_inject_css: Ecken- und Textfarben exakt als rgba formatiert
+[PASS] 1e. build_inject_css (#7): leere Karte setzt --box-opacity: 0 bei unverändertem --box-bg
+[PASS] 2a. card_html (#7): leere Karte nutzt opacity:0; pointer-events:none; statt display:none auf #box
+[PASS] 2b. card_html (#7): Karte mit Text und box_opacity=0 hat rgba(...,0) ohne opacity:0/display:none auf <div id="box">
+[PASS] 2c. card_html: enthält .anim-wrapper und textbox_card_update Event-Listener
+[PASS] 3a. plugin/data/index.html im Repo lesbar
+[PASS] 3b. render_card_html: geschützte Zeile '.textbox-container { ... padding: 15px 60px 20px 50px; }' bleibt vollständig erhalten
+[PASS] 3c. render_card_html: CSS-Injektion vor </head>, Live-Update-Listener vor </body>
+[PASS] 3d. render_card_html: rainbow_corners=true injiziert @keyframes rainbow-rotate
+[PASS] 4a. push_update(clear=false): JSON-Shape mit allen 14 erwarteten Schlüsseln und Typen
+[PASS] 4b. push_update(clear=true): Zeilen geleert, box_opacity=0, box_bg unverändert
+[PASS] 4c. push_update(nullptr): sicherer No-Op
+[PASS] 4d. push_update (IMP-G): JSON hat 18 Schlüssel inkl. template_id + zeilen/style/vn (auch bei clear=true)
+[PASS] 5a. normalize_anim_src: relativer Bildpfad in animation_dir -> base64 Data-URI
+[PASS] 5b. normalize_anim_src: Path-Traversal '../outside.gif' wird abgelehnt
+[PASS] 5c. normalize_anim_src: http/https/file-URLs bleiben unverändert
+[PASS] 5d. normalize_anim_src (#5): Windows-, UNC- und POSIX-Absolutpfade werden portabel erkannt
+[PASS] 5e. write_card (#5): nutzt settings.textbox_path Override vor Dev-Fallback
+[PASS] 5f. IMP-P: sanitize_card_id reinigt ID; write_card schreibt nur in cards/
+All test-textbox-html checks passed.
+<end of output>
+Test time =   2.76 sec
+----------------------------------------------------------
+Test Passed.
+"test-textbox-html" end time: Nov 16 01:51 Mitteleurop�ische Zeit
+"test-textbox-html" time elapsed: 00:00:02
+----------------------------------------------------------
+
+8/8 Testing: test-textbox-templates
+8/8 Test: test-textbox-templates
+Command: "C:/Users/Johann/Desktop/Github/OBS_Textbox/build_x64/RelWithDebInfo/test-textbox-templates.exe"
+Directory: C:/Users/Johann/Desktop/GitHub/OBS_Textbox/build_x64
+"test-textbox-templates" start time: Nov 16 01:51 Mitteleurop�ische Zeit
+Output:
+----------------------------------------------------------
+[PASS] 1a. substitute_tokens(clear=false): alle Tokens inkl. UTF-8 und rgba exakt substituiert
+[PASS] 1b. substitute_tokens(clear=true): zeile1..3 leer und {{clear}}="1"
+[PASS] 2. substitute_tokens: unbekannte Tokens ({{unbekannt}}, {{foo}}) bleiben wörtlich erhalten
+[PASS] 3. Hex-Validierung: ungültige/leere Farben fallen auf #000000 / #ffffff / #fce647 zurück
+[PASS] 4a. templates_dir() liefert gültiges Verzeichnis im Test-Modus
+[PASS] 4b. render_template_html: liest Datei aus templates_dir() und substituiert Tokens
+[PASS] 4c. render_template_html: fehlende Datei oder leere template_id liefert ""
+[PASS] 4d. IMP-H7: template_id als voller Pfad und als 'name.html' funktionieren
+[PASS] 4e. IMP-H7: nicht existierender Vorlagen-Pfad liefert ""
+[PASS] 5a. write_card mit gültiger template_id: Template-HTML + CSS-Injektionsblock (IMP-L6)
+[PASS] 5b. write_card mit fehlendem Template: fällt auf classic-Weg (OBS_TEXTBOX_INJECT_START) zurück
+[PASS] 6. write_card mit template_id="": classic-Verhalten unverändert (INJECT-Marker vorhanden)
+[PASS] 8. push_update: enthält alle 14 alten Keys unverändert + template_id="rounded"
+[PASS] 9a. templates_dir() liefert gültiges Verzeichnis im Test-Modus
+[PASS] 9b. list_template_ids(): nur builtin-Vorlage 'standard' gefunden
+[PASS] 9c. standard.html: Marker, rainbow-Klasse, rgba-Tokens + Zeilen substituiert, kein Token-Rest
+[PASS] 9d. standard.html ohne rainbow_corners: body ohne rainbow-Klasse
+[PASS] 9e. standard.html enthält textbox_card_update-Listener (reload-free push)
+[PASS] 9f. write_card(template_id="standard"): Template-HTML mit CSS-Injektion (IMP-L6)
+[PASS] 9g. write_card mit fehlender Vorlage: fällt auf classic zurück
+[PASS] 9h. user-Vorlage überschreibt builtin-Vorlage gleicher id (IMP-L6: + Injektion)
+[PASS] 8a. CSS-Kontext: rohes Quote bleibt in der CSS-String
+[FAIL] 8b. CSS-Kontext: Token ist CSS-escaped — <!DOCTYPE html><html><head><style>:root{ --zeile-1: "A\"; color: red; --evil: \"B\3c script\3e "; }</style><style>
+/* OBS_TEXTBOX_INJECT_START */
+:root {
+  --zeile-1: "A\"; color: red; --evil: \"B\3c script\3e ";
+  --zeile-2: "";
+  --zeile-3: "";
+  --zeile-count: 3;
+  --anim-file: "";
+  --show-anim: 0;
+  --anim-scale: 3;
+  --anim-x: 0px;
+  --anim-y: 0px;
+  --box-bg: rgba(255,255,255,1);
+  --triangle-color-a: rgba(252,230,71,1);
+  --triangle-color-b: rgba(252,230,71,1);
+  --text-color: rgba(0,0,0,1);
+  --box-opacity: 1;
+  --tb-rainbow: 0;
+}
+html, body { background-color: rgba(0, 0, 0, 0) !important; }
+/* OBS_TEXTBOX_INJECT_END */
+</style>
+</head><body><p>A&quot;; color: red; --evil: &quot;B&lt;script&gt;</p></body></html>
+[FAIL] 8c. HTML-Kontext: Token ist HTML-escaped — <!DOCTYPE html><html><head><style>:root{ --zeile-1: "A\"; color: red; --evil: \"B\3c script\3e "; }</style><style>
+/* OBS_TEXTBOX_INJECT_START */
+:root {
+  --zeile-1: "A\"; color: red; --evil: \"B\3c script\3e ";
+  --zeile-2: "";
+  --zeile-3: "";
+  --zeile-count: 3;
+  --anim-file: "";
+  --show-anim: 0;
+  --anim-scale: 3;
+  --anim-x: 0px;
+  --anim-y: 0px;
+  --box-bg: rgba(255,255,255,1);
+  --triangle-color-a: rgba(252,230,71,1);
+  --triangle-color-b: rgba(252,230,71,1);
+  --text-color: rgba(0,0,0,1);
+  --box-opacity: 1;
+  --tb-rainbow: 0;
+}
+html, body { background-color: rgba(0, 0, 0, 0) !important; }
+/* OBS_TEXTBOX_INJECT_END */
+</style>
+</head><body><p>A&quot;; color: red; --evil: &quot;B&lt;script&gt;</p></body></html>
+[PASS] 9a. parse_hex_color: #RGB-Kurzform expandiert
+[PASS] 9b. infer_style_type: negative Zahl -> num
+[PASS] 9c. infer_style_type: 8-Zeichen-Hex -> text
+[PASS] 10a. url() wird verworfen
+[PASS] 10b. expression() wird verworfen
+[PASS] 10c. normale Funktionswerte bleiben erhalten
+[PASS] 11a. ../-Template-ID trifft die Datei oberhalb nicht
+All test-textbox-templates checks passed.
+<end of output>
+Test time =   0.17 sec
+----------------------------------------------------------
+Test Passed.
+"test-textbox-templates" end time: Nov 16 01:51 Mitteleurop�ische Zeit
+"test-textbox-templates" time elapsed: 00:00:00
+----------------------------------------------------------
+
+End testing: Nov 16 01:51 Mitteleurop�ische Zeit

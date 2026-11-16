@@ -30,7 +30,7 @@ QDialog#tbSettingsDialog {
 
 QWidget#textboxDock {
 	background-color: #1D1F26;
-	border: 2px solid #6C7690;
+	border: 1px solid #3C404D;
 	// 15.11: keine eigene Aussen-Rundung — floating Dock fenster wird von
 	// Windows (DWM, 8px) gerundet, exakt wie OBS-eigene Fenster.
 	border-radius: 0px;
@@ -44,13 +44,13 @@ QScrollArea {
 QToolTip {
 	background-color: #272A33;
 	color: #FFFFFF;
-	border: 1px solid #5E687F;
+	border: 1px solid #3C404D;
 	padding: 4px 6px;
 }
 
 QMenu {
 	background-color: #1D1F26;
-	border: 1px solid #5E687F;
+	border: 1px solid #3C404D;
 	padding: 2px;
 }
 
@@ -85,7 +85,7 @@ QMenu::separator {
 
 QFrame#tbCardOuter {
 	background-color: transparent;
-	border: 2px solid #7A86A2;
+	border: 1px solid #3C404D;
 	border-radius: 4px;
 }
 
@@ -163,7 +163,7 @@ QLabel#tbKopfZeitstempel {
 QLineEdit,
 QPlainTextEdit {
 	background-color: #3C404D;
-	border: 1px solid #5E687F;
+	border: 1px solid #3C404D;
 	border-radius: 4px;
 	padding: 4px 8px;
 	min-height: 22px;
@@ -186,7 +186,7 @@ QPlainTextEdit:focus {
 QComboBox,
 QComboBox#tbYamlProfileCombo {
 	background-color: #3C404D;
-	border: 1px solid #5E687F;
+	border: 1px solid #3C404D;
 	border-radius: 4px;
 	padding: 4px 8px;
 	min-height: 22px;
@@ -635,7 +635,7 @@ QDockWidget::float-button:pressed {
 /* ---- M7: Untere Icon-Toolbar, Karten-Flash, einklappbare Stil-Sektion ---- */
 
 QFrame#tbCardOuter[tbFlash="true"] {
-	border: 2px solid #476BD7;
+	border: 1px solid #476BD7;
 }
 
 QFrame#tbStyleSection {

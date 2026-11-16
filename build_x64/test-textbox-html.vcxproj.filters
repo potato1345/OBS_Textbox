@@ -1,0 +1,42 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="17.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <ClCompile Include="C:\Users\Johann\Desktop\Github\OBS_Textbox\plugin\src\tests\test-textbox-html.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\Johann\Desktop\Github\OBS_Textbox\plugin\src\textbox-html.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\Johann\Desktop\Github\OBS_Textbox\plugin\src\textbox-state.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="C:\Users\Johann\Desktop\Github\OBS_Textbox\plugin\src\textbox-html.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Users\Johann\Desktop\Github\OBS_Textbox\plugin\src\textbox-state.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Users\Johann\Desktop\Github\OBS_Textbox\plugin\src\textbox-profiles.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Users\Johann\Desktop\Github\OBS_Textbox\plugin\src\textbox-textfmt.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <CustomBuild Include="C:\Users\Johann\Desktop\Github\OBS_Textbox\plugin\CMakeLists.txt" />
+  </ItemGroup>
+  <ItemGroup>
+    <Natvis Include="C:\Users\Johann\Desktop\Github\OBS_Textbox\plugin\.deps\obs-deps-2026-10-23-x64\nlohmann_json.natvis" />
+  </ItemGroup>
+  <ItemGroup>
+    <Filter Include="Header Files">
+      <UniqueIdentifier>{16CEC30C-C2D7-3BBB-95FB-4CCC6AF2FC08}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files">
+      <UniqueIdentifier>{6D3C38B3-8E00-3B03-BB74-7FEEB8E103DC}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+</Project>
