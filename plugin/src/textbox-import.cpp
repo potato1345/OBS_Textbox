@@ -1776,7 +1776,8 @@ std::optional<std::string> get_access_token(const std::filesystem::path &token_p
 
 std::optional<nlohmann::json> fetch_titles(const std::string &form_id,
 					   const std::string &access_token,
-					   std::string *out_error)
+					   std::string *out_error,
+					   std::string *out_sheet_id /* = nullptr */)
 {
 #ifndef _WIN32
 	(void)form_id;
@@ -1805,6 +1806,9 @@ std::optional<nlohmann::json> fetch_titles(const std::string &form_id,
 			*out_error = "Ungültige JSON-Antwort bei forms.get.";
 		return std::nullopt;
 	}
+
+	if (out_sheet_id)
+		*out_sheet_id = form.value("linkedSheetId", std::string{});
 
 	nlohmann::json title_map = nlohmann::json::object();
 	if (form.contains("items") && form["items"].is_array()) {
@@ -1882,6 +1886,165 @@ std::optional<std::vector<nlohmann::json>> fetch_responses(const std::string &fo
 #endif
 }
 
+// Fallback-Route: Formular-Antworten ueber verknuepftes Google Sheets abrufen,
+// wenn die Forms-Responses-API 403 zurueckgibt (Cloud-Projekt ohne Forms-API-Zugriff).
+// Baut pro Tabellenzeile ein JSON im Shape der Forms-API fuer api_response_to_record.
+std::optional<std::vector<nlohmann::json>> fetch_responses_via_sheet(
+	const std::string &sheet_id,
+	const std::string &access_token,
+	const nlohmann::json &title_map,
+	std::string *out_error)
+{
+#ifndef _WIN32
+	(void)sheet_id;
+	(void)access_token;
+	(void)title_map;
+	if (out_error)
+		*out_error = "Google-API wird nur unter Windows (WinHTTP) unterstützt.";
+	return std::nullopt;
+#else
+	const std::string url = "https://www.googleapis.com/sheets/v4/spreadsheets/" +
+				url_encode(sheet_id) + "/values/A1:ZZ10000";
+	const std::wstring headers =
+		L"Authorization: Bearer " + utf8_to_wide(access_token) + L"\r\n";
+
+	auto resp = winhttp_request("GET", url, headers, {}, out_error, true);
+	if (!resp)
+		return std::nullopt;
+
+	if (resp->status < 200 || resp->status >= 300) {
+		if (out_error)
+			*out_error = format_http_error(resp->status);
+		return std::nullopt;
+	}
+
+	const nlohmann::json body = nlohmann::json::parse(resp->body, nullptr, false);
+	if (!body.is_object() || !body.contains("values") || !body["values"].is_array()) {
+		if (out_error)
+			*out_error = "Ungueltige Sheets-API-Antwort: kein 'values'-Array.";
+		return std::nullopt;
+	}
+
+	const auto &values = body["values"];
+	if (values.empty()) {
+		if (out_error)
+			*out_error = kNoResponsesApiMsg;
+		return std::nullopt;
+	}
+
+	// Zeile 0 = Header-Spalten (Fragen-Titel plus 'Zeitstempel', 'Emailadresse')
+	const auto &header_row = values[0];
+	if (!header_row.is_array()) {
+		if (out_error)
+			*out_error = "Ungueltige Sheets-API-Antwort: Header-Zeile kein Array.";
+		return std::nullopt;
+	}
+
+	// Inverse Map: Frage-Titel -> questionId
+	std::unordered_map<std::string, std::string> title_to_qid;
+	if (title_map.is_object()) {
+		for (auto it = title_map.begin(); it != title_map.end(); ++it) {
+			if (it.value().is_string()) {
+				const std::string folded = utf8_casefold(trim_str(it.value().get<std::string>()));
+				if (!folded.empty())
+					title_to_qid[folded] = it.key();
+			}
+		}
+	}
+
+	// Header parsen: pro Spalte die questionId bestimmen, Zeitstempel-Spalte merken
+	std::vector<std::string> header_qids;
+	std::size_t timestamp_col = std::string::npos;
+
+	for (const auto &cell : header_row) {
+		const std::string raw = cell.is_string() ? cell.get<std::string>() : std::string{};
+		const std::string title = trim_str(raw);
+		const std::string lower = utf8_casefold(title);
+
+		if (title.empty() || lower == "zeitstempel" || lower == "timestamp") {
+			if (lower == "zeitstempel" || lower == "timestamp")
+				timestamp_col = header_qids.size();
+			header_qids.push_back({});
+			continue;
+		}
+		if (lower == "emailadresse" || lower == "email address" ||
+		    lower == "e-mail address" || lower == "e-mail") {
+			header_qids.push_back({});
+			continue;
+		}
+
+		// Inverse-Lookup ueber die gefaltete Titel-Map
+		auto it = title_to_qid.find(lower);
+		if (it != title_to_qid.end())
+			header_qids.push_back(it->second);
+		else
+			header_qids.push_back({});
+	}
+
+	// Datenzeilen in Forms-API-Responses verwandeln
+	std::vector<nlohmann::json> all_responses;
+	for (std::size_t ri = 1; ri < values.size(); ++ri) {
+		const auto &row = values[ri];
+		if (!row.is_array())
+			continue;
+
+		// Zeile ohne Feldantworten (ausser Zeitstempel) ueberspringen
+		bool has_content = false;
+		for (std::size_t ci = 0; ci < row.size() && ci < header_qids.size(); ++ci) {
+			if (!header_qids[ci].empty() && row[ci].is_string() &&
+			    !trim_str(row[ci].get<std::string>()).empty()) {
+				has_content = true;
+				break;
+			}
+		}
+		if (!has_content)
+			continue;
+
+		nlohmann::json resp_obj = nlohmann::json::object();
+
+		// Zeitstempel
+		std::string ts;
+		if (timestamp_col < row.size() && row[timestamp_col].is_string())
+			ts = trim_str(row[timestamp_col].get<std::string>());
+		if (!ts.empty())
+			resp_obj["lastSubmittedTime"] = ts;
+
+		// Antworten als fieldValues -> answers
+		nlohmann::json answers = nlohmann::json::object();
+		for (std::size_t ci = 0; ci < row.size() && ci < header_qids.size(); ++ci) {
+			if (header_qids[ci].empty())
+				continue;
+			if (!row[ci].is_string())
+				continue;
+			const std::string val = trim_str(row[ci].get<std::string>());
+			if (val.empty())
+				continue;
+
+			nlohmann::json ans;
+			ans["textAnswers"]["answers"] = nlohmann::json::array();
+			ans["textAnswers"]["answers"].push_back({{"value", val}});
+			answers[header_qids[ci]] = std::move(ans);
+		}
+
+		if (!answers.empty())
+			resp_obj["answers"] = std::move(answers);
+
+		if (ts.empty() && answers.empty())
+			continue;
+
+		all_responses.push_back(std::move(resp_obj));
+	}
+
+	if (all_responses.empty()) {
+		if (out_error)
+			*out_error = kNoResponsesApiMsg;
+		return std::nullopt;
+	}
+
+	return all_responses;
+#endif
+}
+
 std::optional<TextboxImportResult> import_from_api(std::string *out_error,
 						    const std::filesystem::path &cache_path,
 						    const std::filesystem::path &token_path,
@@ -1897,13 +2060,25 @@ std::optional<TextboxImportResult> import_from_api(std::string *out_error,
 	if (!token)
 		return std::nullopt;
 
-	auto title_map = fetch_titles(form_id, *token, out_error);
+	std::string linked_sheet;
+	auto title_map = fetch_titles(form_id, *token, out_error, &linked_sheet);
 	if (!title_map)
 		return std::nullopt;
 
 	auto responses = fetch_responses(form_id, *token, out_error);
-	if (!responses)
+	if (!responses && !linked_sheet.empty()) {
+		std::string err2;
+		responses = fetch_responses_via_sheet(linked_sheet, *token, *title_map, &err2);
+		if (responses) {
+			if (out_error)
+				out_error->clear();
+		}
+	}
+	if (!responses) {
+		if (out_error)
+			*out_error = "Keine Antwortquelle: Forms-API blockiert und kein Google-Sheets verknuepft — in Google Forms unter Antworten ein Sheets verknuepfen.";
 		return std::nullopt;
+	}
 
 	if (responses->empty()) {
 		if (out_error)
