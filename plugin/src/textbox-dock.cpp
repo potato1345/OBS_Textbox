@@ -29,6 +29,8 @@
 
 #include <QAction>
 #include <QCheckBox>
+#include <QPainter>
+#include <QPen>
 #include <QColor>
 #include <QColorDialog>
 #include <QComboBox>
@@ -291,6 +293,16 @@ void textbox_self_heal_event(obs_frontend_event event, void *data)
 		dock->ensure_card_sources();
 }
 #endif
+
+void TextboxDock::paintEvent(QPaintEvent *event)
+{
+	QWidget::paintEvent(event);
+	QPainter p(this);
+	p.setRenderHint(QPainter::Antialiasing);
+	p.setPen(QPen(QColor("#7A86A2"), 2));
+	p.setBrush(Qt::NoBrush);
+	p.drawRoundedRect(QRectF(rect()).adjusted(1.0, 1.0, -1.0, -1.0), 6.0, 6.0);
+}
 
 void TextboxDock::ensure_card_sources()
 {

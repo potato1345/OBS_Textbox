@@ -85,7 +85,7 @@ QMenu::separator {
 
 QFrame#tbCardOuter {
 	background-color: transparent;
-	border: 1px solid #6C7690;
+	border: 2px solid #7A86A2;
 	border-radius: 4px;
 }
 
@@ -635,7 +635,7 @@ QDockWidget::float-button:pressed {
 /* ---- M7: Untere Icon-Toolbar, Karten-Flash, einklappbare Stil-Sektion ---- */
 
 QFrame#tbCardOuter[tbFlash="true"] {
-	border: 1px solid #476BD7;
+	border: 2px solid #476BD7;
 }
 
 QFrame#tbStyleSection {
