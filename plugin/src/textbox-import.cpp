@@ -364,7 +364,8 @@ std::optional<std::string> header_key(std::string_view raw)
 	if (lower == "uhrzeit")
 		return std::string("tag");
 
-	// Block-Pattern: "^Block N - <Feld>" (z. B. "Block 1 - Nr", "Block 12 – Titel").
+	// Block-Pattern: "^Block N - <Feld>" (z. B. "Block 1 - Nr", "Block 12 – Titel")
+	// oder "^N. <Name> - <Feld>" (z. B. "1. Eröffnung - GL-Nummer").
 	// normalize_header hat alle Bindestrich-Varianten auf '-' und Whitespace-Ketten
 	// auf genau ein Leerzeichen normiert, daher ist der Trenner exakt " - ".
 	const std::size_t sep = title.find(" - ");
@@ -377,10 +378,32 @@ std::optional<std::string> header_key(std::string_view raw)
 		return std::nullopt;
 
 	int index = 0;
+	// (a) Bevorzugt: "Block N"-Match gegen PROGRAM_POINTS
 	for (std::size_t i = 0; i < PROGRAM_POINTS.size(); ++i) {
 		if (utf8_casefold(name) == utf8_casefold(PROGRAM_POINTS[i])) {
 			index = static_cast<int>(i) + 1;
 			break;
+		}
+	}
+	// (b) Falls kein Block-Match: Digit-Prefix "^\d{1,2}\." erkennen
+	//     (z. B. "1. Eröffnung" -> index=1)
+	if (index == 0 && !name.empty() &&
+	    std::isdigit(static_cast<unsigned char>(name[0]))) {
+		const std::size_t dot_pos = name.find('.');
+		if (dot_pos != std::string::npos && dot_pos >= 1 && dot_pos <= 2) {
+			bool all_digits = true;
+			for (std::size_t j = 0; j < dot_pos; ++j) {
+				if (!std::isdigit(static_cast<unsigned char>(name[j]))) {
+					all_digits = false;
+					break;
+				}
+			}
+			if (all_digits) {
+				const int n = std::stoi(std::string(name.substr(0, dot_pos)));
+				if (n >= 1 && n <= static_cast<int>(PROGRAM_POINTS.size())) {
+					index = n;
+				}
+			}
 		}
 	}
 	if (index == 0)
@@ -388,11 +411,12 @@ std::optional<std::string> header_key(std::string_view raw)
 
 	const std::string field_lower = utf8_casefold(field);
 	std::string_view field_key;
-	if (field_lower == "nr" || field_lower == "nummer") {
+	if (field_lower == "nr" || field_lower == "nummer" ||
+	    field_lower == "gl-nummer" || field_lower == "gl nummer") {
 		field_key = "nr";
-	} else if (field_lower == "zeilen") {
+	} else if (field_lower == "zeilen" || field_lower == "verse" || field_lower == "vers") {
 		field_key = "zeilen";
-	} else if (field_lower == "titel") {
+	} else if (field_lower == "titel" || field_lower == "lied" || field_lower == "liedtitel") {
 		field_key = "titel";
 	} else {
 		return std::nullopt;

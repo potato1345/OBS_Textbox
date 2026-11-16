@@ -212,6 +212,10 @@ int main()
 		const auto k_b1_t = header_key("Block 1 - Titel");
 		const auto k_b12_t = header_key("Block 12 \xE2\x80\x93 Titel");
 		const auto k_unk = header_key("Unbekannte Spalte");
+		// Neue Google-Forms-Item-Titel mit Digit-Prefix und erweiterten Feld-Aliasen
+		const auto k_forms_1_nr = header_key("1. Eröffnung \xE2\x80\x93 GL-Nummer");
+		const auto k_forms_7_zl = header_key("7. Gabenbereitung \xE2\x80\x93 Verse");
+		const auto k_forms_12_t = header_key("12. Schlusslied \xE2\x80\x93 Liedtitel");
 
 		const bool ok = (k_zs && *k_zs == "zeitstempel") &&
 				(k_ts && *k_ts == "zeitstempel") &&
@@ -222,8 +226,11 @@ int main()
 				(k_b1_z && *k_b1_z == "1.zeilen") &&
 				(k_b1_t && *k_b1_t == "1.titel") &&
 				(k_b12_t && *k_b12_t == "12.titel") &&
+				(k_forms_1_nr && *k_forms_1_nr == "1.nr") &&
+				(k_forms_7_zl && *k_forms_7_zl == "7.zeilen") &&
+				(k_forms_12_t && *k_forms_12_t == "12.titel") &&
 				(!k_unk.has_value());
-		check(ok, "3. header_key Simple-Keys, Blöcke 1..12 und Unbekannte Spalte");
+		check(ok, "3. header_key Simple-Keys, Blöcke 1..12, Google-Forms-Item-Titel und Unbekannte Spalte");
 	}
 
 	// 4. antwort_comma.csv
