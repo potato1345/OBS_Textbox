@@ -1806,6 +1806,7 @@ std::optional<nlohmann::json> fetch_titles(const std::string &form_id,
 #ifndef _WIN32
 	(void)form_id;
 	(void)access_token;
+	(void)out_sheet_id;
 	if (out_error)
 		*out_error = "Google-API wird nur unter Windows (WinHTTP) unterstützt.";
 	return std::nullopt;
