@@ -785,7 +785,7 @@ void TextboxDock::create_row_widget(const TextboxCard &card)
 	row_widget->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
 
 	auto *outer_layout = new QVBoxLayout(row_widget);
-	outer_layout->setContentsMargins(0, 0, 0, 0);
+	outer_layout->setContentsMargins(3, 3, 3, 3);
 	outer_layout->setSpacing(0);
 
 	auto *card_inner = new QFrame(row_widget);
