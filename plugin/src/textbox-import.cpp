@@ -1903,7 +1903,7 @@ std::optional<std::vector<nlohmann::json>> fetch_responses_via_sheet(
 		*out_error = "Google-API wird nur unter Windows (WinHTTP) unterstützt.";
 	return std::nullopt;
 #else
-	const std::string url = "https://www.googleapis.com/sheets/v4/spreadsheets/" +
+	const std::string url = "https://sheets.googleapis.com/v4/spreadsheets/" +
 				url_encode(sheet_id) + "/values/A1:ZZ10000";
 	const std::wstring headers =
 		L"Authorization: Bearer " + utf8_to_wide(access_token) + L"\r\n";
