@@ -19,3 +19,8 @@ __pycache__/
 
 # Build-/Installations-Ausgabe (cmake --install)
 /install/
+
+build_x64/
+plugin/build_x64/
+plugin/build_x86/
+.deps/
