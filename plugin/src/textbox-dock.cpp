@@ -3515,6 +3515,8 @@ void TextboxDock::on_open_quick_profiles_dialog()
 		});
 
 	dlg.exec();
+	tb_event_log(tb_event_log_dir_from_state_path(state_path_),
+		     "Schnell-Profile geschlossen");
 	refresh_top_row();
 }
 
@@ -4090,6 +4092,8 @@ void TextboxDock::on_open_settings_dialog()
 		});
 
 	dlg.exec();
+	tb_event_log(tb_event_log_dir_from_state_path(state_path_),
+		     "Einstellungen geschlossen");
 }
 
 void TextboxDock::save_state()
