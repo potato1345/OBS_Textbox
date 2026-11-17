@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<!-- TEXTBOX_TEMPLATE: minimal
+     "Minimal"-Vorlage: Transparente Kompakt-Karte ohne Box-Hintergrund.
+     zeile1 ~34px fett, zeile2 16px, zeile3 12px; Eckpunkte als winzige
+     4px Dots (corner_a / corner_b). Lesbarkeit durch Text-Schlagschatten.
+     Gleiche Token-Semantik und Live-Push-Unterstützung wie standard.html. -->
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<style>
+    :root {
+        --zeile-1: "{{zeile1}}";
+        --zeile-2: "{{zeile2}}";
+        --zeile-3: "{{zeile3}}";
+        --tb-text-color: {{text_color}};
+        --anim-file: "{{anim_src}}";
+        --show-anim: {{show_anim}};
+        --anim-scale: {{anim_scale}};
+        --anim-x: {{anim_x}}px;
+        --anim-y: {{anim_y}}px;
+        --dot-color-a: {{corner_a}};
+        --dot-color-b: {{corner_b}};
+        /* Festes Layout: write_card substituiert nur den offiziellen Token-Set;
+           Positionen/Groessen sind Bestandteil des Minimal-Layouts und keine Tokens. */
+        --l1-x: 30px;
+        --l1-y: 30px;
+        --l1-fsize: 34px;
+        --l2-x: 30px;
+        --l2-y: 76px;
+        --l2-fsize: 16px;
+        --l3-x: 30px;
+        --l3-y: 104px;
+        --l3-fsize: 12px;
+    }
+    html, body {
+        margin: 0;
+        padding: 0;
+        width: 800px;
+        height: 400px;
+        background: transparent;
+        overflow: hidden;
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    }
+    /* KEIN Box-Hintergrund — transparent, nur Text + Eckpunkte */
+    .text-shadow {
+        text-shadow:
+            0 0 2px rgba(0,0,0,0.6),
+            0 0 6px rgba(0,0,0,0.3),
+            1px 1px 0 rgba(0,0,0,0.5);
+    }
+    .line1 {
+        position: absolute;
+        left: var(--l1-x, 30px);
+        top: var(--l1-y, 30px);
+        font-size: var(--l1-fsize, 34px);
+        font-weight: 700;
+        line-height: 1.2;
+        color: var(--tb-text-color);
+        white-space: nowrap;
+        z-index: 2;
+    }
+    .line2 {
+        position: absolute;
+        left: var(--l2-x, 30px);
+        top: var(--l2-y, 76px);
+        font-size: var(--l2-fsize, 16px);
+        font-weight: 500;
+        line-height: 1.3;
+        color: var(--tb-text-color);
+        white-space: nowrap;
+        z-index: 2;
+    }
+    .line3 {
+        position: absolute;
+        left: var(--l3-x, 30px);
+        top: var(--l3-y, 104px);
+        font-size: var(--l3-fsize, 12px);
+        font-weight: 400;
+        line-height: 1.3;
+        color: var(--tb-text-color);
+        opacity: 0.7;
+        white-space: nowrap;
+        z-index: 2;
+    }
+    /* Winzige Eck-Dots (4px rund) */
+    .dot {
+        position: absolute;
+        width: 4px;
+        height: 4px;
+        border-radius: 50%;
+        z-index: 1;
+    }
+    .dot-tl { top: 8px;  left: 8px;  background: var(--dot-color-a); }
+    .dot-tr { top: 8px;  right: 8px; background: var(--dot-color-a); }
+    .dot-bl { bottom: 8px; left: 8px; background: var(--dot-color-b); }
+    .dot-br { bottom: 8px; right: 8px; background: var(--dot-color-b); }
+    body.rainbow .dot {
+        animation: dot-glow 8s linear infinite;
+    }
+    @keyframes dot-glow {
+        0%   { filter: hue-rotate(0deg); }
+        100% { filter: hue-rotate(360deg); }
+    }
+    .anim-wrapper {
+        position: absolute;
+        bottom: 100%;
+        right: 0;
+        margin-bottom: 15px;
+        z-index: 10;
+        transform: translate(var(--anim-x, 0px), var(--anim-y, 0px)) scale(var(--anim-scale, 3));
+        transform-origin: bottom right;
+    }
+    .anim-wrapper img, .anim-wrapper video {
+        display: block;
+        image-rendering: pixelated;
+    }
+</style>
+</head>
+<body class="{{rainbow}}">
+<div class="dot dot-tl"></div>
+<div class="dot dot-tr"></div>
+<div class="dot dot-bl"></div>
+<div class="dot dot-br"></div>
+<div class="anim-wrapper" id="anim-wrapper" style="display: none;"></div>
+<div class="line1 text-shadow" id="l1"></div>
+<div class="line2 text-shadow" id="l2"></div>
+<div class="line3 text-shadow" id="l3"></div>
+<script>
+    // Auto-verbirgt leere Zeilen und schaltet die Animation (wie standard.html).
+    (function () {
+        let currentAnimFile = '';
+        function updateMinimal() {
+            const cs = getComputedStyle(document.documentElement);
+            for (let n = 1; n <= 3; n++) {
+                const raw = (cs.getPropertyValue('--zeile-' + n) || '').trim();
+                const text = raw.replace(/^["']|["']$/g, '');
+                const el = document.getElementById('l' + n);
+                if (el) {
+                    el.textContent = text;
+                    el.style.display = text ? '' : 'none';
+                }
+            }
+            const showAnimRaw = (cs.getPropertyValue('--show-anim') || '').trim();
+            const animFileRaw = (cs.getPropertyValue('--anim-file') || '').trim();
+            const animFile = animFileRaw.replace(/^["']|["']$/g, '');
+            const animWrapper = document.getElementById('anim-wrapper');
+            if (!animWrapper) return;
+            if (showAnimRaw === '1' && animFile) {
+                animWrapper.style.display = 'block';
+                if (animFile !== currentAnimFile) {
+                    currentAnimFile = animFile;
+                    animWrapper.innerHTML = '';
+                    if (animFile.toLowerCase().endsWith('.webm') || animFile.toLowerCase().endsWith('.mp4')) {
+                        const vid = document.createElement('video');
+                        vid.src = animFile; vid.autoplay = true; vid.loop = true; vid.muted = true;
+                        animWrapper.appendChild(vid);
+                    } else {
+                        const img = document.createElement('img');
+                        img.src = animFile;
+                        animWrapper.appendChild(img);
+                    }
+                }
+            } else {
+                animWrapper.style.display = 'none';
+                if (currentAnimFile !== '') {
+                    currentAnimFile = '';
+                    animWrapper.innerHTML = '';
+                }
+            }
+        }
+        updateMinimal();
+        setInterval(updateMinimal, 150);
+
+        // Live-Push vom Plugin (javascript_event -> CustomEvent), ohne Reload.
+        window.addEventListener('textbox_card_update', function (ev) {
+            const d = ev.detail;
+            if (!d) return;
+            const setVar = (name, value) => document.documentElement.style.setProperty(name, value);
+            if (d.zeilen != null) {
+                for (let i = 0; i < d.zeilen.length && i < 8; i++) {
+                    setVar('--zeile-' + (i + 1), JSON.stringify(d.zeilen[i]));
+                    if (d.vn && d.vn[i]) setVar(d.vn[i], JSON.stringify(d.zeilen[i]));
+                }
+                setVar('--zeile-count', String(d.zeilen.length));
+            } else {
+                if (d.zeile1 != null) setVar('--zeile-1', JSON.stringify(d.zeile1));
+                if (d.zeile2 != null) setVar('--zeile-2', JSON.stringify(d.zeile2));
+                if (d.zeile3 != null) setVar('--zeile-3', JSON.stringify(d.zeile3));
+            }
+            if (d.text_color != null) setVar('--tb-text-color', d.text_color);
+            if (d.triangle_color_a != null) setVar('--dot-color-a', d.triangle_color_a);
+            if (d.triangle_color_b != null) setVar('--dot-color-b', d.triangle_color_b);
+            if (d.anim_file != null) setVar('--anim-file', JSON.stringify(d.anim_file));
+            if (d.show_anim != null) setVar('--show-anim', String(d.show_anim));
+            if (d.anim_scale != null) setVar('--anim-scale', String(d.anim_scale));
+            if (d.anim_x != null) setVar('--anim-x', String(d.anim_x) + 'px');
+            if (d.anim_y != null) setVar('--anim-y', String(d.anim_y) + 'px');
+            document.body.classList.toggle('rainbow', !!d.rainbow);
+        });
+    })();
+</script>
+
+<!-- textbox-html:begin
+     Fallback-Html fuer den "Keine Vorlage"-Renderpfad:
+     Entspricht der Minimal-Ansicht oben (kein Box-BG, Schlagschatten).
+<div class="dot" style="position:absolute;width:4px;height:4px;border-radius:50%;z-index:1;top:8px;left:8px;background:var(--dot-color-a);"></div>
+<div class="dot" style="position:absolute;width:4px;height:4px;border-radius:50%;z-index:1;top:8px;right:8px;background:var(--dot-color-a);"></div>
+<div class="dot" style="position:absolute;width:4px;height:4px;border-radius:50%;z-index:1;bottom:8px;left:8px;background:var(--dot-color-b);"></div>
+<div class="dot" style="position:absolute;width:4px;height:4px;border-radius:50%;z-index:1;bottom:8px;right:8px;background:var(--dot-color-b);"></div>
+<div class="line1" style="position:absolute;left:var(--l1-x,30px);top:var(--l1-y,30px);font-size:var(--l1-fsize,34px);font-weight:700;line-height:1.2;color:var(--tb-text-color);white-space:nowrap;z-index:2;text-shadow:0 0 2px rgba(0,0,0,0.6),0 0 6px rgba(0,0,0,0.3),1px 1px 0 rgba(0,0,0,0.5);">ZEILE1</div>
+<div class="line2" style="position:absolute;left:var(--l2-x,30px);top:var(--l2-y,76px);font-size:var(--l2-fsize,16px);font-weight:500;line-height:1.3;color:var(--tb-text-color);white-space:nowrap;z-index:2;text-shadow:0 0 2px rgba(0,0,0,0.6),0 0 6px rgba(0,0,0,0.3),1px 1px 0 rgba(0,0,0,0.5);">ZEILE2</div>
+<div class="line3" style="position:absolute;left:var(--l3-x,30px);top:var(--l3-y,104px);font-size:var(--l3-fsize,12px);font-weight:400;line-height:1.3;color:var(--tb-text-color);opacity:0.7;white-space:nowrap;z-index:2;text-shadow:0 0 2px rgba(0,0,0,0.6),0 0 6px rgba(0,0,0,0.3),1px 1px 0 rgba(0,0,0,0.5);">ZEILE3</div>
+-->
+</body>
+</html>

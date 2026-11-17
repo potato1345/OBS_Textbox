@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<!-- TEXTBOX_TEMPLATE: display
+     "Display"-Vorlage: Dominante Zahlen-Karte mit grosser fetter zeile1
+     (ca. 90px, weight 700), zeile2 kleiner uppercase darunter, zeile3
+     kompakt unten rechts. Linker Akzentbalken (corner_a), Punkt unten
+     rechts (corner_b). Gleiche Token-Semantik und Live-Push-Unterstützung
+     wie standard.html. -->
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<style>
+    :root {
+        --zeile-1: "{{zeile1}}";
+        --zeile-2: "{{zeile2}}";
+        --zeile-3: "{{zeile3}}";
+        --tb-bg-color: {{box_color}};
+        --tb-text-color: {{text_color}};
+        --tb-border-color: rgba(0, 0, 0, 0.6);
+        --tb-border-width: 0px;
+        --acc-bar: {{corner_a}};
+        --acc-dot: {{corner_b}};
+        --anim-file: "{{anim_src}}";
+        --show-anim: {{show_anim}};
+        --anim-scale: {{anim_scale}};
+        --anim-x: {{anim_x}}px;
+        --anim-y: {{anim_y}}px;
+        /* Festes Layout: write_card substituiert nur den offiziellen Token-Set
+           (zeile1..3, Farben, anim, rainbow, clear). Positionen/Groessen sind
+           Bestandteil des Display-Layouts und keine Tokens. */
+        --l1-x: 50px;
+        --l1-y: 60px;
+        --l1-w: auto;
+        --l1-h: auto;
+        --l1-fsize: 90px;
+        --l2-x: 50px;
+        --l2-y: 170px;
+        --l2-w: auto;
+        --l2-h: auto;
+        --l2-fsize: 24px;
+        --l3-y: 16px;
+        --l3-w: auto;
+        --l3-h: auto;
+        --l3-fsize: 13px;
+        --anim-w: 120px;
+        --anim-h: 120px;
+    }
+    html, body {
+        margin: 0;
+        padding: 0;
+        width: 800px;
+        height: 400px;
+        background: transparent;
+        overflow: hidden;
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    }
+    /* Box-Hintergrund — full-canvas, deckt den gesamten Kartenbereich ab */
+    .box-bg {
+        position: absolute;
+        left: 0;
+        top: 0;
+        width: 100%;
+        height: 100%;
+        background: var(--tb-bg-color);
+        border: var(--tb-border-width) solid var(--tb-border-color);
+        z-index: 0;
+    }
+    /* Linker Akzentbalken (corner_a) */
+    .accent-bar {
+        position: absolute;
+        left: 0;
+        top: 0;
+        width: 6px;
+        height: 100%;
+        background: var(--acc-bar);
+        z-index: 1;
+    }
+    body.rainbow .accent-bar {
+        animation: accent-pulse 12s linear infinite;
+    }
+    /* Punkt unten rechts (corner_b) */
+    .accent-dot {
+        position: absolute;
+        bottom: 12px;
+        right: 12px;
+        width: 14px;
+        height: 14px;
+        border-radius: 50%;
+        background: var(--acc-dot);
+        z-index: 1;
+    }
+    body.rainbow .accent-dot {
+        animation: dot-rotate 12s linear infinite;
+    }
+    @keyframes accent-pulse {
+        0%, 100% { filter: hue-rotate(0deg); }
+        50%      { filter: hue-rotate(180deg); }
+    }
+    @keyframes dot-rotate {
+        from { filter: hue-rotate(0deg); }
+        to   { filter: hue-rotate(360deg); }
+    }
+    /* Zeile 1 — dominant ~90px, fett, absolut positioniert via Token */
+    .line1 {
+        position: absolute;
+        left: var(--l1-x, 50px);
+        top: var(--l1-y, 60px);
+        width: var(--l1-w, auto);
+        height: var(--l1-h, auto);
+        font-size: var(--l1-fsize, 90px);
+        font-weight: 700;
+        line-height: 1.1;
+        color: var(--tb-text-color);
+        white-space: nowrap;
+        z-index: 2;
+    }
+    /* Zeile 2 — kleiner, uppercase, unter zeile1 */
+    .line2 {
+        position: absolute;
+        left: var(--l2-x, 50px);
+        top: var(--l2-y, 170px);
+        width: var(--l2-w, auto);
+        height: var(--l2-h, auto);
+        font-size: var(--l2-fsize, 24px);
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.12em;
+        line-height: 1.2;
+        color: var(--tb-text-color);
+        white-space: nowrap;
+        z-index: 2;
+    }
+    /* Zeile 3 — klein, unten rechts */
+    .line3 {
+        position: absolute;
+        left: auto;
+        right: 24px;
+        bottom: var(--l3-y, 16px);
+        width: var(--l3-w, auto);
+        height: var(--l3-h, auto);
+        font-size: var(--l3-fsize, 13px);
+        font-weight: 400;
+        line-height: 1.2;
+        color: var(--tb-text-color);
+        opacity: 0.72;
+        text-align: right;
+        z-index: 2;
+    }
+    .anim-wrapper {
+        position: absolute;
+        bottom: 100%;
+        right: 0;
+        margin-bottom: 15px;
+        z-index: 10;
+        transform: translate(var(--anim-x, 0px), var(--anim-y, 0px)) scale(var(--anim-scale, 3));
+        transform-origin: bottom right;
+    }
+    .anim-wrapper img, .anim-wrapper video {
+        display: block;
+        image-rendering: pixelated;
+    }
+</style>
+</head>
+<body class="{{rainbow}}">
+<div class="box-bg"></div>
+<div class="accent-bar"></div>
+<div class="accent-dot"></div>
+<div class="anim-wrapper" id="anim-wrapper" style="display: none;"></div>
+<div class="line1" id="l1"></div>
+<div class="line2" id="l2"></div>
+<div class="line3" id="l3"></div>
+<script>
+    // Auto-verbirgt leere Zeilen und schaltet die Animation (wie standard.html).
+    (function () {
+        let currentAnimFile = '';
+        function updateDisplay() {
+            const cs = getComputedStyle(document.documentElement);
+            for (let n = 1; n <= 3; n++) {
+                const raw = (cs.getPropertyValue('--zeile-' + n) || '').trim();
+                const text = raw.replace(/^["']|["']$/g, '');
+                const el = document.getElementById('l' + n);
+                if (el) {
+                    el.textContent = text;
+                    el.style.display = text ? '' : 'none';
+                }
+            }
+            const showAnimRaw = (cs.getPropertyValue('--show-anim') || '').trim();
+            const animFileRaw = (cs.getPropertyValue('--anim-file') || '').trim();
+            const animFile = animFileRaw.replace(/^["']|["']$/g, '');
+            const animWrapper = document.getElementById('anim-wrapper');
+            if (!animWrapper) return;
+            if (showAnimRaw === '1' && animFile) {
+                animWrapper.style.display = 'block';
+                if (animFile !== currentAnimFile) {
+                    currentAnimFile = animFile;
+                    animWrapper.innerHTML = '';
+                    if (animFile.toLowerCase().endsWith('.webm') || animFile.toLowerCase().endsWith('.mp4')) {
+                        const vid = document.createElement('video');
+                        vid.src = animFile; vid.autoplay = true; vid.loop = true; vid.muted = true;
+                        animWrapper.appendChild(vid);
+                    } else {
+                        const img = document.createElement('img');
+                        img.src = animFile;
+                        animWrapper.appendChild(img);
+                    }
+                }
+            } else {
+                animWrapper.style.display = 'none';
+                if (currentAnimFile !== '') {
+                    currentAnimFile = '';
+                    animWrapper.innerHTML = '';
+                }
+            }
+        }
+        updateDisplay();
+        setInterval(updateDisplay, 150);
+
+        // Live-Push vom Plugin (javascript_event -> CustomEvent), ohne Reload.
+        window.addEventListener('textbox_card_update', function (ev) {
+            const d = ev.detail;
+            if (!d) return;
+            const setVar = (name, value) => document.documentElement.style.setProperty(name, value);
+            if (d.zeilen != null) {
+                for (let i = 0; i < d.zeilen.length && i < 8; i++) {
+                    setVar('--zeile-' + (i + 1), JSON.stringify(d.zeilen[i]));
+                    if (d.vn && d.vn[i]) setVar(d.vn[i], JSON.stringify(d.zeilen[i]));
+                }
+                setVar('--zeile-count', String(d.zeilen.length));
+            } else {
+                if (d.zeile1 != null) setVar('--zeile-1', JSON.stringify(d.zeile1));
+                if (d.zeile2 != null) setVar('--zeile-2', JSON.stringify(d.zeile2));
+                if (d.zeile3 != null) setVar('--zeile-3', JSON.stringify(d.zeile3));
+            }
+            if (d.box_bg != null) setVar('--tb-bg-color', d.box_bg);
+            if (d.text_color != null) setVar('--tb-text-color', d.text_color);
+            if (d.triangle_color_a != null) {
+                setVar('--acc-bar', d.triangle_color_a);
+            }
+            if (d.triangle_color_b != null) {
+                setVar('--acc-dot', d.triangle_color_b);
+            }
+            if (d.anim_file != null) setVar('--anim-file', JSON.stringify(d.anim_file));
+            if (d.show_anim != null) setVar('--show-anim', String(d.show_anim));
+            if (d.anim_scale != null) setVar('--anim-scale', String(d.anim_scale));
+            if (d.anim_x != null) setVar('--anim-x', String(d.anim_x) + 'px');
+            if (d.anim_y != null) setVar('--anim-y', String(d.anim_y) + 'px');
+            document.body.classList.toggle('rainbow', !!d.rainbow);
+        });
+    })();
+</script>
+
+<!-- textbox-html:begin
+     Fallback-Html fuer den "Keine Vorlage"-Renderpfad:
+     Entspricht der Display-Ansicht oben.
+<div class="box-bg" style="position:absolute;left:0;top:0;width:100%;height:100%;background:var(--tb-bg-color);border:0 solid rgba(0,0,0,0.6);z-index:0;"></div>
+<div class="accent-bar" style="position:absolute;left:0;top:0;width:6px;height:100%;background:var(--acc-bar);z-index:1;"></div>
+<div class="accent-dot" style="position:absolute;bottom:12px;right:12px;width:14px;height:14px;border-radius:50%;background:var(--acc-dot);z-index:1;"></div>
+<div class="line1" style="position:absolute;left:var(--l1-x,50px);top:var(--l1-y,60px);font-size:var(--l1-fsize,90px);font-weight:700;line-height:1.1;color:var(--tb-text-color);white-space:nowrap;z-index:2;">ZEILE1</div>
+<div class="line2" style="position:absolute;left:var(--l2-x,50px);top:var(--l2-y,170px);font-size:var(--l2-fsize,24px);font-weight:600;text-transform:uppercase;letter-spacing:0.12em;line-height:1.2;color:var(--tb-text-color);white-space:nowrap;z-index:2;">ZEILE2</div>
+<div class="line3" style="position:absolute;right:var(--l3-x,24px);bottom:var(--l3-y,16px);font-size:var(--l3-fsize,13px);font-weight:400;line-height:1.2;color:var(--tb-text-color);opacity:0.72;text-align:right;z-index:2;">ZEILE3</div>
+-->
+</body>
+</html>

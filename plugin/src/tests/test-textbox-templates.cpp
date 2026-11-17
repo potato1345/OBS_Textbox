@@ -355,12 +355,15 @@ int main()
 
 		const std::vector<std::string> ids = textbox_html::list_template_ids();
 		const bool has_standard = std::find(ids.begin(), ids.end(), "standard") != ids.end();
-		// 15.11: nur die Standard-Vorlage wird geshiped — keine Beispiel-Vorlagen mehr.
+		const bool has_display   = std::find(ids.begin(), ids.end(), "display") != ids.end();
+		const bool has_minimal   = std::find(ids.begin(), ids.end(), "minimal") != ids.end();
+		const bool has_badge     = std::find(ids.begin(), ids.end(), "badge") != ids.end();
+		// Stand 17.11: vier Beispiel-Vorlagen geshiped (standard, display, minimal, badge).
 		std::string id_list;
 		for (const std::string &id : ids)
 			id_list += id + ",";
-		check(has_standard && ids.size() == 1,
-		      "9b. list_template_ids(): nur builtin-Vorlage 'standard' gefunden", id_list);
+		check(has_standard && has_display && has_minimal && has_badge && ids.size() == 4,
+		      "9b. list_template_ids(): vier builtin-Vorlagen (standard, display, minimal, badge)", id_list);
 
 		TextboxCard c;
 		c.id = "box_builtin";

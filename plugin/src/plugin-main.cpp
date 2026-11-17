@@ -6,7 +6,7 @@
  *   - Registriert die native Kartenquelle.
  *   - Erzeugt und bindet das benutzerdefinierte QDockWidget (TextboxDock) über die
  *     OBS-Frontend-API ein.
- *   - Unterstützt abgerundete Ecken im Floating-Fensterzustand via Event-Filter (TextboxFloatRoundedHelper).
+ *   - Floating-Docks werden als native OS-Fenster belassen (kein FramelessWindowHint).
  */
 
 #include <obs-module.h>
@@ -39,7 +39,6 @@ OBS_DECLARE_MODULE()
 #include "textbox-dock.hpp"
 #include <QDockWidget>
 #include <QPointer>
-#include <QEvent>
 #include <QGuiApplication>
 #include <QRect>
 #include <QScreen>
@@ -72,46 +71,6 @@ static void clamp_dock_to_screen(QDockWidget *d)
 	}
 }
 
-/*
-M7h: Runde untere Fensterecken im Floating-Zustand.
-Ein floatender QDockWidget ist ein opak-rechteckiges Top-Level-Fenster;
-ein QSS border-radius am Kind (TextboxDock) rundet nur die gemalte
-Flaeche — hinter den Ecken bleibt die undurchsichtige Fensterregion.
-Fuellig transparente Ecken brauchen daher ein transluzentes +
-framelesses Fenster, damit der abgerundete Kind-Hintergrund bis an
-den Fensterrand reicht. Beides wird beim ersten Show des
-Floating-Zustands genau einmal gesetzt (Guard: Attribut-Check).
-*/
-struct TextboxFloatRoundedHelper : public QObject
-{
-	QDockWidget *dock;
-
-	explicit TextboxFloatRoundedHelper(QDockWidget *d) : QObject(d), dock(d)
-	{
-		dock->installEventFilter(this);
-	}
-
-	bool eventFilter(QObject *obj, QEvent *ev) override
-	{
-		if (obj == dock &&
-		    (ev->type() == QEvent::Show || ev->type() == QEvent::WindowStateChange)) {
-			if (dock->isWindow() &&
-			    !(dock->windowState() &
-			      (Qt::WindowMinimized | Qt::WindowFullScreen))) {
-				if (!dock->testAttribute(Qt::WA_TranslucentBackground)) {
-					const QRect geom = dock->geometry();
-					dock->setAttribute(Qt::WA_TranslucentBackground, true);
-					dock->setWindowFlags(
-						dock->windowFlags() | Qt::FramelessWindowHint);
-					dock->setGeometry(geom);
-					dock->hide();
-					dock->show();
-				}
-			}
-		}
-		return QObject::eventFilter(obj, ev);
-	}
-};
 #endif /* ENABLE_QT */
 #endif /* ENABLE_FRONTEND_API */
 
@@ -145,8 +104,6 @@ bool obs_module_load(void)
 		g_dock->setObjectName(QStringLiteral("textbox"));
 		g_dock->setWindowTitle(QStringLiteral("Textbox Studio"));
 		g_dock->setWidget(new TextboxDock(state_path, g_dock));
-		/* M7h: runde untere Ecken im Floating-Zustand (liefert sich selbst) */
-		new TextboxFloatRoundedHelper(g_dock);
 		bool ok = obs_frontend_add_custom_qdock("textbox", g_dock);
 		if (!ok) {
 			/* Registrierung fehlgeschlagen: Widget nicht hängen lassen */

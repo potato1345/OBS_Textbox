@@ -1593,6 +1593,32 @@ void TextboxDock::create_row_widget(const TextboxCard &card)
 	// Für refresh_templates_ui() (State-Änderung von außen) am Row erreichbar.
 	row_widget->setProperty("tbHasTemplate", true);
 
+	// QCompleter listing all .html files in templates_dir() for quick pick.
+	{
+		const std::string tpl_dir = textbox_html::templates_dir();
+		if (!tpl_dir.empty()) {
+			QStringList html_files;
+			std::error_code ec;
+			for (const auto &entry : std::filesystem::directory_iterator(
+				     std::filesystem::u8path(tpl_dir), ec)) {
+				if (!entry.is_regular_file())
+					continue;
+				const std::string name = entry.path().filename().u8string();
+				if (name.size() >= 6 &&
+				    name.compare(name.size() - 5, 5, ".html") == 0) {
+					html_files.append(QString::fromUtf8(name.c_str()));
+				}
+			}
+			if (!html_files.isEmpty()) {
+				html_files.sort(Qt::CaseInsensitive);
+				auto *completer = new QCompleter(html_files, style_section);
+				completer->setCaseSensitivity(Qt::CaseInsensitive);
+				completer->setFilterMode(Qt::MatchContains);
+				tpl_edit->setCompleter(completer);
+			}
+		}
+	}
+
 
 	style_section->setVisible(true);
 	inner_layout->addWidget(style_section);

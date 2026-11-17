@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<!-- TEXTBOX_TEMPLATE: badge.html
+     Pill-Badge-Vorlage: Horizontale abgerundete Pill (border-radius: 999px),
+     zentriert nahe des unteren Canvas-Rands. Zwei kleine runde Akzent-Punkte
+     (corner_a / corner_b) an den Enden der Pill. Gleiche Token-Semantik und
+     Live-Push-Unterstützung wie standard.html. -->
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<style>
+    :root {
+        --zeile-1: "{{zeile1}}";
+        --zeile-2: "{{zeile2}}";
+        --zeile-3: "{{zeile3}}";
+        --tb-bg-color: {{box_color}};
+        --tb-text-color: {{text_color}};
+        --tb-border-color: rgba(255, 255, 255, 0.28);
+        --anim-file: "{{anim_src}}";
+        --show-anim: {{show_anim}};
+        --anim-scale: {{anim_scale}};
+        --anim-x: {{anim_x}}px;
+        --anim-y: {{anim_y}}px;
+        --dot-color-a: {{corner_a}};
+        --dot-color-b: {{corner_b}};
+    }
+    html, body {
+        margin: 0;
+        padding: 0;
+        width: 800px;
+        height: 400px;
+        background: transparent;
+        overflow: hidden;
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    }
+    .pill {
+        position: absolute;
+        bottom: 60px;
+        left: 50%;
+        transform: translateX(-50%);
+        display: inline-flex;
+        align-items: center;
+        gap: 14px;
+        padding: 0 28px;
+        height: 56px;
+        border-radius: 999px;
+        background: var(--tb-bg-color);
+        border: 1px solid var(--tb-border-color);
+        box-sizing: border-box;
+        white-space: nowrap;
+        max-width: 90vw;
+    }
+    .dot {
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        flex-shrink: 0;
+    }
+    .dot-left { background: var(--dot-color-a); }
+    .dot-right { background: var(--dot-color-b); }
+    .text-group {
+        display: flex;
+        align-items: baseline;
+        gap: 10px;
+        color: var(--tb-text-color);
+        min-width: 0;
+    }
+    .line1 {
+        font-size: 28px;
+        font-weight: 700;
+        line-height: 1.2;
+    }
+    .line2 {
+        font-size: 13px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.18em;
+        line-height: 1.2;
+    }
+    .line3 {
+        font-size: 11px;
+        font-weight: 400;
+        text-align: right;
+        line-height: 1.2;
+        opacity: 0.75;
+    }
+    body.rainbow .pill {
+        animation: rainbow-pulse 6s linear infinite;
+    }
+    @keyframes rainbow-pulse {
+        0% { filter: hue-rotate(0deg); }
+        100% { filter: hue-rotate(360deg); }
+    }
+    .anim-wrapper {
+        position: absolute;
+        bottom: 100%;
+        right: 0;
+        margin-bottom: 15px;
+        z-index: 10;
+        transform: translate(var(--anim-x, 0px), var(--anim-y, 0px)) scale(var(--anim-scale, 3));
+        transform-origin: bottom right;
+    }
+    .anim-wrapper img, .anim-wrapper video {
+        display: block;
+        image-rendering: pixelated;
+    }
+</style>
+</head>
+<body class="{{rainbow}}">
+<div class="pill" id="pill">
+    <div class="dot dot-left"></div>
+    <div class="text-group">
+        <span class="line1" id="l1"></span>
+        <span class="line2" id="l2"></span>
+        <span class="line3" id="l3"></span>
+    </div>
+    <div class="dot dot-right"></div>
+</div>
+<div class="anim-wrapper" id="anim-wrapper" style="display: none;"></div>
+<script>
+    // Auto-verbirgt die ganze Pill, wenn zeile1 leer ist; Live-Push via CustomEvent.
+    (function () {
+        let currentAnimFile = '';
+        function updatePill() {
+            const cs = getComputedStyle(document.documentElement);
+            const raw1 = (cs.getPropertyValue('--zeile-1') || '').trim();
+            const text1 = raw1.replace(/^["']|["']$/g, '');
+            const pill = document.getElementById('pill');
+            if (pill) pill.style.display = text1 ? '' : 'none';
+
+            for (let n = 1; n <= 3; n++) {
+                const raw = (cs.getPropertyValue('--zeile-' + n) || '').trim();
+                const text = raw.replace(/^["']|["']$/g, '');
+                const el = document.getElementById('l' + n);
+                if (el) {
+                    el.textContent = text;
+                    el.style.display = text ? '' : 'none';
+                }
+            }
+
+            const showAnimRaw = (cs.getPropertyValue('--show-anim') || '').trim();
+            const animFileRaw = (cs.getPropertyValue('--anim-file') || '').trim();
+            const animFile = animFileRaw.replace(/^["']|["']$/g, '');
+            const animWrapper = document.getElementById('anim-wrapper');
+            if (!animWrapper) return;
+            if (showAnimRaw === '1' && animFile) {
+                animWrapper.style.display = 'block';
+                if (animFile !== currentAnimFile) {
+                    currentAnimFile = animFile;
+                    animWrapper.innerHTML = '';
+                    if (animFile.toLowerCase().endsWith('.webm') || animFile.toLowerCase().endsWith('.mp4')) {
+                        const vid = document.createElement('video');
+                        vid.src = animFile; vid.autoplay = true; vid.loop = true; vid.muted = true;
+                        animWrapper.appendChild(vid);
+                    } else {
+                        const img = document.createElement('img');
+                        img.src = animFile;
+                        animWrapper.appendChild(img);
+                    }
+                }
+            } else {
+                animWrapper.style.display = 'none';
+                if (currentAnimFile !== '') {
+                    currentAnimFile = '';
+                    animWrapper.innerHTML = '';
+                }
+            }
+        }
+        updatePill();
+        setInterval(updatePill, 150);
+
+        // Live-Push vom Plugin (javascript_event -> CustomEvent), ohne Reload.
+        window.addEventListener('textbox_card_update', function (ev) {
+            const d = ev.detail;
+            if (!d) return;
+            const setVar = (name, value) => document.documentElement.style.setProperty(name, value);
+            if (d.zeilen != null) {
+                for (let i = 0; i < d.zeilen.length && i < 8; i++) {
+                    setVar('--zeile-' + (i + 1), JSON.stringify(d.zeilen[i]));
+                    if (d.vn && d.vn[i]) setVar(d.vn[i], JSON.stringify(d.zeilen[i]));
+                }
+                setVar('--zeile-count', String(d.zeilen.length));
+            } else {
+                if (d.zeile1 != null) setVar('--zeile-1', JSON.stringify(d.zeile1));
+                if (d.zeile2 != null) setVar('--zeile-2', JSON.stringify(d.zeile2));
+                if (d.zeile3 != null) setVar('--zeile-3', JSON.stringify(d.zeile3));
+            }
+            if (d.box_bg != null) setVar('--tb-bg-color', d.box_bg);
+            if (d.text_color != null) setVar('--tb-text-color', d.text_color);
+            if (d.triangle_color_a != null) setVar('--dot-color-a', d.triangle_color_a);
+            if (d.triangle_color_b != null) setVar('--dot-color-b', d.triangle_color_b);
+            if (d.anim_file != null) setVar('--anim-file', JSON.stringify(d.anim_file));
+            if (d.show_anim != null) setVar('--show-anim', String(d.show_anim));
+            if (d.anim_scale != null) setVar('--anim-scale', String(d.anim_scale));
+            if (d.anim_x != null) setVar('--anim-x', String(d.anim_x) + 'px');
+            if (d.anim_y != null) setVar('--anim-y', String(d.anim_y) + 'px');
+            document.body.classList.toggle('rainbow', !!d.rainbow);
+        });
+    })();
+</script>
+
+<!-- textbox-html:begin
+     Fallback-Html fuer den "Keine Vorlage"-Renderpfad:
+     Entspricht der Pill-Badge-Ansicht oben.
+<div class="pill" style="position:absolute;bottom:60px;left:50%;transform:translateX(-50%);display:inline-flex;align-items:center;gap:14px;padding:0 28px;height:56px;border-radius:999px;background:var(--tb-bg-color);border:1px solid rgba(255,255,255,0.28);box-sizing:border-box;white-space:nowrap;max-width:90vw;">
+  <div class="dot" style="width:10px;height:10px;border-radius:50%;flex-shrink:0;background:var(--dot-color-a);"></div>
+  <div class="text-group" style="display:flex;align-items:baseline;gap:10px;color:var(--tb-text-color);min-width:0;">
+    <span class="line1" style="font-size:28px;font-weight:700;line-height:1.2;">ZEILE1</span>
+    <span class="line2" style="font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:0.18em;line-height:1.2;">ZEILE2</span>
+    <span class="line3" style="font-size:11px;font-weight:400;text-align:right;line-height:1.2;opacity:0.75;">ZEILE3</span>
+  </div>
+  <div class="dot" style="width:10px;height:10px;border-radius:50%;flex-shrink:0;background:var(--dot-color-b);"></div>
+</div>
+-->
+</body>
+</html>

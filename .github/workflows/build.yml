@@ -6,6 +6,9 @@ on:
       - 'v*'
   workflow_dispatch:
 
+env:
+  OBS_VERSION: "32.2.2"
+
 # softprops/action-gh-release braucht Schreibrechte fuer die Release-Assets.
 permissions:
   contents: write
@@ -41,7 +44,7 @@ jobs:
           New-Item -ItemType Directory -Force -Path staging/obs-plugins/64bit, staging/data/obs-plugins | Out-Null
           Copy-Item install/textbox-studio/bin/64bit/* staging/obs-plugins/64bit/
           Copy-Item install/textbox-studio/data staging/data/obs-plugins/textbox-studio -Recurse
-          Compress-Archive -Path staging/obs-plugins, staging/data -DestinationPath "textbox-studio-$ver-windows-x64.zip"
+          Compress-Archive -Path staging/obs-plugins, staging/data -DestinationPath "textbox-studio-$ver-obs-${{ env.OBS_VERSION }}-windows-x64.zip"
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
@@ -119,7 +122,7 @@ jobs:
           echo "PACKAGED: $(ls staging/obs-plugins)"
           data_dir="$(find install -type d -name data -path '*textbox-studio*' | head -n 1)"
           cp -R "$data_dir" staging/data/obs-plugins/textbox-studio
-          (cd staging && zip -r "../textbox-studio-$ver-macos.zip" obs-plugins data)
+          (cd staging && zip -r "../textbox-studio-$ver-obs-${{ env.OBS_VERSION }}-macos-universal.zip" obs-plugins data)
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
@@ -169,7 +172,7 @@ jobs:
           find install -name '*.so' -exec cp {} staging/obs-plugins/ \;
           data_dir="$(find install -type d -name data -path '*textbox-studio*' | head -n 1)"
           cp -R "$data_dir" staging/data/obs-plugins/textbox-studio
-          (cd staging && zip -r "../textbox-studio-$ver-linux-x86_64.zip" obs-plugins data)
+          (cd staging && zip -r "../textbox-studio-$ver-obs-${{ env.OBS_VERSION }}-linux-x86_64.zip" obs-plugins data)
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
@@ -194,4 +197,5 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: dist/*.zip
+          body: "Gebaut und getestet gegen OBS Studio ${{ env.OBS_VERSION }} (obs-frontend-api ABI-stabil seit OBS 28)."
           generate_release_notes: true

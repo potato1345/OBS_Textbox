@@ -36,6 +36,7 @@
 #include <map>
 #include <mutex>
 #include <sstream>
+#include <string>
 #include <tuple>
 #include <utility>
 
@@ -1089,13 +1090,27 @@ bool reload_browser_source(obs_source_t *source)
 	// Browser-Source hat die Proc "reload" (argumentlos); proc_handler_call aus
 	// callback/proc.h ruft sie mit leerem calldata auf. false, wenn Proc fehlt.
 	proc_handler_t *ph = obs_source_get_proc_handler(source);
-	if (!ph)
+	if (ph) {
+		calldata_t cd;
+		calldata_init(&cd);
+		const bool ok = proc_handler_call(ph, "reload", &cd);
+		calldata_free(&cd);
+		if (ok)
+			return true; // obs-browser-alt / custom reload-Proc gefunden
+	}
+
+	// obs-browser hat keinen reload-Proc; CSS-Nonce erzwingt obs_source_update,
+	// das den Browser neu erstellt.
+	obs_data_t *sd = obs_source_get_settings(source);
+	if (!sd)
 		return false;
-	calldata_t cd;
-	calldata_init(&cd);
-	const bool ok = proc_handler_call(ph, "reload", &cd);
-	calldata_free(&cd);
-	return ok;
+	static int nonce = 0;
+	std::string css = obs_data_get_string(sd, "css");
+	css += "/* tb_reload " + std::to_string(++nonce) + " */";
+	obs_data_set_string(sd, "css", css.c_str());
+	obs_source_update(source, sd);
+	obs_data_release(sd);
+	return true;
 #endif
 }
 
