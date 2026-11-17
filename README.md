@@ -14,7 +14,7 @@ Aktuelle Version: **1.2.1** · [Releases](https://github.com/potato1345/OBS_Text
 | **standard** | Drei Textzeilen mit farbigen Eck-Akzenten und Regenbogen-Modus | ![Standard](assets/screenshots/standard.png) |
 | **badge** | Horizontale Pill-Badge mit Akzent-Punkten an den Enden | ![Badge](assets/screenshots/badge.png) |
 | **display** | Große Zahl mit Akzent-Balken und Meta-Label | ![Display](assets/screenshots/display.png) |
-| **minimal** | Drei kleine gestapelte Zeilen ohne Box-Hintergrund | ![Minimal](assets/screenshots/minimal.png) |
+| **minimal** | Drei Textzeilen mit 4px-Eck-Dots, transparenter Hintergrund (hier auf dunklem Yami gezeigt) | ![Minimal](assets/screenshots/minimal.png) |
 
 Alle Vorlagen sind im Vorlagen-Ordner des Plugins (`Settings > Vorlagen-Ordner öffnen`) einsehbar und pro Karte im Feld **VORLAGE** auswählbar. Eigene `.html`-Vorlagen im Templates-Ordner werden sofort akzeptiert.
 
