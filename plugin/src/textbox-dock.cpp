@@ -2530,6 +2530,7 @@ void TextboxDock::on_open_import_dialog()
 	prompt_group->setObjectName(QStringLiteral("tbAnimGroup"));
 	prompt_group->setCheckable(true);
 	prompt_group->setChecked(true);
+	prompt_group->setAccessibleName(QStringLiteral("Master-Prompt ein/ausklappen"));
 	auto *prompt_group_layout = new QVBoxLayout(prompt_group);
 	prompt_group_layout->setContentsMargins(8, 8, 8, 8);
 	prompt_group_layout->setSpacing(6);
@@ -2545,6 +2546,7 @@ void TextboxDock::on_open_import_dialog()
 	QPlainTextEdit *ai_prompt_edit =
 		new PromptTabEdit(QString::fromUtf8(init_prompt.c_str()), prompt_body);
 	ai_prompt_edit->setObjectName(QStringLiteral("tbAiSystemPrompt"));
+	ai_prompt_edit->setAccessibleName(QStringLiteral("Master-Prompt"));
 	ai_prompt_edit->setFixedHeight(110);
 
 	auto *ai_prompt_reset_btn =
@@ -3380,6 +3382,7 @@ void TextboxDock::on_open_quick_profiles_dialog()
 	save_row->setSpacing(8);
 	auto *name_edit = new QLineEdit(make_default_name(), save_group);
 	name_edit->setPlaceholderText(QStringLiteral("Name des Schnell-Profils"));
+	name_edit->setAccessibleName(QStringLiteral("Schnellprofil-Name"));
 	auto *save_btn = new QPushButton(QStringLiteral("Speichern"), save_group);
 	save_btn->setObjectName(QStringLiteral("tbBtnQuickSave"));
 	save_row->addWidget(name_edit, 1);
@@ -3686,7 +3689,8 @@ void TextboxDock::on_open_settings_dialog()
 	auto make_path_row = [m5_group](QVBoxLayout *parent_l, const QString &label_txt,
 					const std::string &cur_val,
 					const std::string &def_val,
-					QPushButton *&out_btn) -> QLineEdit * {
+					QPushButton *&out_btn,
+					const QString &acc_name) -> QLineEdit * {
 		auto *lbl = new QLabel(label_txt, m5_group);
 		lbl->setObjectName(QStringLiteral("tbFieldLabel"));
 		auto *row = new QHBoxLayout();
@@ -3694,6 +3698,7 @@ void TextboxDock::on_open_settings_dialog()
 		const std::string v = cur_val.empty() ? def_val : cur_val;
 		auto *edit = new QLineEdit(QString::fromUtf8(v.c_str()), m5_group);
 		edit->setPlaceholderText(QString::fromUtf8(def_val.c_str()));
+		edit->setAccessibleName(acc_name);
 		out_btn = new QPushButton(QStringLiteral("…"), m5_group);
 		out_btn->setObjectName(QStringLiteral("tbBtn"));
 		row->addWidget(edit, 1);
@@ -3707,25 +3712,29 @@ void TextboxDock::on_open_settings_dialog()
 	auto *edit_key_path = make_path_row(
 		m5_layout, QStringLiteral("OPENROUTER-API-KEY-PFAD (api.env)"),
 		state_.settings.openrouter_key_path, def_settings.openrouter_key_path,
-		browse_key_btn);
+		browse_key_btn,
+		QStringLiteral("OpenRouter-API-Key-Pfad"));
 
 	QPushButton *browse_py_btn = nullptr;
 	auto *edit_py_path = make_path_row(
 		m5_layout, QStringLiteral("MARKITDOWN-PYTHON-PFAD"),
 		state_.settings.markitdown_python, def_settings.markitdown_python,
-		browse_py_btn);
+		browse_py_btn,
+		QStringLiteral("Markitdown-Python-Pfad"));
 
 	QPushButton *browse_anim_btn = nullptr;
 	auto *edit_anim_dir = make_path_row(
 		m5_layout, QStringLiteral("ANIMATIONS-ORDNER"),
 		state_.settings.animation_dir, def_settings.animation_dir,
-		browse_anim_btn);
+		browse_anim_btn,
+		QStringLiteral("Animations-Ordner"));
 
 	QPushButton *browse_referenz_btn = nullptr;
 	auto *edit_referenz_path = make_path_row(
 		m5_layout, QStringLiteral("REFERENZ-INDEX"),
 		state_.settings.referenz_path, def_settings.referenz_path,
-		browse_referenz_btn);
+		browse_referenz_btn,
+		QStringLiteral("Referenz-Index"));
 
 	root->addWidget(m5_group);
 
