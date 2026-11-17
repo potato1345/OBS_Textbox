@@ -384,6 +384,7 @@ TextboxDock::TextboxDock(const std::string &state_path, QWidget *parent)
 	profil_select_->setEditable(true);
 	profil_select_->setInsertPolicy(QComboBox::NoInsert);
 	profil_select_->setMinimumWidth(160);
+	profil_select_->setAccessibleName(QStringLiteral("Schnellprofil-Wahl"));
 	profil_select_->setToolTip(
 		QStringLiteral("Schnellprofile-Liste (gespeicherte Karten-Sets, nicht Kartenfarben)"));
 	if (QCompleter *c = profil_select_->completer()) {
@@ -393,6 +394,7 @@ TextboxDock::TextboxDock(const std::string &state_path, QWidget *parent)
 	if (profil_select_->lineEdit()) {
 		profil_select_->lineEdit()->setPlaceholderText(
 			QStringLiteral("Schnellprofil suchen…"));
+		profil_select_->lineEdit()->setAccessibleName(QStringLiteral("Schnellprofil-Wahl"));
 		profil_select_->lineEdit()->setToolTip(
 			QStringLiteral("Schnellprofile-Liste (gespeicherte Karten-Sets, nicht Kartenfarben)"));
 	}
@@ -401,12 +403,14 @@ TextboxDock::TextboxDock(const std::string &state_path, QWidget *parent)
 	card_search_->setEditable(true);
 	card_search_->setInsertPolicy(QComboBox::NoInsert);
 	card_search_->setMinimumWidth(140);
+	card_search_->setAccessibleName(QStringLiteral("Karten-Suche"));
 	if (QCompleter *c = card_search_->completer()) {
 		c->setCaseSensitivity(Qt::CaseInsensitive);
 		c->setFilterMode(Qt::MatchContains);
 	}
 	if (card_search_->lineEdit()) {
 		card_search_->lineEdit()->setPlaceholderText(QStringLiteral("Karte suchen…"));
+		card_search_->lineEdit()->setAccessibleName(QStringLiteral("Karten-Suche"));
 	}
 
 	top_row->addWidget(profil_select_, 1);
@@ -826,6 +830,7 @@ void TextboxDock::create_row_widget(const TextboxCard &card)
 	id_edit->setObjectName(QStringLiteral("tbIdValue"));
 	id_edit->setFixedWidth(96);
 	id_edit->setToolTip(QStringLiteral("ID umbenennen (Enter); nur Buchstaben/Zahlen/-/_"));
+	id_edit->setAccessibleName(QStringLiteral("Karten-ID"));
 
 	auto *style_toggle_btn = new QToolButton(id_bar);
 	style_toggle_btn->setObjectName(QStringLiteral("tbStyleToggle"));
@@ -1125,6 +1130,8 @@ void TextboxDock::create_row_widget(const TextboxCard &card)
 	profile_combo->setFixedHeight(34);
 	profile_combo->setToolTip(
 		QStringLiteral("Karten-Farbprofil (Text/Box/Ecken/Deckkraft)"));
+	profile_combo->setAccessibleName(
+		QStringLiteral("Karten-Farbprofil %1").arg(QString::fromUtf8(card.id.c_str())));
 	int selected_index = 0;
 	const std::string canonical_prof = profile_name_canonical(card.profile);
 	for (size_t i = 0; i < state_.color_profiles.size(); ++i) {
@@ -1406,11 +1413,13 @@ void TextboxDock::create_row_widget(const TextboxCard &card)
 			auto *comp = new QCompleter(*css_var_model, css_frame);
 			comp->setCaseSensitivity(Qt::CaseInsensitive);
 			nedit->setCompleter(comp);
+			nedit->setAccessibleName(QStringLiteral("Name der CSS-Regel %1").arg(name));
 			auto *tcombo = new QComboBox(css_frame);
 			tcombo->setFixedWidth(78);
 			tcombo->setFixedHeight(32);
 			tcombo->setToolTip(QStringLiteral(
 				"Wert-Eingarte: Text, Zahl 0-255 (Regler), HEX (Farbpicker), px (Dropdown), Bool, Enum (Dropdown), Datei (Picker)"));
+			tcombo->setAccessibleName(QStringLiteral("Typ der CSS-Regel %1").arg(name));
 			tcombo->addItem(QStringLiteral("Text"), QStringLiteral("text"));
 			tcombo->addItem(QStringLiteral("0-255"), QStringLiteral("num"));
 			tcombo->addItem(QStringLiteral("HEX"), QStringLiteral("hex"));
@@ -1431,6 +1440,9 @@ void TextboxDock::create_row_widget(const TextboxCard &card)
 			};
 			auto built = build_value_widget(tcombo->currentData().toString(), value, onchange);
 			r.value_widget = built.first;
+			if (r.value_widget && r.value_widget->inherits("QComboBox"))
+				r.value_widget->setAccessibleName(
+					QStringLiteral("Wert der CSS-Regel %1").arg(name));
 			r.getter = built.second;
 			if (*css_collapsed) {
 				r.name_edit->hide();
@@ -1565,6 +1577,8 @@ void TextboxDock::create_row_widget(const TextboxCard &card)
 	tpl_edit->setToolTip(lbl_tpl->toolTip());
 	tpl_edit->setFixedHeight(32);
 	tpl_edit->setText(QString::fromUtf8(card.template_id.c_str()));
+	tpl_edit->setAccessibleName(
+		QStringLiteral("Vorlagenpfad der Karte %1").arg(QString::fromUtf8(card.id.c_str())));
 	auto *tpl_pick = new QPushButton(style_section);
 	tpl_pick->setObjectName(QStringLiteral("tbTemplatePick"));
 	tpl_pick->setFixedSize(34, 32);
@@ -2344,6 +2358,7 @@ void TextboxDock::on_open_import_dialog()
 	auto *edit_form_id =
 		new QLineEdit(QString::fromUtf8(init_form_id.c_str()), google_group);
 	edit_form_id->setPlaceholderText(QStringLiteral("Google-Form-ID"));
+	edit_form_id->setAccessibleName(QStringLiteral("Google-Form-ID"));
 
 	auto *lbl_token_path = new QLabel(QStringLiteral("TOKEN-PFAD"), google_group);
 	lbl_token_path->setObjectName(QStringLiteral("tbFieldLabel"));
@@ -2353,6 +2368,7 @@ void TextboxDock::on_open_import_dialog()
 	auto *edit_token_path =
 		new QLineEdit(QString::fromUtf8(init_token_path.c_str()), google_group);
 	edit_token_path->setPlaceholderText(QString::fromUtf8(textbox_import::default_token_path_str()));
+	edit_token_path->setAccessibleName(QStringLiteral("OAuth-Token-Pfad"));
 
 	connect(edit_form_id, &QLineEdit::editingFinished, this, [this, edit_form_id]() {
 		const std::string new_id = edit_form_id->text().trimmed().toUtf8().toStdString();
@@ -2395,6 +2411,7 @@ void TextboxDock::on_open_import_dialog()
 	auto *service_combo = new QComboBox(kopf_group);
 	service_combo->setObjectName(QStringLiteral("tbServiceSelect"));
 	service_combo->setFixedHeight(34);
+	service_combo->setAccessibleName(QStringLiteral("Einreichungsauswahl"));
 	// Sehr lange Einreichungs-Items würden sonst das Content-Widget auf
 	// mehrere tausend Pixel Breite aufblähen (QComboBox::minimumSizeHint =
 	// längstes Item). Items werden vom Combo ohnehin elidiert.
@@ -2473,6 +2490,7 @@ void TextboxDock::on_open_import_dialog()
 	auto *ai_file_edit = new QLineEdit(ai_group);
 	ai_file_edit->setObjectName(QStringLiteral("tbAiFilePath"));
 	ai_file_edit->setPlaceholderText(QStringLiteral("PDF- oder DOCX-Datei auswählen …"));
+	ai_file_edit->setAccessibleName(QStringLiteral("AI-Import-Dokumentpfad"));
 	auto *ai_file_btn = new QPushButton(QStringLiteral("Datei wählen …"), ai_group);
 	ai_file_btn->setObjectName(QStringLiteral("tbBtnAiFilePick"));
 	ai_file_row->addWidget(ai_file_edit, 1);
@@ -2491,6 +2509,7 @@ void TextboxDock::on_open_import_dialog()
 		new QLineEdit(QString::fromUtf8(prefilled_key.c_str()), ai_group);
 	ai_key_edit->setObjectName(QStringLiteral("tbAiApiKey"));
 	ai_key_edit->setEchoMode(QLineEdit::Password);
+	ai_key_edit->setAccessibleName(QStringLiteral("OpenRouter API-Key"));
 	ai_key_edit->setPlaceholderText(
 		QStringLiteral("OpenRouter API-Key (leer = lokale Offline-Analyse)"));
 	/* Ui4: kein Auge-Emoji — natives Text-Toggle (OBS-Style: Text, kein Glyph). */
@@ -3376,6 +3395,7 @@ void TextboxDock::on_open_quick_profiles_dialog()
 
 	auto *combo = new QComboBox(list_group);
 	combo->setFixedHeight(34);
+	combo->setAccessibleName(QStringLiteral("Schnellprofil-Auswahl"));
 
 	auto *action_row = new QHBoxLayout();
 	action_row->setSpacing(8);
@@ -3597,6 +3617,7 @@ void TextboxDock::on_open_settings_dialog()
 	const std::string cur_form_id = state_.settings.google_form_id;
 	auto *edit_form = new QLineEdit(QString::fromUtf8(cur_form_id.c_str()), oauth_group);
 	edit_form->setPlaceholderText(QStringLiteral("Google-Form-ID"));
+	edit_form->setAccessibleName(QStringLiteral("Google-Form-ID"));
 
 	auto *lbl_token = new QLabel(QStringLiteral("OAUTH-TOKEN-PFAD"), oauth_group);
 	lbl_token->setObjectName(QStringLiteral("tbFieldLabel"));
@@ -3607,6 +3628,7 @@ void TextboxDock::on_open_settings_dialog()
 	token_row->setSpacing(8);
 	auto *edit_token = new QLineEdit(QString::fromUtf8(cur_token.c_str()), oauth_group);
 	edit_token->setPlaceholderText(QString::fromUtf8(textbox_import::default_token_path_str()));
+	edit_token->setAccessibleName(QStringLiteral("OAuth-Token-Pfad"));
 	/* Ui4: „…“ = natives OBS-Browse-Button-Idiom (Properties-Panel). */
 	auto *browse_btn = new QPushButton(QStringLiteral("…"), oauth_group);
 	browse_btn->setObjectName(QStringLiteral("tbBtn"));
@@ -3738,6 +3760,7 @@ void TextboxDock::on_open_settings_dialog()
 
 	auto *yaml_combo = new QComboBox(profiles_group);
 	yaml_combo->setObjectName(QStringLiteral("tbYamlProfileCombo"));
+	yaml_combo->setAccessibleName(QStringLiteral("YAML-Profil-Auswahl"));
 	yaml_combo->setFixedHeight(34);
 
 	auto *yaml_btn_row = new QHBoxLayout();
