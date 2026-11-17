@@ -28,3 +28,6 @@ plugin/build_x86/
 # Design-Specs und UI-Checks bleiben lokal, gehören nicht ins Repo
 docs/
 tools/
+
+# README-Bilder bleiben lokal, nicht im Repo
+assets/screenshots/

@@ -8,12 +8,6 @@ AI-Sidecar (Python).
 Aktuelle Version: **1.2.0** · gebaut und getestet gegen **OBS Studio 32.2.2**
 (Windows x64, macOS Universal, Linux x64).
 
-## Screenshots
-
-Karte mit dem Standard-Template, gerendert als Browser-Source:
-
-![Standard-Template](assets/screenshots/standard.png)
-
 ## Features
 
 - **Karten**: dynamische Anzahl (im Zustand gespeichert, z. B. 12), jede als eigene
@@ -159,7 +153,7 @@ plugin/templates/           Overlay-Vorlagen (standard/display/minimal/badge)
 docs/DESIGN.md              UI-Design-Spec (Spacing-Raster, Theme-Tokens)
 docs/native-style-notes.md  Referenz: natives OBS-Plugin-Styling
 tools/ui_spacing_check.py   UI-Audit-Tool (Pixel-Gaps gegen DESIGN.md)
-assets/screenshots/         README-Screenshots (Browser-Source-Renders)
+assets/screenshots/         README-Screenshots (nur lokal, nicht im Repo)
 ```
 
 ## Lizenz
