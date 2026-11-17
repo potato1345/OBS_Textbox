@@ -8,6 +8,26 @@ AI-Sidecar (Python).
 Aktuelle Version: **1.2.0** · gebaut und getestet gegen **OBS Studio 32.2.2**
 (Windows x64, macOS Universal, Linux x64).
 
+## Vorlagen-Galerie
+
+Alle Vorlagen als freigestellte Render (transparenter Hintergrund):
+
+**standard** — Karte mit drei Textzeilen und farbigen Eck-Akzenten (Regenbogen-Modus):
+
+![Standard-Template](assets/screenshots/standard.png)
+
+**badge** — horizontale Pill-Badge mit Akzent-Punkten an den Enden:
+
+![Badge-Template](assets/screenshots/badge.png)
+
+**display** — große Zahl mit Akzent-Balken und Meta-Label:
+
+![Display-Template](assets/screenshots/display.png)
+
+**minimal** — drei kleine Zeilen, gestapelt, ohne Box:
+
+![Minimal-Template](assets/screenshots/minimal.png)
+
 ## Features
 
 - **Karten**: dynamische Anzahl (im Zustand gespeichert, z. B. 12), jede als eigene
@@ -153,7 +173,7 @@ plugin/templates/           Overlay-Vorlagen (standard/display/minimal/badge)
 docs/DESIGN.md              UI-Design-Spec (Spacing-Raster, Theme-Tokens)
 docs/native-style-notes.md  Referenz: natives OBS-Plugin-Styling
 tools/ui_spacing_check.py   UI-Audit-Tool (Pixel-Gaps gegen DESIGN.md)
-assets/screenshots/         README-Screenshots (nur lokal, nicht im Repo)
+assets/screenshots/         Vorlagen-Galerie-Bilder (transparent freigestellt)
 ```
 
 ## Lizenz
