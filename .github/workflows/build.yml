@@ -99,24 +99,24 @@ jobs:
         run: |
           ver="${{ matrix.obs_version }}"
           python3 -c "
-import json, hashlib, urllib.request
-with open('plugin/buildspec.json') as f:
-    spec = json.load(f)
-spec['dependencies']['obs-studio']['version'] = ver
-# Compute SHA256 for macOS tar.gz at runtime
-tgz_url = f'https://github.com/obsproject/obs-studio/archive/refs/tags/{ver}.tar.gz'
-resp = urllib.request.urlopen(tgz_url)
-tgz_hash = hashlib.sha256(resp.read()).hexdigest()
-# Also compute Windows ZIP hash (needed for buildspec cross-platform consistency)
-zip_url = f'https://github.com/obsproject/obs-studio/archive/refs/tags/{ver}.zip'
-resp2 = urllib.request.urlopen(zip_url)
-zip_hash = hashlib.sha256(resp2.read()).hexdigest()
-spec['dependencies']['obs-studio']['hashes']['macos'] = tgz_hash
-spec['dependencies']['obs-studio']['hashes']['windows-x64'] = zip_hash
-with open('plugin/buildspec.json', 'w') as f:
-    json.dump(spec, f, indent=4)
-    f.write('\n')
-"
+          import json, hashlib, urllib.request
+          with open('plugin/buildspec.json') as f:
+              spec = json.load(f)
+          spec['dependencies']['obs-studio']['version'] = ver
+          # Compute SHA256 for macOS tar.gz at runtime
+          tgz_url = f'https://github.com/obsproject/obs-studio/archive/refs/tags/{ver}.tar.gz'
+          resp = urllib.request.urlopen(tgz_url)
+          tgz_hash = hashlib.sha256(resp.read()).hexdigest()
+          # Also compute Windows ZIP hash (needed for buildspec cross-platform consistency)
+          zip_url = f'https://github.com/obsproject/obs-studio/archive/refs/tags/{ver}.zip'
+          resp2 = urllib.request.urlopen(zip_url)
+          zip_hash = hashlib.sha256(resp2.read()).hexdigest()
+          spec['dependencies']['obs-studio']['hashes']['macos'] = tgz_hash
+          spec['dependencies']['obs-studio']['hashes']['windows-x64'] = zip_hash
+          with open('plugin/buildspec.json', 'w') as f:
+              json.dump(spec, f, indent=4)
+              f.write('\n')
+          "
           echo "Patched buildspec.json for OBS $ver"
 
       - name: Configure (CI preset)
