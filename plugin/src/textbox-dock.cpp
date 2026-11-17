@@ -2333,12 +2333,6 @@ void TextboxDock::on_open_import_dialog()
 	auto *root = new QVBoxLayout(dlg_content);
 	dlg_scroll->setWidget(dlg_content);
 	dlg_layout->addWidget(dlg_scroll);
-	{
-		int avail_h = 780;
-		if (auto *scr = QGuiApplication::primaryScreen())
-			avail_h = scr->availableGeometry().height() - 80;
-		dlg.resize(560, avail_h);
-	}
 	root->setContentsMargins(16, 16, 16, 16);
 	root->setSpacing(12);
 
@@ -2347,6 +2341,7 @@ void TextboxDock::on_open_import_dialog()
 	auto *google_layout = new QVBoxLayout(google_group);
 	google_layout->setContentsMargins(12, 16, 12, 12);
 	google_layout->setSpacing(8);
+	google_group->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Preferred);
 
 	auto *google_info = new QLabel(
 		QStringLiteral("JSON-Antworten von einer URL laden"), google_group);
@@ -2469,6 +2464,7 @@ void TextboxDock::on_open_import_dialog()
 	auto *csv_layout = new QVBoxLayout(csv_group);
 	csv_layout->setContentsMargins(12, 16, 12, 12);
 	csv_layout->setSpacing(8);
+	csv_group->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Preferred);
 
 	auto *csv_btn = new QPushButton(
 		QStringLiteral("Datei importieren (CSV / XLSX / ZIP) …"), csv_group);
@@ -2482,6 +2478,7 @@ void TextboxDock::on_open_import_dialog()
 	auto *ai_layout = new QVBoxLayout(ai_group);
 	ai_layout->setContentsMargins(12, 16, 12, 12);
 	ai_layout->setSpacing(8);
+	ai_group->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Preferred);
 
 	auto *lbl_ai_file = new QLabel(QStringLiteral("DOKUMENT (PDF / DOCX)"), ai_group);
 	lbl_ai_file->setObjectName(QStringLiteral("tbFieldLabel"));
@@ -2632,6 +2629,11 @@ void TextboxDock::on_open_import_dialog()
 	error_lbl->setWordWrap(true);
 	error_lbl->setVisible(false);
 	root->addWidget(error_lbl);
+	root->addStretch(1);
+	int avail_h = 780;
+	if (auto *scr = QGuiApplication::primaryScreen())
+		avail_h = scr->availableGeometry().height() - 80;
+	dlg.resize(560, std::min(avail_h, dlg_content->sizeHint().height() + 8));
 
 	auto pending_ai_res = std::make_shared<textbox_ai::AiResult>();
 	auto loaded_services =
