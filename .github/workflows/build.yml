@@ -102,13 +102,13 @@ jobs:
           import json, hashlib, urllib.request
           with open('plugin/buildspec.json') as f:
               spec = json.load(f)
-          spec['dependencies']['obs-studio']['version'] = ver
+          spec['dependencies']['obs-studio']['version'] = '${{ matrix.obs_version }}'
           # Compute SHA256 for macOS tar.gz at runtime
-          tgz_url = f'https://github.com/obsproject/obs-studio/archive/refs/tags/{ver}.tar.gz'
+          tgz_url = f'https://github.com/obsproject/obs-studio/archive/refs/tags/${{ matrix.obs_version }}.tar.gz'
           resp = urllib.request.urlopen(tgz_url)
           tgz_hash = hashlib.sha256(resp.read()).hexdigest()
           # Also compute Windows ZIP hash (needed for buildspec cross-platform consistency)
-          zip_url = f'https://github.com/obsproject/obs-studio/archive/refs/tags/{ver}.zip'
+          zip_url = f'https://github.com/obsproject/obs-studio/archive/refs/tags/${{ matrix.obs_version }}.zip'
           resp2 = urllib.request.urlopen(zip_url)
           zip_hash = hashlib.sha256(resp2.read()).hexdigest()
           spec['dependencies']['obs-studio']['hashes']['macos'] = tgz_hash
