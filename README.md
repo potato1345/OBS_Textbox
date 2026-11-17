@@ -24,7 +24,7 @@ Alle Vorlagen als freigestellte Render (transparenter Hintergrund):
 
 ![Display-Template](assets/screenshots/display.png)
 
-**minimal** — drei kleine Zeilen, gestapelt, ohne Box:
+**minimal** — drei kleine Zeilen, gestapelt, ohne Box (Text ist transparent; hier auf dunklem Hintergrund gezeigt):
 
 ![Minimal-Template](assets/screenshots/minimal.png)
 
