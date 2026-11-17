@@ -174,7 +174,12 @@ if(ENABLE_QT)
     src/textbox-profiles.hpp
     src/textbox-textfmt.hpp
   )
-  target_compile_definitions(textbox-render-tests PRIVATE TEXTBOX_TEST_NO_OBS)
+  target_compile_definitions(
+    textbox-render-tests
+    PRIVATE
+      TEXTBOX_TEST_NO_OBS
+      TEXTBOX_DEV_REPO_PATH="${CMAKE_CURRENT_SOURCE_DIR}/data/index.html"
+  )
   target_include_directories(
     textbox-render-tests
     PRIVATE $<TARGET_PROPERTY:OBS::libobs,INTERFACE_INCLUDE_DIRECTORIES>
@@ -198,6 +203,7 @@ if(ENABLE_QT)
     PRIVATE
       TEXTBOX_TEST_NO_OBS
       TEXTBOX_REPO_ROOT="${CMAKE_CURRENT_SOURCE_DIR}/.."
+      TEXTBOX_DEV_REPO_PATH="${CMAKE_CURRENT_SOURCE_DIR}/data/index.html"
   )
   target_include_directories(
     test-textbox-html
@@ -221,6 +227,7 @@ if(ENABLE_QT)
     PRIVATE
       TEXTBOX_TEST_NO_OBS
       TEXTBOX_REPO_ROOT="${CMAKE_CURRENT_SOURCE_DIR}/.."
+      TEXTBOX_DEV_REPO_PATH="${CMAKE_CURRENT_SOURCE_DIR}/data/index.html"
   )
   target_include_directories(
     test-textbox-templates

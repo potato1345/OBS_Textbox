@@ -409,6 +409,10 @@ std::string extract_document_text(const std::string &file_path, const std::strin
 	}
 	if (cancelled || wait_res == WAIT_TIMEOUT) {
 		TerminateProcess(pi.hProcess, 1);
+		// stdout_read sofort schliessen, damit der blockierende ReadFile-Thread
+		// (reader) nicht auf ewig hängt. Nach reader.join() kommt kein zweites Close.
+		CloseHandle(stdout_read);
+		stdout_read = nullptr;
 	}
 
 	reader.join();
@@ -417,7 +421,8 @@ std::string extract_document_text(const std::string &file_path, const std::strin
 	DWORD exit_code = 1;
 	GetExitCodeProcess(pi.hProcess, &exit_code);
 
-	CloseHandle(stdout_read);
+	if (stdout_read)
+		CloseHandle(stdout_read);
 	if (stderr_read)
 		CloseHandle(stderr_read);
 	CloseHandle(pi.hThread);

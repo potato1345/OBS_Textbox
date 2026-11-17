@@ -38,6 +38,10 @@ Toolbar-Icon ⤓ öffnet den Import-Dialog mit drei unabhängigen Wegen:
 
 ## OBS-Kompatibilität
 
+**Getestet:** OBS 32.2.2 (Windows/macOS/Linux).  
+**Kompatibel erwartet:** OBS ≥ 28 (stabile Plugin-ABI via `obs-frontend-api`).  
+**OBS 33+:** Ungetastet, die Release-Matrix baut jedoch `obs-33.0.1`-Assets.
+
 | Platform | OBS Versions | Build |
 |----------|-------------|-------|
 | Windows x64 | 32.2.2, 33.0.1 | Per CMake-Preset gegen obs-deps |
@@ -66,7 +70,14 @@ ctest --test-dir build_x64 -C RelWithDebInfo
 ### Deploy nach OBS Studio
 
 DLL + PDB nach `<OBS>\obs-plugins\64bit\` und `<OBS>\bin\64bit\` kopieren;
-Plugin-Data unter `<OBS>\data\obs-plugins\textbox-studio\` (per `cmake --install`).
+Plugin-Data unter `<OBS>\data\obs-plugins\textbox-studio\` per `cmake --install`:
+
+```bash
+cmake --install build_x64 --config RelWithDebInfo --prefix "C:/Program Files/obs-studio"
+```
+
+Das `--prefix` muss auf das OBS-Installationsverzeichnis zeigen (alternativ `<OBS>`).
+Der Befehl kopiert `index.html`, Vorlagen und Animationen in das Plugin-Data-Verzeichnis.
 
 ## Nutzung
 

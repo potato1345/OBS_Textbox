@@ -30,8 +30,11 @@
 
 namespace {
 
-constexpr const char *kFallbackTokenPath =
-	"C:\\Users\\Johann\\AppData\\Local\\hermes\\google_token.json";
+#ifdef TEXTBOX_DEV_TOKEN_PATH
+constexpr const char *kFallbackTokenPath = TEXTBOX_DEV_TOKEN_PATH;
+#else
+constexpr const char *kFallbackTokenPath = "";
+#endif
 constexpr const char *kFallbackReferenzPath =
 	""; // keine fest hinterlegte Referenztabelle; Datei optional über die UI wählbar
 

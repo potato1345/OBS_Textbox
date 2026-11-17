@@ -34,6 +34,7 @@
 #include <QString>
 
 #include <algorithm>
+#include <atomic>
 #include <cctype>
 #include <filesystem>
 #include <fstream>
@@ -48,7 +49,11 @@ namespace textbox_html {
 
 namespace {
 
-constexpr const char *kRepoTextboxPath = "C:/Users/Johann/Desktop/GitHub/OBS_Textbox/plugin/data/index.html";
+#ifdef TEXTBOX_DEV_REPO_PATH
+constexpr const char *kRepoTextboxPath = TEXTBOX_DEV_REPO_PATH;
+#else
+constexpr const char *kRepoTextboxPath = "";
+#endif
 
 // IMP-U: Regenbogen-Magie liegt im HTML (plugin/data/index.html + Templates +
 // Fallback-Template) und wird über --tb-rainbow / --triangle-background
@@ -314,7 +319,9 @@ std::string resolve_textbox_path_impl(const TextboxSettings &settings)
 		}
 	}
 #endif
-	return kRepoTextboxPath;
+	if (kRepoTextboxPath[0] != '\0')
+		return kRepoTextboxPath;
+	return "";
 }
 
 std::string g_last_push_update_json;
@@ -1113,7 +1120,7 @@ bool reload_browser_source(obs_source_t *source)
 	obs_data_t *sd = obs_source_get_settings(source);
 	if (!sd)
 		return false;
-	static int nonce = 0;
+	static std::atomic<int> nonce{0};
 	std::string css = obs_data_get_string(sd, "css");
 	css += "/* tb_reload " + std::to_string(++nonce) + " */";
 	obs_data_set_string(sd, "css", css.c_str());
