@@ -25,6 +25,10 @@
 
 #include <QByteArray>
 #include <QJsonArray>
+#include <QThread>
+#ifndef TEXTBOX_TEST_NO_OBS
+#include <QApplication>
+#endif
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QString>
@@ -1087,6 +1091,11 @@ bool reload_browser_source(obs_source_t *source)
 	(void)source;
 	return false;
 #else
+	// Thread-Safety: nur vom Main-Thread aufrufen (OBS-API nicht thread-safe).
+#ifndef TEXTBOX_TEST_NO_OBS
+	Q_ASSERT(QThread::currentThread() == qApp->thread());
+#endif
+
 	// Browser-Source hat die Proc "reload" (argumentlos); proc_handler_call aus
 	// callback/proc.h ruft sie mit leerem calldata auf. false, wenn Proc fehlt.
 	proc_handler_t *ph = obs_source_get_proc_handler(source);

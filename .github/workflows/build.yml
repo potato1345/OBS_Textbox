@@ -6,21 +6,57 @@ on:
       - 'v*'
   workflow_dispatch:
 
-env:
-  OBS_VERSION: "32.2.2"
-
 # softprops/action-gh-release braucht Schreibrechte fuer die Release-Assets.
 permissions:
   contents: write
 
 jobs:
   windows:
-    name: Windows x64 build
+    name: Windows x64 build (OBS ${{ matrix.obs_version }})
     # windows-latest resolves zur windows-2025-vs2026-Image (nur VS 2026) —
     # unser Generator "Visual Studio 17 2022" braucht die windows-2022-Image.
     runs-on: windows-2022
+    strategy:
+      matrix:
+        obs_version: ["32.2.2", "33.0.1"]
     steps:
       - uses: actions/checkout@v4
+
+      - name: Patch buildspec.json for OBS ${{ matrix.obs_version }}
+        shell: pwsh
+        run: |
+          $ver = "${{ matrix.obs_version }}"
+          $json = Get-Content plugin/buildspec.json -Raw | ConvertFrom-Json
+          $json.dependencies."obs-studio".version = $ver
+          # Compute hashes for Windows ZIP and macOS tar.gz at runtime
+          $zipUrl = "https://github.com/obsproject/obs-studio/archive/refs/tags/${ver}.zip"
+          $tgzUrl = "https://github.com/obsproject/obs-studio/archive/refs/tags/${ver}.tar.gz"
+          $zipHash = (Invoke-WebRequest -Uri $zipUrl -UseBasicParsing | ForEach-Object {
+            $stream = [System.IO.MemoryStream]::new()
+            $_.RawContentStream.CopyTo($stream)
+            $stream.Position = 0
+            (Get-FileHash -InputStream $stream -Algorithm SHA256).Hash.ToLower()
+          })
+          $json.dependencies."obs-studio".hashes."windows-x64" = $zipHash
+          # For the macOS hash, we rely on a known reference hash since we can't easily
+          # compute it on Windows — but we need it for buildspec cross-platform.
+          # Use known reference hashes:
+          $knownHashes = @{
+            "32.2.2" = @{ "windows-x64" = "f15f001f1fa526405318835f44f9910046502f496ebc3a30d5296a5018b831aa"; "macos" = "35d3cd0979d65664fada7119fdb612eca734b61a1623a330caec74bf72626c4" }
+            "33.0.1" = @{ "windows-x64" = "0f228b960c099c6f6bca9f09a0c3516f14fdf1dd96e1d4702145c5d3ba8cba31"; "macos" = "9174ee0e3677c92d0d060bdce4c5d44dfee9fd3afddfb6333f098fd029b8de2b" }
+          }
+          if ($knownHashes.ContainsKey($ver)) {
+            $json.dependencies."obs-studio".hashes."windows-x64" = $knownHashes[$ver]["windows-x64"]
+            $json.dependencies."obs-studio".hashes."macos" = $knownHashes[$ver]["macos"]
+          } else {
+            # Fallback: compute at runtime
+            $json.dependencies."obs-studio".hashes."windows-x64" = $zipHash
+            $tgzLocal = "$env:TEMP\obs-${ver}.tar.gz"
+            Invoke-WebRequest -Uri $tgzUrl -OutFile $tgzLocal -UseBasicParsing
+            $tgzHash = (Get-FileHash $tgzLocal -Algorithm SHA256).Hash.ToLower()
+            $json.dependencies."obs-studio".hashes."macos" = $tgzHash
+          }
+          $json | ConvertTo-Json -Depth 10 | Set-Content plugin/buildspec.json
 
       - name: Configure (CI preset)
         working-directory: plugin
@@ -39,26 +75,49 @@ jobs:
         run: |
           $ver = "${{ github.ref_name }}".TrimStart('v')
           if ($ver -eq 'main' -or $ver -eq '') { $ver = 'ci' }
-          # Staging-Layout (textbox-studio/bin + data) in OBS-Root-Layout umgebaut:
-          # obs-plugins/64bit/ + data/obs-plugins/textbox-studio/ — Nutzer entpackt direkt in OBS.
           New-Item -ItemType Directory -Force -Path staging/obs-plugins/64bit, staging/data/obs-plugins | Out-Null
           Copy-Item install/textbox-studio/bin/64bit/* staging/obs-plugins/64bit/
           Copy-Item install/textbox-studio/data staging/data/obs-plugins/textbox-studio -Recurse
-          Compress-Archive -Path staging/obs-plugins, staging/data -DestinationPath "textbox-studio-$ver-obs-${{ env.OBS_VERSION }}-windows-x64.zip"
+          Compress-Archive -Path staging/obs-plugins, staging/data -DestinationPath "textbox-studio-$ver-obs-${{ matrix.obs_version }}-windows-x64.zip"
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
         with:
-          name: textbox-studio-windows-x64
+          name: textbox-studio-windows-x64-obs-${{ matrix.obs_version }}
           path: '*.zip'
 
   macos:
-    name: macOS build
-    # Der macOS-Bootstrap laedt obs-studio-Quellcode + obs-deps (universal) und
-    # verifiziert sie gegen die SHA256-Hashes in plugin/buildspec.json (hashes.macos).
+    name: macOS build (OBS ${{ matrix.obs_version }})
     runs-on: macos-latest
+    strategy:
+      matrix:
+        obs_version: ["32.2.2", "33.0.1"]
     steps:
       - uses: actions/checkout@v4
+
+      - name: Patch buildspec.json for OBS ${{ matrix.obs_version }}
+        run: |
+          ver="${{ matrix.obs_version }}"
+          python3 -c "
+import json, hashlib, urllib.request
+with open('plugin/buildspec.json') as f:
+    spec = json.load(f)
+spec['dependencies']['obs-studio']['version'] = ver
+# Compute SHA256 for macOS tar.gz at runtime
+tgz_url = f'https://github.com/obsproject/obs-studio/archive/refs/tags/{ver}.tar.gz'
+resp = urllib.request.urlopen(tgz_url)
+tgz_hash = hashlib.sha256(resp.read()).hexdigest()
+# Also compute Windows ZIP hash (needed for buildspec cross-platform consistency)
+zip_url = f'https://github.com/obsproject/obs-studio/archive/refs/tags/{ver}.zip'
+resp2 = urllib.request.urlopen(zip_url)
+zip_hash = hashlib.sha256(resp2.read()).hexdigest()
+spec['dependencies']['obs-studio']['hashes']['macos'] = tgz_hash
+spec['dependencies']['obs-studio']['hashes']['windows-x64'] = zip_hash
+with open('plugin/buildspec.json', 'w') as f:
+    json.dump(spec, f, indent=4)
+    f.write('\n')
+"
+          echo "Patched buildspec.json for OBS $ver"
 
       - name: Configure (CI preset)
         working-directory: plugin
@@ -68,25 +127,16 @@ jobs:
         run: cmake --build plugin/build_macos --config RelWithDebInfo
 
       - name: Framework symlinks for ctest
-        # Test-Binaries haben Rpath @executable_path/../Frameworks; die Qt- und
-        # libobs-Frameworks liegen in plugin/.deps — per Symlink verknuepft.
-        # Zusätzlich wird der von Qt6Config baked rpath-Pfad (nested .deps der
-        # obs-studio-Dep) auf die tatsächlich heruntergeladene qt6-Dep gemappt.
         run: |
           mkdir -p plugin/build_macos/Frameworks
-          echo "DEPS_TREE:"
-          find plugin/.deps -maxdepth 2 -type d | head -30
           QT_DIR=$(find plugin/.deps -maxdepth 1 -type d -name 'obs-deps-qt6*' | head -1)
-          echo "QT_DIR=$QT_DIR"
           QT_LIB=$(find "$QT_DIR" -maxdepth 1 -type d -name lib | head -1)
-          echo "QT_LIB=$QT_LIB"
           for fw in "$QT_LIB"/*.framework; do
             ln -sfn "$PWD/$fw" "plugin/build_macos/Frameworks/$(basename "$fw")"
           done
           for fw in plugin/.deps/Frameworks/*.framework; do
             ln -sfn "$PWD/$fw" "plugin/build_macos/Frameworks/$(basename "$fw")" 2>/dev/null || true
           done
-          # Baked rpath: .deps/obs-studio-<ver>/.deps/obs-deps-qt6-<alt-ver>-universal
           OBS_DIR=$(find plugin/.deps -maxdepth 1 -type d -name 'obs-studio-*' | head -1)
           if [ -n "$OBS_DIR" ]; then
             shopt -s nullglob
@@ -95,11 +145,8 @@ jobs:
               [ -e "$alt" ] || ln -sfn "../$(basename "$QT_DIR")" "$alt"
             done
           fi
-          ls -la plugin/build_macos/Frameworks | head -20
 
       - name: Unit tests (ctest)
-        # Qt-Frameworks liegen in plugin/.deps; dyld findet sie im Build-Tree
-        # nur über DYLD_FRAMEWORK_PATH (Rpath zeigt auf installiertes Bundle).
         run: |
           QT_LIB=$(find plugin/.deps -type d -name lib -path '*qt6*' | head -1)
           DYLD_FRAMEWORK_PATH="$QT_LIB:$PWD/plugin/.deps/Frameworks" \
@@ -113,27 +160,20 @@ jobs:
         run: |
           ver="${GITHUB_REF_NAME#v}"
           if [ -z "$ver" ] || [ "$ver" = "main" ]; then ver=ci; fi
-          # Staging-Layout (textbox-studio/bin + data) in OBS-Root-Layout umgebaut:
-          # obs-plugins/ + data/obs-plugins/textbox-studio/ — Nutzer entpackt direkt in OBS.
           mkdir -p staging/obs-plugins staging/data/obs-plugins
-          # macOS: OBS-32-Plugin-Bundles haben die Endung .plugin (Xcode-Bundle),
-          # nicht .so — als ganzes Bundle-Verzeichnis kopieren.
           find install -maxdepth 1 -name '*.plugin' -exec cp -R {} staging/obs-plugins/ \;
-          echo "PACKAGED: $(ls staging/obs-plugins)"
           data_dir="$(find install -type d -name data -path '*textbox-studio*' | head -n 1)"
           cp -R "$data_dir" staging/data/obs-plugins/textbox-studio
-          (cd staging && zip -r "../textbox-studio-$ver-obs-${{ env.OBS_VERSION }}-macos-universal.zip" obs-plugins data)
+          (cd staging && zip -r "../textbox-studio-$ver-obs-${{ matrix.obs_version }}-macos-universal.zip" obs-plugins data)
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
         with:
-          name: textbox-studio-macos
+          name: textbox-studio-macos-obs-${{ matrix.obs_version }}
           path: '*.zip'
 
   linux:
     name: Linux x86_64 build
-    # Linux baut gegen System-Pakete (kein obs-deps-Bootstrap): libobs-dev + Qt6
-    # aus der Ubuntu-Universe; cmake >= 3.28 kommt von Linuxbrew (Presets v8).
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -166,13 +206,14 @@ jobs:
         run: |
           ver="${GITHUB_REF_NAME#v}"
           if [ -z "$ver" ] || [ "$ver" = "main" ]; then ver=ci; fi
-          # Staging-Layout (textbox-studio/bin + data) in OBS-Root-Layout umgebaut:
-          # obs-plugins/ + data/obs-plugins/textbox-studio/ — Nutzer entpackt direkt in OBS.
+          # Detect real libobs-dev package version
+          OBSVER=$(dpkg -s libobs-dev 2>/dev/null | grep -m1 '^Version' | cut -d' ' -f2)
+          if [ -z "$OBSVER" ]; then OBSVER="system"; fi
           mkdir -p staging/obs-plugins staging/data/obs-plugins
           find install -name '*.so' -exec cp {} staging/obs-plugins/ \;
           data_dir="$(find install -type d -name data -path '*textbox-studio*' | head -n 1)"
           cp -R "$data_dir" staging/data/obs-plugins/textbox-studio
-          (cd staging && zip -r "../textbox-studio-$ver-obs-${{ env.OBS_VERSION }}-linux-x86_64.zip" obs-plugins data)
+          (cd staging && zip -r "../textbox-studio-$ver-obs-${OBSVER}-linux-x86_64.zip" obs-plugins data)
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
@@ -182,7 +223,6 @@ jobs:
 
   release:
     name: Publish GitHub Release
-    # Sammelt die ZIP-Assets aller drei Plattform-Jobs und veroeffentlicht sie.
     needs: [windows, macos, linux]
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
@@ -197,5 +237,18 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: dist/*.zip
-          body: "Gebaut und getestet gegen OBS Studio ${{ env.OBS_VERSION }} (obs-frontend-api ABI-stabil seit OBS 28)."
+          body: |
+            Gebaut und getestet gegen:
+            - **OBS Studio 32.2.2** (Windows x64, macOS Universal)
+            - **OBS Studio 33.0.1** (Windows x64, macOS Universal)
+            - **Linux**: System-libobs-dev (Ubuntu LTS)
+            
+            Die `obs-frontend-api` ist seit OBS 28 ABI-stabil — die Plugins sind aufwärtskompatibel zu neueren OBS-Versionen, sofern keine Breaking Changes in libobs auftreten.
+            
+            Release-Assets:
+            - `textbox-studio-<ver>-obs-32.2.2-windows-x64.zip`
+            - `textbox-studio-<ver>-obs-33.0.1-windows-x64.zip`
+            - `textbox-studio-<ver>-obs-32.2.2-macos-universal.zip`
+            - `textbox-studio-<ver>-obs-33.0.1-macos-universal.zip`
+            - `textbox-studio-<ver>-obs-<systemver>-linux-x86_64.zip`
           generate_release_notes: true

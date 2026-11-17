@@ -62,6 +62,8 @@ public:
 private:
 	// Zeichnet einen sichtbaren Dock-Rand nach der QSS-Hintergrundmalung.
 	void paintEvent(QPaintEvent *event) override;
+	// Palette-Wechsel (Theme-Switch) erkennt und QSS neu baut.
+	void changeEvent(QEvent *event) override;
 
 	// Durchsucht state_.cards nach der ID; nullptr bei Nichtfund (mutable access).
 	TextboxCard *find_card_mut(const std::string &id);

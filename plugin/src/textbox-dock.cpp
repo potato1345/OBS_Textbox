@@ -86,6 +86,7 @@ public:
 #include <QtGlobal>
 
 #include <QDesktopServices>
+#include <QEvent>
 
 #include <algorithm>
 #include <functional>
@@ -120,6 +121,19 @@ QFileDialog::Options dialog_options()
 }
 
 // RAII-Wächter zum Zählen laufender Hintergrund-Threads für den sauberen Modul-Shutdown.
+
+// Abschnittsüberschrift als QToolButton (einklappbare Bereiche).
+static QToolButton *make_section_toolbtn(const QString &text, QWidget *parent)
+{
+	auto *btn = new QToolButton(parent);
+	btn->setObjectName(QStringLiteral("tbFieldLabel"));
+	btn->setAutoRaise(true);
+	btn->setText(text);
+	btn->setToolButtonStyle(Qt::ToolButtonTextOnly);
+	btn->setContentsMargins(0, 0, 0, 0);
+	return btn;
+}
+
 struct ActiveJobGuard {
 	ActiveJobGuard() { ++g_active_jobs; }
 	~ActiveJobGuard() { --g_active_jobs; }
@@ -311,6 +325,14 @@ void textbox_self_heal_event(obs_frontend_event event, void *data)
 }
 #endif
 
+void TextboxDock::changeEvent(QEvent *event)
+{
+	if (event->type() == QEvent::ApplicationPaletteChange) {
+		setStyleSheet(textbox_theme::stylesheet(icon_dir_));
+	}
+	QWidget::changeEvent(event);
+}
+
 void TextboxDock::paintEvent(QPaintEvent *event)
 {
 	QWidget::paintEvent(event);
@@ -352,12 +374,7 @@ TextboxDock::TextboxDock(const std::string &state_path, QWidget *parent)
 		g_dock_schedulers.erase(this);
 	});
 
-	/*
-	Ui4: OBS-Theme-Icons ausliefern — in der DLL eingebettet, beim Dock-Build
-	nach <config>/textbox-studio/icons/ (neben textbox-state.json) geschrieben.
-	Version-Gated: No-Op, wenn der Satz aktuell ist (s. textbox-theme-icons.hpp).
-	Bei Fehlschlag: Dock ohne Icons (QSS ohne Icon-Regeln) — nicht fatal.
-	*/
+	/* OBS-Theme-Icons aus der DLL nach <config>/textbox-studio/icons/ schreiben. */
 	if (!state_path_.empty()) {
 		const std::filesystem::path icons_dir =
 			std::filesystem::u8path(state_path_).parent_path() / "icons";
@@ -366,7 +383,7 @@ TextboxDock::TextboxDock(const std::string &state_path, QWidget *parent)
 			const auto u8 = icons_dir.u8string();
 			icon_dir_ = QString::fromUtf8(u8.data(), static_cast<int>(u8.size()));
 		} else {
-			blog(LOG_WARNING, "Textbox: Icons konnten nicht geschrieben werden: %s",
+			blog(LOG_WARNING, "[textbox] Icons konnten nicht geschrieben werden: %s",
 			     icon_err.c_str());
 		}
 	}
@@ -416,12 +433,13 @@ TextboxDock::TextboxDock(const std::string &state_path, QWidget *parent)
 	top_row->addWidget(profil_select_, 1);
 	profil_del_btn_ = new QToolButton(this);
 	profil_del_btn_->setObjectName(QStringLiteral("tbProfilDelBtn"));
-	profil_del_btn_->setFixedSize(28, 28);
+	profil_del_btn_->setFixedSize(24, 24);
 	profil_del_btn_->setAutoRaise(true);
 	profil_del_btn_->setIcon(theme_icon("trash.svg"));
 	profil_del_btn_->setIconSize(QSize(16, 16));
 	profil_del_btn_->setToolTip(QStringLiteral("Gewähltes Schnell-Profil löschen"));
 	profil_del_btn_->setEnabled(false);
+	profil_del_btn_->setProperty("class", "iconbtn");
 	top_row->addWidget(profil_del_btn_);
 	top_row->addWidget(card_search_, 1);
 	root_layout->addLayout(top_row);
@@ -435,7 +453,7 @@ TextboxDock::TextboxDock(const std::string &state_path, QWidget *parent)
 	cards_container->setAttribute(Qt::WA_StyledBackground, true);
 
 	cards_layout_ = new QVBoxLayout(cards_container);
-	cards_layout_->setContentsMargins(4, 4, 4, 4);
+	cards_layout_->setContentsMargins(4, 4, 16, 4); // rechter Rand 16px für Scrollbar-Abstand
 	cards_layout_->setSpacing(8);
 	cards_layout_->addStretch(1);
 
@@ -470,18 +488,19 @@ TextboxDock::TextboxDock(const std::string &state_path, QWidget *parent)
 	root_layout->addLayout(status_row);
 
 	auto *bottom_toolbar = new QHBoxLayout();
-	bottom_toolbar->setContentsMargins(4, 2, 4, 4);
+	bottom_toolbar->setContentsMargins(4, 4, 4, 4);
 	bottom_toolbar->setSpacing(6);
 
 	auto make_tool_btn = [this](const QString &obj_name, const char *icon_name,
 				    const QString &tooltip) -> QToolButton * {
 		auto *btn = new QToolButton(this);
 		btn->setObjectName(obj_name);
-		btn->setFixedSize(32, 32);
+		btn->setFixedSize(24, 24);
 		btn->setAutoRaise(true);
 		btn->setIcon(theme_icon(icon_name));
 		btn->setIconSize(QSize(16, 16));
 		btn->setToolTip(tooltip);
+		btn->setProperty("class", "iconbtn");
 		return btn;
 	};
 
@@ -492,7 +511,7 @@ TextboxDock::TextboxDock(const std::string &state_path, QWidget *parent)
 	// Kompakter Button für einstufiges Rückgängig (Undo) neben „Alle leeren"
 	auto *tool_undo = new QPushButton(QStringLiteral("↶ Rückgängig"), this);
 	tool_undo->setObjectName(QStringLiteral("tbToolUndo"));
-	tool_undo->setFixedHeight(32);
+	tool_undo->setFixedHeight(24);
 	tool_undo->setToolTip(
 		QStringLiteral("Letzte destruktive Aktion rückgängig machen (Strg+Z)"));
 	tool_undo->setEnabled(state_.undo_available_);
@@ -709,11 +728,7 @@ TextboxDock::TextboxDock(const std::string &state_path, QWidget *parent)
 		save_state();
 	}
 
-	/*
-	 * IMP-H5: Standardprofile einmalig in state_.color_profiles materialisieren.
-	 * Danach sind sie normale Daten: löschbar, umbenennbar, überschreibbar.
-	 * profiles_seeded prevents re-seeding deleted profiles on next start.
-	 */
+	/* Standardprofile einmalig in state_.color_profiles materialisieren. */
 	if (!state_.profiles_seeded) {
 		for (const auto &bp : textbox_profiles()) {
 			bool present = false;
@@ -755,9 +770,7 @@ TextboxDock::TextboxDock(const std::string &state_path, QWidget *parent)
 		textbox_scene::reload_everywhere(card, state_.settings);
 	}
 
-	// Self-healing: Karten mit Inhalt bekommen garantiert eine Browser-Quelle
-	// in der aktuellen Szene. Das Frontend lädt die Szenen erst nach dem
-	// Dock-Konstruktor, also läuft die Reparatur beim Frontend-Event.
+	// Self-healing via Frontend-Event (Szenen nach Dock-Aufbau laden).
 #ifdef ENABLE_FRONTEND_API
 	obs_frontend_add_event_callback(&textbox_self_heal_event, this);
 #endif
@@ -828,35 +841,36 @@ void TextboxDock::create_row_widget(const TextboxCard &card)
 
 	auto *id_edit = new QLineEdit(QString::fromUtf8(card.id.c_str()), id_bar);
 	id_edit->setObjectName(QStringLiteral("tbIdValue"));
-	id_edit->setFixedWidth(96);
 	id_edit->setToolTip(QStringLiteral("ID umbenennen (Enter); nur Buchstaben/Zahlen/-/_"));
 	id_edit->setAccessibleName(QStringLiteral("Karten-ID"));
+	id_edit->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
 
 	auto *style_toggle_btn = new QToolButton(id_bar);
 	style_toggle_btn->setObjectName(QStringLiteral("tbStyleToggle"));
-	style_toggle_btn->setFixedSize(28, 28);
+	style_toggle_btn->setFixedSize(24, 24);
 	style_toggle_btn->setAutoRaise(true);
 	style_toggle_btn->setIcon(theme_icon("chevron_down.svg"));
 	style_toggle_btn->setIconSize(QSize(16, 16));
 	style_toggle_btn->setToolTip(QStringLiteral("Stil-Optionen einklappen"));
+	style_toggle_btn->setProperty("class", "iconbtn");
 
 	auto *dup_btn = new QToolButton(id_bar);
 	dup_btn->setObjectName(QStringLiteral("tbDupBtn"));
-	dup_btn->setFixedSize(28, 28);
+	dup_btn->setFixedSize(24, 24);
 	dup_btn->setAutoRaise(true);
 	dup_btn->setText(QStringLiteral("⧉"));
 	dup_btn->setToolTip(QStringLiteral("Karte duplizieren (neue ID, gleicher Inhalt + Stil)"));
+	dup_btn->setProperty("class", "iconbtn");
 
 	auto *del_btn = new QPushButton(id_bar);
 	del_btn->setObjectName(QStringLiteral("tbDelBtn"));
-	del_btn->setFixedSize(28, 28);
+	del_btn->setFixedSize(24, 24);
 	del_btn->setIcon(theme_icon("trash.svg"));
 	del_btn->setIconSize(QSize(16, 16));
 	del_btn->setToolTip(QStringLiteral("Karte löschen"));
 
 	id_layout->addWidget(id_prefix);
-	id_layout->addWidget(id_edit);
-	id_layout->addStretch(1);
+	id_layout->addWidget(id_edit, 1);
 	id_layout->addWidget(style_toggle_btn);
 	id_layout->addWidget(dup_btn);
 	id_layout->addWidget(del_btn);
@@ -881,25 +895,24 @@ void TextboxDock::create_row_widget(const TextboxCard &card)
 	rows_bar->setContentsMargins(0, 0, 0, 0);
 	rows_bar->setSpacing(6);
 	auto rows_collapsed = std::make_shared<bool>(false);
-	auto *lbl_rows = new QToolButton(rows_frame);
-	lbl_rows->setObjectName(QStringLiteral("tbFieldLabel"));
-	lbl_rows->setAutoRaise(true);
-	lbl_rows->setText(QStringLiteral("▼ SPEZIFISCHE CSS-REGELN")); // c4: Umbenennung von "ZEILEN"
+	auto *lbl_rows = make_section_toolbtn(QStringLiteral("▼ SPEZIFISCHE CSS-REGELN"), rows_frame);
 	lbl_rows->setToolTip(QStringLiteral("Spezifische CSS-Regeln ein-/ausklappen"));
 	auto *row_add_btn = new QToolButton(rows_frame);
 	row_add_btn->setObjectName(QStringLiteral("tbRowAdd"));
-	row_add_btn->setFixedSize(28, 28);
+	row_add_btn->setFixedSize(24, 24);
 	row_add_btn->setAutoRaise(true);
 	row_add_btn->setIcon(theme_icon("plus.svg"));
 	row_add_btn->setIconSize(QSize(16, 16));
 	row_add_btn->setToolTip(QStringLiteral("Zeile hinzufügen (max 8)"));
+	row_add_btn->setProperty("class", "iconbtn");
 	auto *row_del_btn = new QToolButton(rows_frame);
 	row_del_btn->setObjectName(QStringLiteral("tbRowDel"));
-	row_del_btn->setFixedSize(28, 28);
+	row_del_btn->setFixedSize(24, 24);
 	row_del_btn->setAutoRaise(true);
 	row_del_btn->setIcon(theme_icon("trash.svg"));
 	row_del_btn->setIconSize(QSize(16, 16));
 	row_del_btn->setToolTip(QStringLiteral("Letzte Zeile entfernen (min 1)"));
+	row_del_btn->setProperty("class", "iconbtn");
 	rows_bar->addWidget(lbl_rows);
 	rows_bar->addStretch(1);
 	rows_bar->addWidget(row_add_btn);
@@ -935,22 +948,24 @@ void TextboxDock::create_row_widget(const TextboxCard &card)
 		ledit->setToolTip(QStringLiteral(
 			"CSS-Variablenname dieser Zeile (mit -- Präfix). Im gerenderten HTML als var(--…) referenzierbar; leer/ohne -- => --zeile-N."));
 		ledit->setFixedWidth(110);
-		ledit->setFixedHeight(34);
+		ledit->setFixedHeight(24);
 		auto *vedit = new QLineEdit(value, card_inner);
 		vedit->setPlaceholderText(QStringLiteral("Text dieser Zeile"));
-		vedit->setFixedHeight(34);
+		vedit->setFixedHeight(24);
 		auto *up_btn = new QToolButton(card_inner);
 		up_btn->setObjectName(QStringLiteral("tbRowUp"));
-		up_btn->setFixedSize(24, 34);
+		up_btn->setFixedSize(24, 24);
 		up_btn->setAutoRaise(true);
 		up_btn->setText(QStringLiteral("▲"));
 		up_btn->setToolTip(QStringLiteral("Zeile nach oben verschieben"));
+		up_btn->setProperty("class", "iconbtn");
 		auto *down_btn = new QToolButton(card_inner);
 		down_btn->setObjectName(QStringLiteral("tbRowDown"));
-		down_btn->setFixedSize(24, 34);
+		down_btn->setFixedSize(24, 24);
 		down_btn->setAutoRaise(true);
 		down_btn->setText(QStringLiteral("▼"));
 		down_btn->setToolTip(QStringLiteral("Zeile nach unten verschieben"));
+		down_btn->setProperty("class", "iconbtn");
 		QObject::connect(up_btn, &QToolButton::clicked, card_inner,
 		                 [move_row, ledit]() { (*move_row)(ledit, -1); });
 		QObject::connect(down_btn, &QToolButton::clicked, card_inner,
@@ -1111,8 +1126,15 @@ void TextboxDock::create_row_widget(const TextboxCard &card)
 	prof_layout->setContentsMargins(0, 0, 0, 0);
 	prof_layout->setSpacing(4);
 
-	auto *lbl_prof = new QLabel(QStringLiteral("PROFIL"), style_section);
-	lbl_prof->setObjectName(QStringLiteral("tbFieldLabel"));
+	// Einheitlicher Left-Margin für alle Abschnittsüberschriften
+	auto make_section_label = [](const QString &text, QWidget *parent) -> QLabel * {
+		auto *lbl = new QLabel(text, parent);
+		lbl->setObjectName(QStringLiteral("tbFieldLabel"));
+		lbl->setContentsMargins(0, 0, 0, 0);
+		return lbl;
+	};
+
+	auto *lbl_prof = make_section_label(QStringLiteral("PROFIL"), style_section);
 	lbl_prof->setToolTip(
 		QStringLiteral("Karten-Farbprofil (Text/Box/Ecken/Deckkraft)"));
 
@@ -1127,7 +1149,7 @@ void TextboxDock::create_row_widget(const TextboxCard &card)
 	 * box_color) werden NICHT automatisch zurückgesetzt.
 	 */
 	auto *profile_combo = new QComboBox(style_section);
-	profile_combo->setFixedHeight(34);
+	profile_combo->setFixedHeight(24);
 	profile_combo->setToolTip(
 		QStringLiteral("Karten-Farbprofil (Text/Box/Ecken/Deckkraft)"));
 	profile_combo->setAccessibleName(
@@ -1144,23 +1166,23 @@ void TextboxDock::create_row_widget(const TextboxCard &card)
 
 	auto *new_prof_btn = new QPushButton(QStringLiteral("Profil +"), style_section);
 	new_prof_btn->setObjectName(QStringLiteral("tbBtnNewProfile"));
-	new_prof_btn->setFixedHeight(34);
+	new_prof_btn->setFixedHeight(24);
 	new_prof_btn->setToolTip(
 		QStringLiteral("Aktuelles Karten-Farbprofil (Text/Box/Ecken/Deckkraft) speichern"));
 
-	auto *prof_rename_btn = new QPushButton(style_section); // c2: eigenes Umbenennen-Icon statt ✎
+	auto *prof_rename_btn = new QPushButton(style_section);
 	prof_rename_btn->setObjectName(QStringLiteral("tbBtnRenameProfile"));
-	prof_rename_btn->setFixedHeight(34);
+	prof_rename_btn->setFixedSize(24, 24);
 	prof_rename_btn->setToolTip(QStringLiteral("Aktuelles Profil umbenennen"));
-	prof_rename_btn->setMaximumWidth(40);
 	prof_rename_btn->setIcon(theme_icon("rename.svg"));
 	prof_rename_btn->setIconSize(QSize(16, 16));
+	prof_rename_btn->setProperty("class", "iconbtn");
 
 	auto *prof_del_btn = new QPushButton(QStringLiteral("−"), style_section);
 	prof_del_btn->setObjectName(QStringLiteral("tbBtnDeleteProfile"));
-	prof_del_btn->setFixedHeight(34);
+	prof_del_btn->setFixedSize(24, 24);
 	prof_del_btn->setToolTip(QStringLiteral("Aktuelles Profil löschen"));
-	prof_del_btn->setMaximumWidth(40);
+	prof_del_btn->setProperty("class", "iconbtn");
 
 	prof_row->addWidget(profile_combo, 1);
 	prof_row->addWidget(new_prof_btn);
@@ -1181,25 +1203,24 @@ void TextboxDock::create_row_widget(const TextboxCard &card)
 	css_bar->setContentsMargins(0, 0, 0, 0);
 	css_bar->setSpacing(6);
 	auto css_collapsed = std::make_shared<bool>(true);
-	auto *lbl_css = new QToolButton(css_frame);
-	lbl_css->setObjectName(QStringLiteral("tbFieldLabel"));
-	lbl_css->setAutoRaise(true);
-	lbl_css->setText(QStringLiteral("▶ GENERELLE CSS-REGELN"));
+	auto *lbl_css = make_section_toolbtn(QStringLiteral("▶ GENERELLE CSS-REGELN"), css_frame);
 	lbl_css->setToolTip(QStringLiteral("CSS-Regeln ein-/ausklappen"));
 	auto *css_add_btn = new QToolButton(css_frame);
 	css_add_btn->setObjectName(QStringLiteral("tbCssAdd"));
-	css_add_btn->setFixedSize(28, 28);
+	css_add_btn->setFixedSize(24, 24);
 	css_add_btn->setAutoRaise(true);
 	css_add_btn->setIcon(theme_icon("plus.svg"));
 	css_add_btn->setIconSize(QSize(16, 16));
 	css_add_btn->setToolTip(QStringLiteral("CSS-Regel hinzufügen (--variable = wert)"));
+	css_add_btn->setProperty("class", "iconbtn");
 	auto *css_del_btn = new QToolButton(css_frame);
 	css_del_btn->setObjectName(QStringLiteral("tbCssDel"));
-	css_del_btn->setFixedSize(28, 28);
+	css_del_btn->setFixedSize(24, 24);
 	css_del_btn->setAutoRaise(true);
 	css_del_btn->setIcon(theme_icon("trash.svg"));
 	css_del_btn->setIconSize(QSize(16, 16));
 	css_del_btn->setToolTip(QStringLiteral("Letzte CSS-Regel entfernen"));
+	css_del_btn->setProperty("class", "iconbtn");
 	css_bar->addWidget(lbl_css);
 	css_bar->addStretch(1);
 	css_bar->addWidget(css_add_btn);
@@ -1563,8 +1584,7 @@ void TextboxDock::create_row_widget(const TextboxCard &card)
 	auto *tpl_layout = new QVBoxLayout();
 	tpl_layout->setContentsMargins(0, 0, 0, 0);
 	tpl_layout->setSpacing(4);
-	auto *lbl_tpl = new QLabel(QStringLiteral("VORLAGE"), style_section);
-	lbl_tpl->setObjectName(QStringLiteral("tbFieldLabel"));
+	auto *lbl_tpl = make_section_label(QStringLiteral("VORLAGE"), style_section);
 	lbl_tpl->setToolTip(QStringLiteral(
 		"Pfad zur Vorlagen-HTML. Leer = index.html (classic). Einfacher Name (z.B. minimal) = "
 		"Vorlagen-Ordner; voller Pfad = direkte Datei. Ordner-Icon wählt eine .html."));
@@ -1575,16 +1595,17 @@ void TextboxDock::create_row_widget(const TextboxCard &card)
 	tpl_edit->setObjectName(QStringLiteral("tbTemplatePath"));
 	tpl_edit->setPlaceholderText(QStringLiteral("index.html (leer = classic) oder Pfad zur Vorlage"));
 	tpl_edit->setToolTip(lbl_tpl->toolTip());
-	tpl_edit->setFixedHeight(32);
+	tpl_edit->setFixedHeight(24);
 	tpl_edit->setText(QString::fromUtf8(card.template_id.c_str()));
 	tpl_edit->setAccessibleName(
 		QStringLiteral("Vorlagenpfad der Karte %1").arg(QString::fromUtf8(card.id.c_str())));
 	auto *tpl_pick = new QPushButton(style_section);
 	tpl_pick->setObjectName(QStringLiteral("tbTemplatePick"));
-	tpl_pick->setFixedSize(34, 32);
+	tpl_pick->setFixedSize(24, 24);
 	tpl_pick->setIcon(theme_icon("download.svg"));
 	tpl_pick->setIconSize(QSize(16, 16));
 	tpl_pick->setToolTip(QStringLiteral("Vorlagen-Datei (.html) auswählen"));
+	tpl_pick->setProperty("class", "iconbtn");
 	tpl_row->addWidget(tpl_edit, 1);
 	tpl_row->addWidget(tpl_pick);
 	tpl_layout->addWidget(lbl_tpl);
@@ -1643,11 +1664,13 @@ void TextboxDock::create_row_widget(const TextboxCard &card)
 
 	auto *to_scene_btn = new QPushButton(QStringLiteral("Zu Szene"), card_inner);
 	to_scene_btn->setObjectName(QStringLiteral("tbBtnGreen"));
+	to_scene_btn->setFixedHeight(24);
 	to_scene_btn->setToolTip(
 		QStringLiteral("Karte als Text-Quelle in die aktuelle Szene legen oder aktualisieren"));
 
 	auto *clear_src_btn = new QPushButton(QStringLiteral("Leeren"), card_inner);
 	clear_src_btn->setObjectName(QStringLiteral("tbBtnRed"));
+	clear_src_btn->setFixedHeight(24);
 	clear_src_btn->setToolTip(
 		QStringLiteral("Text der Quelle auf leer setzen — die Quelle bleibt in der Szene"));
 
