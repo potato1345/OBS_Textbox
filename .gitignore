@@ -24,3 +24,7 @@ build_x64/
 plugin/build_x64/
 plugin/build_x86/
 .deps/
+
+# Design-Specs und UI-Checks bleiben lokal, gehören nicht ins Repo
+docs/
+tools/
