@@ -358,12 +358,13 @@ int main()
 		const bool has_display   = std::find(ids.begin(), ids.end(), "display") != ids.end();
 		const bool has_minimal   = std::find(ids.begin(), ids.end(), "minimal") != ids.end();
 		const bool has_badge     = std::find(ids.begin(), ids.end(), "badge") != ids.end();
-		// Stand 17.11: vier Beispiel-Vorlagen geshiped (standard, display, minimal, badge).
+		const bool has_board    = std::find(ids.begin(), ids.end(), "board") != ids.end();
+		// Stand 18.11: fünf Beispiel-Vorlagen geshiped (standard, display, minimal, badge, board).
 		std::string id_list;
 		for (const std::string &id : ids)
 			id_list += id + ",";
-		check(has_standard && has_display && has_minimal && has_badge && ids.size() == 4,
-		      "9b. list_template_ids(): vier builtin-Vorlagen (standard, display, minimal, badge)", id_list);
+		check(has_standard && has_display && has_minimal && has_badge && has_board && ids.size() == 5,
+		      "9b. list_template_ids(): fünf builtin-Vorlagen (standard, display, minimal, badge, board)", id_list);
 
 		TextboxCard c;
 		c.id = "box_builtin";

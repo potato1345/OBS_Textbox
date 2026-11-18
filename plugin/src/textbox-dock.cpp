@@ -70,6 +70,94 @@ public:
 	explicit CappedScrollArea(QWidget *parent = nullptr) : QScrollArea(parent) { setMinimumSize(0, 0); }
 	QSize minimumSizeHint() const override { return QSize(0, 0); }
 };
+
+// Hover-Propagation: findet den nächsten tbCardOuter-Vorfahren eines Widgets.
+QWidget *find_tb_card_outer(QWidget *w)
+{
+	while (w) {
+		if (w->objectName() == QStringLiteral("tbCardOuter"))
+			return w;
+		w = w->parentWidget();
+	}
+	return nullptr;
+}
+
+// Findet rekursiv das tiefste sichtbare Widget unter pos im viewport-Baum.
+QWidget *deepest_child_at(QWidget *parent, QPoint pos)
+{
+	if (!parent)
+		return nullptr;
+	QWidget *direct = parent->childAt(pos);
+	if (!direct)
+		return nullptr;
+	QPoint local = direct->mapFromParent(pos);
+	QWidget *deeper = deepest_child_at(direct, local);
+	return deeper ? deeper : direct;
+}
+
+// Event-Filter für den ScrollArea-Viewport: tracked MouseMove/Leave und setzt
+// tbHover-Property auf dem tbCardOuter-Ancestor. Nur EINE Karte gleichzeitig aktiv.
+class CardHoverFilter : public QObject {
+	QWidget *hovered_ = nullptr;
+public:
+	explicit CardHoverFilter(QObject *parent = nullptr) : QObject(parent) {}
+protected:
+	bool eventFilter(QObject *obj, QEvent *ev) override
+	{
+		auto *viewport = qobject_cast<QWidget *>(obj);
+		if (!viewport)
+			return QObject::eventFilter(obj, ev);
+		switch (ev->type()) {
+		case QEvent::MouseMove: {
+			QWidget *outer = nullptr;
+			if (auto *me = static_cast<QMouseEvent *>(ev)) {
+				QPoint local = viewport->mapFromGlobal(me->globalPosition().toPoint());
+				if (viewport->rect().contains(local)) {
+					if (QWidget *child = deepest_child_at(viewport, local))
+						outer = find_tb_card_outer(child);
+				}
+			}
+			if (outer == hovered_)
+				break;
+			// Alte Karte clearen.
+			if (hovered_) {
+				hovered_->setProperty("tbHover", QVariant());
+				if (QStyle *st = hovered_->style()) {
+					st->unpolish(hovered_);
+					st->polish(hovered_);
+				}
+				hovered_->update();
+			}
+			hovered_ = outer;
+			// Neue Karte markieren.
+			if (hovered_) {
+				hovered_->setProperty("tbHover", QStringLiteral("1"));
+				if (QStyle *st = hovered_->style()) {
+					st->unpolish(hovered_);
+					st->polish(hovered_);
+				}
+				hovered_->update();
+			}
+			break;
+		}
+		case QEvent::Leave: {
+			if (hovered_) {
+				hovered_->setProperty("tbHover", QVariant());
+				if (QStyle *st = hovered_->style()) {
+					st->unpolish(hovered_);
+					st->polish(hovered_);
+				}
+				hovered_->update();
+				hovered_ = nullptr;
+			}
+			break;
+		}
+		default:
+			break;
+		}
+		return QObject::eventFilter(obj, ev);
+	}
+};
 }
 #include <QShortcut>
 #include <QSignalBlocker>
@@ -440,6 +528,7 @@ TextboxDock::TextboxDock(const std::string &state_path, QWidget *parent)
 	profil_del_btn_->setToolTip(QStringLiteral("Gewähltes Schnell-Profil löschen"));
 	profil_del_btn_->setEnabled(false);
 	profil_del_btn_->setProperty("class", "iconbtn");
+	profil_del_btn_->setProperty("tbDanger", true);
 	top_row->addWidget(profil_del_btn_);
 	top_row->addWidget(card_search_, 1);
 	root_layout->addLayout(top_row);
@@ -447,6 +536,11 @@ TextboxDock::TextboxDock(const std::string &state_path, QWidget *parent)
 	scroll_area_ = new QScrollArea(this);
 	scroll_area_->setWidgetResizable(true);
 	scroll_area_->setFrameShape(QFrame::NoFrame);
+
+	// Karten-Hover-Propagation: tbCardOuter :hover auch bei Maus über Kindern.
+	auto *hover_filter = new CardHoverFilter(scroll_area_);
+	scroll_area_->viewport()->setMouseTracking(true);
+	scroll_area_->viewport()->installEventFilter(hover_filter);
 
 	auto *cards_container = new QWidget(scroll_area_);
 	cards_container->setObjectName(QStringLiteral("tbCardsContainer"));
@@ -868,6 +962,7 @@ void TextboxDock::create_row_widget(const TextboxCard &card)
 	del_btn->setIcon(theme_icon("trash.svg"));
 	del_btn->setIconSize(QSize(16, 16));
 	del_btn->setToolTip(QStringLiteral("Karte löschen"));
+	del_btn->setProperty("tbDanger", true);
 
 	id_layout->addWidget(id_prefix);
 	id_layout->addWidget(id_edit, 1);
@@ -913,6 +1008,7 @@ void TextboxDock::create_row_widget(const TextboxCard &card)
 	row_del_btn->setIconSize(QSize(16, 16));
 	row_del_btn->setToolTip(QStringLiteral("Letzte Zeile entfernen (min 1)"));
 	row_del_btn->setProperty("class", "iconbtn");
+	row_del_btn->setProperty("tbDanger", true);
 	rows_bar->addWidget(lbl_rows);
 	rows_bar->addStretch(1);
 	rows_bar->addWidget(row_add_btn);
@@ -1183,6 +1279,7 @@ void TextboxDock::create_row_widget(const TextboxCard &card)
 	prof_del_btn->setFixedSize(24, 24);
 	prof_del_btn->setToolTip(QStringLiteral("Aktuelles Profil löschen"));
 	prof_del_btn->setProperty("class", "iconbtn");
+	prof_del_btn->setProperty("tbDanger", true);
 
 	prof_row->addWidget(profile_combo, 1);
 	prof_row->addWidget(new_prof_btn);
@@ -1221,6 +1318,7 @@ void TextboxDock::create_row_widget(const TextboxCard &card)
 	css_del_btn->setIconSize(QSize(16, 16));
 	css_del_btn->setToolTip(QStringLiteral("Letzte CSS-Regel entfernen"));
 	css_del_btn->setProperty("class", "iconbtn");
+	css_del_btn->setProperty("tbDanger", true);
 	css_bar->addWidget(lbl_css);
 	css_bar->addStretch(1);
 	css_bar->addWidget(css_add_btn);
@@ -1673,6 +1771,7 @@ void TextboxDock::create_row_widget(const TextboxCard &card)
 	clear_src_btn->setFixedHeight(24);
 	clear_src_btn->setToolTip(
 		QStringLiteral("Text der Quelle auf leer setzen — die Quelle bleibt in der Szene"));
+	clear_src_btn->setProperty("tbDanger", true);
 
 	actions_layout->addWidget(to_scene_btn, 1);
 	actions_layout->addWidget(clear_src_btn, 1);
@@ -3459,6 +3558,7 @@ void TextboxDock::on_open_quick_profiles_dialog()
 	del_btn->setObjectName(QStringLiteral("tbBtnQuickDelete"));
 	del_btn->setIcon(theme_icon("trash.svg"));
 	del_btn->setIconSize(QSize(16, 16));
+	del_btn->setProperty("tbDanger", true);
 	action_row->addWidget(apply_btn, 1);
 	action_row->addWidget(del_btn, 1);
 
@@ -3815,6 +3915,7 @@ void TextboxDock::on_open_settings_dialog()
 	del_prof_btn->setObjectName(QStringLiteral("tbBtnDeleteProfile"));
 	del_prof_btn->setIcon(theme_icon("trash.svg"));
 	del_prof_btn->setIconSize(QSize(16, 16));
+	del_prof_btn->setProperty("tbDanger", true);
 	del_prof_btn->setEnabled(false);
 
 	auto *lbl_yaml_profiles = new QLabel(QStringLiteral("YAML-EXPORT / -IMPORT"), profiles_group);

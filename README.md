@@ -13,6 +13,7 @@ Aktuelle Version: **1.2.1** · [Releases](https://github.com/potato1345/OBS_Text
 |----------|-------------|------------|
 | **standard** | Drei Textzeilen mit farbigen Eck-Akzenten und Regenbogen-Modus | ![Standard](assets/screenshots/standard.png) |
 | **badge** | Horizontale Pill-Badge mit Akzent-Punkten an den Enden | ![Badge](assets/screenshots/badge.png) |
+| **board** | Platinenform: Leiterplatten-Panel mit Kupfer-Traces, Pads und Vias, die über die Card-Grenze nach außen führen | ![Board](assets/screenshots/board.png) |
 | **display** | Große Zahl mit Akzent-Balken und Meta-Label | ![Display](assets/screenshots/display.png) |
 | **minimal** | Drei Textzeilen mit 4px-Eck-Dots, transparenter Hintergrund (hier auf dunklem Yami gezeigt) | ![Minimal](assets/screenshots/minimal.png) |
 
@@ -21,7 +22,7 @@ Alle Vorlagen sind im Vorlagen-Ordner des Plugins (`Settings > Vorlagen-Ordner �
 ## Features
 
 - **Karten**: dynamische Anzahl (im Zustand gespeichert, z. B. 12), jede als eigene Browser-Source.
-- **Vorlagen (Templates)**: `standard.html`, `display.html`, `minimal.html`, `badge.html` — jede nutzt `{{token}}`-Platzhalter (`zeile1..3`, `box_color`, `text_color`, …).
+- **Vorlagen (Templates)**: `standard.html`, `display.html`, `minimal.html`, `badge.html`, `board.html` — jede nutzt `{{token}}`-Platzhalter (`zeile1..3`, `box_color`, `text_color`, …).
 - **16 Style-Properties pro Karte**: Schrift, Farbe/Transparenz, Box-Farbe, Corner-Farbe/-Opacity, Animation, Regenbogen-Ecken.
 - **Animationen**: relative Pfade, HTTP/HTTPS-URLs oder Data-URIs (mitgeliefert: `sparkle.webp`, `pulse.webp`).
 - **Dock „Textbox Studio“**: Kartenliste, CSS-Regeln pro Karte, Schnell-Profile, Live-Vorschau, Undo.
@@ -100,7 +101,7 @@ git tag -f vX.Y.Z <commit> && git push -f origin vX.Y.Z
 plugin/                     OBS-Plugin (Quellcode, CMake, Data, Tests)
 plugin/src/                 Quellen (Controls, Dock, Overlay, HTML, Import, AI, Theme)
 plugin/src/tests/           Qt-freie Test-Suiten + samples
-plugin/templates/           Overlay-Vorlagen (standard/display/minimal/badge)
+plugin/templates/           Overlay-Vorlagen (standard/display/minimal/badge/board)
 docs/DESIGN.md              UI-Design-Spec (Spacing-Raster, Theme-Tokens)
 docs/native-style-notes.md  Referenz: natives OBS-Plugin-Styling
 tools/ui_spacing_check.py   UI-Audit-Tool (Pixel-Gaps gegen DESIGN.md)

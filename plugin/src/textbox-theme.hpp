@@ -188,17 +188,21 @@ QFrame#tbCardOuter {
 	border-radius: 4px;
 }
 
+QFrame#tbCardOuter:hover {
+	border: 1px solid %6;
+}
+
+QFrame#tbCardOuter[tbHover="1"] {
+	border: 1px solid %6;
+}
+
 QFrame#tbCardInner {
 	background-color: %4;
 	border: none;
-	border-top-left-radius: 0px;
-	border-top-right-radius: 0px;
+	border-top-left-radius: 3px;
+	border-top-right-radius: 3px;
 	border-bottom-left-radius: 4px;
 	border-bottom-right-radius: 4px;
-}
-
-QFrame#tbCardInner:hover {
-	background-color: %8;
 }
 
 QFrame#tbIdBar {
@@ -399,12 +403,53 @@ QPushButton#tbDelBtn:pressed {
 }
 
 QPushButton#tbDelBtn {
-	color: %9;
+	color: %2;
 	font-size: 12pt;
 }
 QPushButton#tbDelBtn:hover {
 	background-color: %3;
 	color: %10;
+}
+
+/* Danger-Buttons (destructive actions) */
+QPushButton[tbDanger="1"] {
+	color: %10;
+	border-color: %15;
+}
+QPushButton[tbDanger="1"]:hover {
+	color: %10;
+	border-color: %10;
+	background-color: transparent;
+}
+QPushButton[tbDanger="1"]:disabled {
+	color: %9;
+	border-color: %3;
+}
+
+/* Kleine Icon-Buttons (Dup, RowUp, RowDown, CssAdd, CssDel) einheitlich */
+QToolButton#tbDupBtn,
+QToolButton#tbRowUp,
+QToolButton#tbRowDown,
+QToolButton#tbCssAdd,
+QToolButton#tbCssDel {
+	color: %2;
+	font-size: 12px;
+	min-width: 24px;
+	max-width: 24px;
+	min-height: 24px;
+	max-height: 24px;
+	padding: 0px;
+	background: transparent;
+	border: none;
+	border-radius: 4px;
+}
+QToolButton#tbDupBtn:hover,
+QToolButton#tbRowUp:hover,
+QToolButton#tbRowDown:hover,
+QToolButton#tbCssAdd:hover,
+QToolButton#tbCssDel:hover {
+	background-color: %3;
+	color: %2;
 }
 
 /* Primary-Aktionen (blau) */
