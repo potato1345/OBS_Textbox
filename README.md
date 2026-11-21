@@ -39,9 +39,18 @@ Toolbar-Icon ⤓ öffnet den Import-Dialog mit drei unabhängigen Wegen:
 
 ## OBS-Kompatibilität
 
-**Getestet:** OBS 32.2.2 (Windows/macOS/Linux).  
+**Getestet:** OBS 32.2.2 und 33.0.1 (Windows/macOS/Linux).  
 **Kompatibel erwartet:** OBS ≥ 28 (stabile Plugin-ABI via `obs-frontend-api`).  
-**OBS 33+:** Ungetastet, die Release-Matrix baut jedoch `obs-33.0.1`-Assets.
+**OBS 33:** Live-getestet mit OBS 33.0.1 (Windows); Release-Matrix baut obs-33.0.1-Assets.
+
+## Erster Live-Betrieb (Checkliste)
+
+- Release-ZIP der passenden OBS-Version installieren und OBS neu starten
+- Dock "Textbox Studio" über Menü Docks öffnen
+- Karten erstellen oder über das Import-Icon füllen (Google-Formular, CSV/XLSX, AI)
+- Pro Karte Vorlage (VORLAGE) und Farbprofil setzen
+- "Zu Szene" legt die Karte als Browser-Source ins aktuelle Scene; Source-Position bei Bedarf im Scene-Editor anpassen
+- Karten bleiben in textbox-state.json erhalten; Backup/Restore über das Gear-Menü
 
 | Platform | OBS Versions | Build |
 |----------|-------------|-------|

@@ -526,6 +526,7 @@ TextboxDock::TextboxDock(const std::string &state_path, QWidget *parent)
 	profil_del_btn_->setIcon(theme_icon("trash.svg"));
 	profil_del_btn_->setIconSize(QSize(16, 16));
 	profil_del_btn_->setToolTip(QStringLiteral("Gewähltes Schnell-Profil löschen"));
+	profil_del_btn_->setAccessibleName(QStringLiteral("Gewähltes Schnell-Profil löschen"));
 	profil_del_btn_->setEnabled(false);
 	profil_del_btn_->setProperty("class", "iconbtn");
 	profil_del_btn_->setProperty("tbDanger", true);
@@ -565,6 +566,7 @@ TextboxDock::TextboxDock(const std::string &state_path, QWidget *parent)
 	dock_status_close_->setIcon(theme_icon("close.svg"));
 	dock_status_close_->setIconSize(QSize(12, 12));
 	dock_status_close_->setToolTip(QStringLiteral("Meldung schließen"));
+	dock_status_close_->setAccessibleName(QStringLiteral("Meldung schließen"));
 	dock_status_close_->setVisible(false);
 	connect(dock_status_close_, &QToolButton::clicked, this, [this]() {
 		if (dock_status_lbl_)
@@ -594,6 +596,7 @@ TextboxDock::TextboxDock(const std::string &state_path, QWidget *parent)
 		btn->setIcon(theme_icon(icon_name));
 		btn->setIconSize(QSize(16, 16));
 		btn->setToolTip(tooltip);
+		btn->setAccessibleName(tooltip);
 		btn->setProperty("class", "iconbtn");
 		return btn;
 	};
@@ -946,6 +949,7 @@ void TextboxDock::create_row_widget(const TextboxCard &card)
 	style_toggle_btn->setIcon(theme_icon("chevron_down.svg"));
 	style_toggle_btn->setIconSize(QSize(16, 16));
 	style_toggle_btn->setToolTip(QStringLiteral("Stil-Optionen einklappen"));
+	style_toggle_btn->setAccessibleName(QStringLiteral("Stil-Optionen einklappen"));
 	style_toggle_btn->setProperty("class", "iconbtn");
 
 	auto *dup_btn = new QToolButton(id_bar);
@@ -954,6 +958,7 @@ void TextboxDock::create_row_widget(const TextboxCard &card)
 	dup_btn->setAutoRaise(true);
 	dup_btn->setText(QStringLiteral("⧉"));
 	dup_btn->setToolTip(QStringLiteral("Karte duplizieren (neue ID, gleicher Inhalt + Stil)"));
+	dup_btn->setAccessibleName(QStringLiteral("Karte duplizieren (neue ID, gleicher Inhalt + Stil)"));
 	dup_btn->setProperty("class", "iconbtn");
 
 	auto *del_btn = new QPushButton(id_bar);
@@ -962,6 +967,7 @@ void TextboxDock::create_row_widget(const TextboxCard &card)
 	del_btn->setIcon(theme_icon("trash.svg"));
 	del_btn->setIconSize(QSize(16, 16));
 	del_btn->setToolTip(QStringLiteral("Karte löschen"));
+	del_btn->setAccessibleName(QStringLiteral("Karte löschen"));
 	del_btn->setProperty("tbDanger", true);
 
 	id_layout->addWidget(id_prefix);
@@ -999,6 +1005,7 @@ void TextboxDock::create_row_widget(const TextboxCard &card)
 	row_add_btn->setIcon(theme_icon("plus.svg"));
 	row_add_btn->setIconSize(QSize(16, 16));
 	row_add_btn->setToolTip(QStringLiteral("Zeile hinzufügen (max 8)"));
+	row_add_btn->setAccessibleName(QStringLiteral("Zeile hinzufügen (max 8)"));
 	row_add_btn->setProperty("class", "iconbtn");
 	auto *row_del_btn = new QToolButton(rows_frame);
 	row_del_btn->setObjectName(QStringLiteral("tbRowDel"));
@@ -1007,6 +1014,7 @@ void TextboxDock::create_row_widget(const TextboxCard &card)
 	row_del_btn->setIcon(theme_icon("trash.svg"));
 	row_del_btn->setIconSize(QSize(16, 16));
 	row_del_btn->setToolTip(QStringLiteral("Letzte Zeile entfernen (min 1)"));
+	row_del_btn->setAccessibleName(QStringLiteral("Letzte Zeile entfernen (min 1)"));
 	row_del_btn->setProperty("class", "iconbtn");
 	row_del_btn->setProperty("tbDanger", true);
 	rows_bar->addWidget(lbl_rows);
@@ -1054,6 +1062,7 @@ void TextboxDock::create_row_widget(const TextboxCard &card)
 		up_btn->setAutoRaise(true);
 		up_btn->setText(QStringLiteral("▲"));
 		up_btn->setToolTip(QStringLiteral("Zeile nach oben verschieben"));
+		up_btn->setAccessibleName(QStringLiteral("Zeile nach oben verschieben"));
 		up_btn->setProperty("class", "iconbtn");
 		auto *down_btn = new QToolButton(card_inner);
 		down_btn->setObjectName(QStringLiteral("tbRowDown"));
@@ -1061,6 +1070,7 @@ void TextboxDock::create_row_widget(const TextboxCard &card)
 		down_btn->setAutoRaise(true);
 		down_btn->setText(QStringLiteral("▼"));
 		down_btn->setToolTip(QStringLiteral("Zeile nach unten verschieben"));
+		down_btn->setAccessibleName(QStringLiteral("Zeile nach unten verschieben"));
 		down_btn->setProperty("class", "iconbtn");
 		QObject::connect(up_btn, &QToolButton::clicked, card_inner,
 		                 [move_row, ledit]() { (*move_row)(ledit, -1); });
@@ -1270,6 +1280,7 @@ void TextboxDock::create_row_widget(const TextboxCard &card)
 	prof_rename_btn->setObjectName(QStringLiteral("tbBtnRenameProfile"));
 	prof_rename_btn->setFixedSize(24, 24);
 	prof_rename_btn->setToolTip(QStringLiteral("Aktuelles Profil umbenennen"));
+	prof_rename_btn->setAccessibleName(QStringLiteral("Aktuelles Profil umbenennen"));
 	prof_rename_btn->setIcon(theme_icon("rename.svg"));
 	prof_rename_btn->setIconSize(QSize(16, 16));
 	prof_rename_btn->setProperty("class", "iconbtn");
@@ -1278,6 +1289,7 @@ void TextboxDock::create_row_widget(const TextboxCard &card)
 	prof_del_btn->setObjectName(QStringLiteral("tbBtnDeleteProfile"));
 	prof_del_btn->setFixedSize(24, 24);
 	prof_del_btn->setToolTip(QStringLiteral("Aktuelles Profil löschen"));
+	prof_del_btn->setAccessibleName(QStringLiteral("Aktuelles Profil löschen"));
 	prof_del_btn->setProperty("class", "iconbtn");
 	prof_del_btn->setProperty("tbDanger", true);
 
@@ -1309,6 +1321,7 @@ void TextboxDock::create_row_widget(const TextboxCard &card)
 	css_add_btn->setIcon(theme_icon("plus.svg"));
 	css_add_btn->setIconSize(QSize(16, 16));
 	css_add_btn->setToolTip(QStringLiteral("CSS-Regel hinzufügen (--variable = wert)"));
+	css_add_btn->setAccessibleName(QStringLiteral("CSS-Regel hinzufügen (--variable = wert)"));
 	css_add_btn->setProperty("class", "iconbtn");
 	auto *css_del_btn = new QToolButton(css_frame);
 	css_del_btn->setObjectName(QStringLiteral("tbCssDel"));
@@ -1317,6 +1330,7 @@ void TextboxDock::create_row_widget(const TextboxCard &card)
 	css_del_btn->setIcon(theme_icon("trash.svg"));
 	css_del_btn->setIconSize(QSize(16, 16));
 	css_del_btn->setToolTip(QStringLiteral("Letzte CSS-Regel entfernen"));
+	css_del_btn->setAccessibleName(QStringLiteral("Letzte CSS-Regel entfernen"));
 	css_del_btn->setProperty("class", "iconbtn");
 	css_del_btn->setProperty("tbDanger", true);
 	css_bar->addWidget(lbl_css);
@@ -1703,6 +1717,7 @@ void TextboxDock::create_row_widget(const TextboxCard &card)
 	tpl_pick->setIcon(theme_icon("download.svg"));
 	tpl_pick->setIconSize(QSize(16, 16));
 	tpl_pick->setToolTip(QStringLiteral("Vorlagen-Datei (.html) auswählen"));
+	tpl_pick->setAccessibleName(QStringLiteral("Vorlagen-Datei (.html) auswählen"));
 	tpl_pick->setProperty("class", "iconbtn");
 	tpl_row->addWidget(tpl_edit, 1);
 	tpl_row->addWidget(tpl_pick);
