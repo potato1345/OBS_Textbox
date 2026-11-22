@@ -51,6 +51,8 @@
         .textbox-container {
             /* Textbox-Container */
             position: relative;
+            transform: translate(var(--box-x,0px), var(--box-y,0px)) scale(var(--box-scale,1));
+            transform-origin: top left;
             background-color: var(--box-bg);
             /* Ecken /(Dreiecke) */
             background-image: var(--triangle-background);
@@ -151,6 +153,7 @@
             /* Translation und Skalierung. Translate zuerst, damit die X/Y Pixel absolut sind */
             transform: translate(var(--anim-x, 0px), var(--anim-y, 0px)) scale(var(--anim-scale, 3));
             transform-origin: bottom right;
+        }
         }
         .anim-wrapper img, .anim-wrapper video {
             display: block;

@@ -104,6 +104,9 @@ std::string build_repo_listener_script()
 	     "        if (d.anim_scale != null) setVar(\"--anim-scale\", String(d.anim_scale));\n"
 	     "        if (d.anim_x != null) setVar(\"--anim-x\", String(d.anim_x) + \"px\");\n"
 	     "        if (d.anim_y != null) setVar(\"--anim-y\", String(d.anim_y) + \"px\");\n"
+	     "        if (d.box_x != null) setVar(\"--box-x\", String(d.box_x) + \"px\");\n"
+	     "        if (d.box_y != null) setVar(\"--box-y\", String(d.box_y) + \"px\");\n"
+	     "        if (d.box_scale != null) setVar(\"--box-scale\", String(d.box_scale));\n"
 	     "        // Die 150-ms updateLines()-Poll der Seite wendet die Variablen an\n"
 	     "        // (Zeilen ein/ausblenden, Anim-Wrapper).\n"
 	     "    });\n"
@@ -669,6 +672,9 @@ std::string build_inject_css(const TextboxCard &card, const TextboxSettings &set
 	    << "  --anim-scale: " << card.anim_scale << ";\n"
 	    << "  --anim-x: " << card.anim_x << "px;\n"
 	    << "  --anim-y: " << card.anim_y << "px;\n"
+	    << "  --box-x: " << card.box_x << "px;\n"
+	    << "  --box-y: " << card.box_y << "px;\n"
+	    << "  --box-scale: " << card.box_scale << ";\n"
 	    << "  --box-bg: " << box_bg << ";\n"
 	    << "  --triangle-color-a: " << tri_col_a << ";\n"
 	    << "  --triangle-color-b: " << tri_col_b << ";\n"
@@ -681,6 +687,8 @@ std::string build_inject_css(const TextboxCard &card, const TextboxSettings &set
 	if (card.rainbow_corners)
 		oss << "  --triangle-background: none;\n";
 	// Generelle CSS-Regeln (--name: value); ungültige Namen/Values werden gedroppt.
+	// Emissions-Reihenfolge: User-Regeln NACH den festen --anim-* Zeilen,
+	// damit User-Werte für --anim-show/--show-anim/--anim-file etc. Vorrang haben.
 	for (const auto &rule : card.style) {
 		const std::string var_name = sanitize_css_var_name(rule.name);
 		const std::string var_value = sanitize_css_value(rule.value);
@@ -860,6 +868,9 @@ std::string substitute_tokens(const TextboxCard &card, const std::string &templa
 	const std::string anim_scale = std::to_string(card.anim_scale);
 	const std::string anim_x = std::to_string(card.anim_x);
 	const std::string anim_y = std::to_string(card.anim_y);
+	const std::string box_x = std::to_string(card.box_x);
+	const std::string box_y = std::to_string(card.box_y);
+	const std::string box_scale = std::to_string(card.box_scale);
 	const std::string clear_str = clear ? "1" : "0";
 
 	const std::pair<const char *, std::string> tokens[] = {
@@ -882,6 +893,9 @@ std::string substitute_tokens(const TextboxCard &card, const std::string &templa
 		{"{{anim_scale}}", anim_scale},
 		{"{{anim_x}}", anim_x},
 		{"{{anim_y}}", anim_y},
+		{"{{box_x}}", box_x},
+		{"{{box_y}}", box_y},
+		{"{{box_scale}}", box_scale},
 		{"{{card_id}}", card.id},
 		{"{{clear}}", clear_str},
 	};
@@ -1187,6 +1201,15 @@ std::string card_html(const TextboxCard &card)
 		"\t--anim-y: " +
 		std::to_string(card.anim_y) +
 		"px;\n"
+		"\t--box-x: " +
+		std::to_string(card.box_x) +
+		"px;\n"
+		"\t--box-y: " +
+		std::to_string(card.box_y) +
+		"px;\n"
+		"\t--box-scale: " +
+		std::to_string(card.box_scale) +
+		";\n"
 		"}\n"
 		"html, body {\n"
 		"\tmargin: 0;\n"
@@ -1200,6 +1223,8 @@ std::string card_html(const TextboxCard &card)
 		"\tposition: relative;\n"
 		"\twidth: 800px;\n"
 		"\theight: 400px;\n"
+		"\ttransform: translate(var(--box-x, 0px), var(--box-y, 0px)) scale(var(--box-scale, 1));\n"
+		"\ttransform-origin: top left;\n"
 		"}\n"
 		"#box {\n"
 		"\tposition: absolute;\n"
@@ -1404,6 +1429,9 @@ std::string card_html(const TextboxCard &card)
 		"\tif (d.anim_scale != null) setVar(\"--anim-scale\", String(d.anim_scale));\n"
 		"\tif (d.anim_x != null) setVar(\"--anim-x\", String(d.anim_x) + \"px\");\n"
 		"\tif (d.anim_y != null) setVar(\"--anim-y\", String(d.anim_y) + \"px\");\n"
+		"\tif (d.box_x != null) setVar(\"--box-x\", String(d.box_x) + \"px\");\n"
+		"\tif (d.box_y != null) setVar(\"--box-y\", String(d.box_y) + \"px\");\n"
+		"\tif (d.box_scale != null) setVar(\"--box-scale\", String(d.box_scale));\n"
 		"\tupdateAnim();\n"
 		"}\n"
 		"updateAnim();\n"
@@ -1534,6 +1562,9 @@ void push_update(obs_source_t *src, const TextboxCard &card, bool clear,
 	obj.insert(QStringLiteral("anim_scale"), card.anim_scale);
 	obj.insert(QStringLiteral("anim_x"), card.anim_x);
 	obj.insert(QStringLiteral("anim_y"), card.anim_y);
+	obj.insert(QStringLiteral("box_x"), card.box_x);
+	obj.insert(QStringLiteral("box_y"), card.box_y);
+	obj.insert(QStringLiteral("box_scale"), card.box_scale);
 	obj.insert(QStringLiteral("template_id"), QString::fromUtf8(card.template_id.c_str()));
 
 	const QByteArray json_bytes = QJsonDocument(obj).toJson(QJsonDocument::Compact);

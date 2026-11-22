@@ -14,7 +14,6 @@
 #include "textbox-state.hpp"
 
 #include <QIcon>
-#include <QPaintEvent>
 #include <QWidget>
 #include <atomic>
 #include <memory>
@@ -60,11 +59,6 @@ public:
 	void ensure_card_sources();
 
 private:
-	// Zeichnet einen sichtbaren Dock-Rand nach der QSS-Hintergrundmalung.
-	void paintEvent(QPaintEvent *event) override;
-	// Palette-Wechsel (Theme-Switch) erkennt und QSS neu baut.
-	void changeEvent(QEvent *event) override;
-
 	// Durchsucht state_.cards nach der ID; nullptr bei Nichtfund (mutable access).
 	TextboxCard *find_card_mut(const std::string &id);
 	// Baut die komplette Qt-Widget-Zeile für eine Karte (ID-Bar, Zeilen, CSS-Regeln, Profil, Aktionen).

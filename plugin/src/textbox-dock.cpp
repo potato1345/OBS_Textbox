@@ -18,7 +18,6 @@
 #include "textbox-profiles.hpp"
 #include "textbox-scene.hpp"
 #include "textbox-theme-icons.hpp"
-#include "textbox-theme.hpp"
 #include "textbox-log.hpp"
 
 #include <obs.h>
@@ -29,8 +28,6 @@
 
 #include <QAction>
 #include <QCheckBox>
-#include <QPainter>
-#include <QPen>
 #include <QColor>
 #include <QColorDialog>
 #include <QComboBox>
@@ -380,23 +377,6 @@ bool reconcile_profiles_after_delete(TextboxState &state)
 	return reseeded;
 }
 
-// Dünner 1px-Rahmen für Kartenboxen im gedämpften OBS-Stil (#3C404D).
-class CardOutlineFrame : public QFrame {
-public:
-	explicit CardOutlineFrame(QWidget *parent = nullptr) : QFrame(parent) {}
-
-protected:
-	void paintEvent(QPaintEvent *event) override
-	{
-		QFrame::paintEvent(event);
-		QPainter p(this);
-		p.setRenderHint(QPainter::Antialiasing);
-		p.setPen(QPen(QColor("#3C404D"), 1));
-		p.setBrush(Qt::NoBrush);
-		p.drawRoundedRect(QRectF(rect()).adjusted(0.5, 0.5, -0.5, -0.5), 4.0, 4.0);
-	}
-};
-
 } // namespace
 
 #ifdef ENABLE_FRONTEND_API
@@ -413,23 +393,7 @@ void textbox_self_heal_event(obs_frontend_event event, void *data)
 }
 #endif
 
-void TextboxDock::changeEvent(QEvent *event)
-{
-	if (event->type() == QEvent::ApplicationPaletteChange) {
-		setStyleSheet(textbox_theme::stylesheet(icon_dir_));
-	}
-	QWidget::changeEvent(event);
-}
-
-void TextboxDock::paintEvent(QPaintEvent *event)
-{
-	QWidget::paintEvent(event);
-	QPainter p(this);
-	p.setRenderHint(QPainter::Antialiasing);
-	p.setPen(QPen(QColor("#3C404D"), 1));
-	p.setBrush(Qt::NoBrush);
-	p.drawRoundedRect(QRectF(rect()).adjusted(0.5, 0.5, -0.5, -0.5), 6.0, 6.0);
-}
+// changeEvent entfernt — natives OBS-Styling via aktiver Style
 
 void TextboxDock::ensure_card_sources()
 {
@@ -475,7 +439,6 @@ TextboxDock::TextboxDock(const std::string &state_path, QWidget *parent)
 			     icon_err.c_str());
 		}
 	}
-	setStyleSheet(textbox_theme::stylesheet(icon_dir_));
 
 	auto *root_layout = new QVBoxLayout(this);
 	root_layout->setContentsMargins(4, 4, 4, 4);
@@ -488,7 +451,7 @@ TextboxDock::TextboxDock(const std::string &state_path, QWidget *parent)
 	profil_select_ = new QComboBox(this);
 	profil_select_->setEditable(true);
 	profil_select_->setInsertPolicy(QComboBox::NoInsert);
-	profil_select_->setMinimumWidth(160);
+	profil_select_->setMinimumWidth(fontMetrics().averageCharWidth() * 14);
 	profil_select_->setAccessibleName(QStringLiteral("Schnellprofil-Wahl"));
 	profil_select_->setToolTip(
 		QStringLiteral("Schnellprofile-Liste (gespeicherte Karten-Sets, nicht Kartenfarben)"));
@@ -507,7 +470,7 @@ TextboxDock::TextboxDock(const std::string &state_path, QWidget *parent)
 	card_search_ = new QComboBox(this);
 	card_search_->setEditable(true);
 	card_search_->setInsertPolicy(QComboBox::NoInsert);
-	card_search_->setMinimumWidth(140);
+	card_search_->setMinimumWidth(fontMetrics().averageCharWidth() * 12);
 	card_search_->setAccessibleName(QStringLiteral("Karten-Suche"));
 	if (QCompleter *c = card_search_->completer()) {
 		c->setCaseSensitivity(Qt::CaseInsensitive);
@@ -521,7 +484,8 @@ TextboxDock::TextboxDock(const std::string &state_path, QWidget *parent)
 	top_row->addWidget(profil_select_, 1);
 	profil_del_btn_ = new QToolButton(this);
 	profil_del_btn_->setObjectName(QStringLiteral("tbProfilDelBtn"));
-	profil_del_btn_->setFixedSize(24, 24);
+	const int btn_icon_sz = style()->pixelMetric(QStyle::PM_ButtonIconSize, nullptr, this);
+	profil_del_btn_->setFixedSize(btn_icon_sz, btn_icon_sz);
 	profil_del_btn_->setAutoRaise(true);
 	profil_del_btn_->setIcon(theme_icon("trash.svg"));
 	profil_del_btn_->setIconSize(QSize(16, 16));
@@ -587,11 +551,11 @@ TextboxDock::TextboxDock(const std::string &state_path, QWidget *parent)
 	bottom_toolbar->setContentsMargins(4, 4, 4, 4);
 	bottom_toolbar->setSpacing(6);
 
-	auto make_tool_btn = [this](const QString &obj_name, const char *icon_name,
+	auto make_tool_btn = [this, btn_icon_sz](const QString &obj_name, const char *icon_name,
 				    const QString &tooltip) -> QToolButton * {
 		auto *btn = new QToolButton(this);
 		btn->setObjectName(obj_name);
-		btn->setFixedSize(24, 24);
+		btn->setFixedSize(btn_icon_sz, btn_icon_sz);
 		btn->setAutoRaise(true);
 		btn->setIcon(theme_icon(icon_name));
 		btn->setIconSize(QSize(16, 16));
@@ -603,12 +567,10 @@ TextboxDock::TextboxDock(const std::string &state_path, QWidget *parent)
 
 	auto *tool_add = make_tool_btn(QStringLiteral("tbToolAdd"), "plus.svg",
 				       QStringLiteral("Neue Karte"));
-	auto *tool_clear = make_tool_btn(QStringLiteral("tbToolClear"), "trash.svg",
-					 QStringLiteral("Alle Karten löschen"));
-	// Kompakter Button für einstufiges Rückgängig (Undo) neben „Alle leeren"
+	// Kompakter Button für einstufiges Rückgängig (Undo)
 	auto *tool_undo = new QPushButton(QStringLiteral("↶ Rückgängig"), this);
 	tool_undo->setObjectName(QStringLiteral("tbToolUndo"));
-	tool_undo->setFixedHeight(24);
+	tool_undo->setFixedHeight(btn_icon_sz);
 	tool_undo->setToolTip(
 		QStringLiteral("Letzte destruktive Aktion rückgängig machen (Strg+Z)"));
 	tool_undo->setEnabled(state_.undo_available_);
@@ -637,7 +599,6 @@ TextboxDock::TextboxDock(const std::string &state_path, QWidget *parent)
 	tool_settings->setMenu(settings_menu);
 
 	bottom_toolbar->addWidget(tool_add);
-	bottom_toolbar->addWidget(tool_clear);
 	bottom_toolbar->addWidget(tool_undo);
 	bottom_toolbar->addWidget(tool_import);
 	bottom_toolbar->addWidget(tool_settings);
@@ -690,7 +651,6 @@ TextboxDock::TextboxDock(const std::string &state_path, QWidget *parent)
 	connect(undo_shortcut, &QShortcut::activated, this, perform_undo);
 
 	connect(tool_add, &QToolButton::clicked, this, &TextboxDock::on_add_card);
-	connect(tool_clear, &QToolButton::clicked, this, &TextboxDock::on_clear_all);
 	connect(tool_import, &QToolButton::clicked, this, &TextboxDock::on_open_import_dialog);
 	connect(act_quick, &QAction::triggered, this, &TextboxDock::on_open_quick_profiles_dialog);
 	connect(act_settings, &QAction::triggered, this, &TextboxDock::on_open_settings_dialog);
@@ -889,6 +849,10 @@ TextboxDock::~TextboxDock()
 			it->second.timer->stop();
 		g_dock_schedulers.erase(it);
 	}
+	// Verbleibende Karten-Sources aus Szenen entfernen (Shutdown-Rest).
+	for (const auto &card : state_.cards) {
+		textbox_scene::remove_everywhere(card.id);
+	}
 }
 
 TextboxCard *TextboxDock::find_card_mut(const std::string &id)
@@ -909,10 +873,11 @@ QIcon TextboxDock::theme_icon(const char *name) const
 
 void TextboxDock::create_row_widget(const TextboxCard &card)
 {
-	auto *row_widget = new CardOutlineFrame(this);
+	const int btn_sz = style()->pixelMetric(QStyle::PM_ButtonIconSize, nullptr, this);
+	auto *row_widget = new QFrame(this);
 	row_widget->setObjectName(QStringLiteral("tbCardOuter"));
 	row_widget->setProperty("tbCardId", QString::fromUtf8(card.id.c_str()));
-	row_widget->setMinimumWidth(320);
+	row_widget->setMinimumWidth(fontMetrics().averageCharWidth() * 28);
 	row_widget->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
 
 	auto *outer_layout = new QVBoxLayout(row_widget);
@@ -944,7 +909,7 @@ void TextboxDock::create_row_widget(const TextboxCard &card)
 
 	auto *style_toggle_btn = new QToolButton(id_bar);
 	style_toggle_btn->setObjectName(QStringLiteral("tbStyleToggle"));
-	style_toggle_btn->setFixedSize(24, 24);
+	style_toggle_btn->setFixedSize(btn_sz, btn_sz);
 	style_toggle_btn->setAutoRaise(true);
 	style_toggle_btn->setIcon(theme_icon("chevron_down.svg"));
 	style_toggle_btn->setIconSize(QSize(16, 16));
@@ -954,7 +919,7 @@ void TextboxDock::create_row_widget(const TextboxCard &card)
 
 	auto *dup_btn = new QToolButton(id_bar);
 	dup_btn->setObjectName(QStringLiteral("tbDupBtn"));
-	dup_btn->setFixedSize(24, 24);
+	dup_btn->setFixedSize(btn_sz, btn_sz);
 	dup_btn->setAutoRaise(true);
 	dup_btn->setText(QStringLiteral("⧉"));
 	dup_btn->setToolTip(QStringLiteral("Karte duplizieren (neue ID, gleicher Inhalt + Stil)"));
@@ -963,7 +928,7 @@ void TextboxDock::create_row_widget(const TextboxCard &card)
 
 	auto *del_btn = new QPushButton(id_bar);
 	del_btn->setObjectName(QStringLiteral("tbDelBtn"));
-	del_btn->setFixedSize(24, 24);
+	del_btn->setFixedSize(btn_sz, btn_sz);
 	del_btn->setIcon(theme_icon("trash.svg"));
 	del_btn->setIconSize(QSize(16, 16));
 	del_btn->setToolTip(QStringLiteral("Karte löschen"));
@@ -1000,7 +965,7 @@ void TextboxDock::create_row_widget(const TextboxCard &card)
 	lbl_rows->setToolTip(QStringLiteral("Spezifische CSS-Regeln ein-/ausklappen"));
 	auto *row_add_btn = new QToolButton(rows_frame);
 	row_add_btn->setObjectName(QStringLiteral("tbRowAdd"));
-	row_add_btn->setFixedSize(24, 24);
+	row_add_btn->setFixedSize(btn_sz, btn_sz);
 	row_add_btn->setAutoRaise(true);
 	row_add_btn->setIcon(theme_icon("plus.svg"));
 	row_add_btn->setIconSize(QSize(16, 16));
@@ -1009,7 +974,7 @@ void TextboxDock::create_row_widget(const TextboxCard &card)
 	row_add_btn->setProperty("class", "iconbtn");
 	auto *row_del_btn = new QToolButton(rows_frame);
 	row_del_btn->setObjectName(QStringLiteral("tbRowDel"));
-	row_del_btn->setFixedSize(24, 24);
+	row_del_btn->setFixedSize(btn_sz, btn_sz);
 	row_del_btn->setAutoRaise(true);
 	row_del_btn->setIcon(theme_icon("trash.svg"));
 	row_del_btn->setIconSize(QSize(16, 16));
@@ -1043,7 +1008,7 @@ void TextboxDock::create_row_widget(const TextboxCard &card)
 			        b->setVisible(!*rows_collapsed);
 	        });
 
-	auto add_row_edit = [card_inner, rows_layout, rows_collapsed, move_row, move_btns](const QString &label, const QString &value) {
+	auto add_row_edit = [this, card_inner, rows_layout, rows_collapsed, move_row, move_btns, btn_sz](const QString &label, const QString &value) {
 		auto *row = new QHBoxLayout();
 		row->setContentsMargins(0, 0, 0, 0);
 		row->setSpacing(6);
@@ -1051,14 +1016,14 @@ void TextboxDock::create_row_widget(const TextboxCard &card)
 		ledit->setPlaceholderText(QStringLiteral("--zeile-N"));
 		ledit->setToolTip(QStringLiteral(
 			"CSS-Variablenname dieser Zeile (mit -- Präfix). Im gerenderten HTML als var(--…) referenzierbar; leer/ohne -- => --zeile-N."));
-		ledit->setFixedWidth(110);
-		ledit->setFixedHeight(24);
+		ledit->setFixedWidth(fontMetrics().averageCharWidth() * 10);
+		ledit->setFixedHeight(btn_sz);
 		auto *vedit = new QLineEdit(value, card_inner);
 		vedit->setPlaceholderText(QStringLiteral("Text dieser Zeile"));
-		vedit->setFixedHeight(24);
+		vedit->setFixedHeight(btn_sz);
 		auto *up_btn = new QToolButton(card_inner);
 		up_btn->setObjectName(QStringLiteral("tbRowUp"));
-		up_btn->setFixedSize(24, 24);
+		up_btn->setFixedSize(btn_sz, btn_sz);
 		up_btn->setAutoRaise(true);
 		up_btn->setText(QStringLiteral("▲"));
 		up_btn->setToolTip(QStringLiteral("Zeile nach oben verschieben"));
@@ -1066,7 +1031,7 @@ void TextboxDock::create_row_widget(const TextboxCard &card)
 		up_btn->setProperty("class", "iconbtn");
 		auto *down_btn = new QToolButton(card_inner);
 		down_btn->setObjectName(QStringLiteral("tbRowDown"));
-		down_btn->setFixedSize(24, 24);
+		down_btn->setFixedSize(btn_sz, btn_sz);
 		down_btn->setAutoRaise(true);
 		down_btn->setText(QStringLiteral("▼"));
 		down_btn->setToolTip(QStringLiteral("Zeile nach unten verschieben"));
@@ -1255,7 +1220,7 @@ void TextboxDock::create_row_widget(const TextboxCard &card)
 	 * box_color) werden NICHT automatisch zurückgesetzt.
 	 */
 	auto *profile_combo = new QComboBox(style_section);
-	profile_combo->setFixedHeight(24);
+	profile_combo->setFixedHeight(btn_sz);
 	profile_combo->setToolTip(
 		QStringLiteral("Karten-Farbprofil (Text/Box/Ecken/Deckkraft)"));
 	profile_combo->setAccessibleName(
@@ -1272,13 +1237,13 @@ void TextboxDock::create_row_widget(const TextboxCard &card)
 
 	auto *new_prof_btn = new QPushButton(QStringLiteral("Profil +"), style_section);
 	new_prof_btn->setObjectName(QStringLiteral("tbBtnNewProfile"));
-	new_prof_btn->setFixedHeight(24);
+	new_prof_btn->setFixedHeight(btn_sz);
 	new_prof_btn->setToolTip(
 		QStringLiteral("Aktuelles Karten-Farbprofil (Text/Box/Ecken/Deckkraft) speichern"));
 
 	auto *prof_rename_btn = new QPushButton(style_section);
 	prof_rename_btn->setObjectName(QStringLiteral("tbBtnRenameProfile"));
-	prof_rename_btn->setFixedSize(24, 24);
+	prof_rename_btn->setFixedSize(btn_sz, btn_sz);
 	prof_rename_btn->setToolTip(QStringLiteral("Aktuelles Profil umbenennen"));
 	prof_rename_btn->setAccessibleName(QStringLiteral("Aktuelles Profil umbenennen"));
 	prof_rename_btn->setIcon(theme_icon("rename.svg"));
@@ -1287,7 +1252,7 @@ void TextboxDock::create_row_widget(const TextboxCard &card)
 
 	auto *prof_del_btn = new QPushButton(QStringLiteral("−"), style_section);
 	prof_del_btn->setObjectName(QStringLiteral("tbBtnDeleteProfile"));
-	prof_del_btn->setFixedSize(24, 24);
+	prof_del_btn->setFixedSize(btn_sz, btn_sz);
 	prof_del_btn->setToolTip(QStringLiteral("Aktuelles Profil löschen"));
 	prof_del_btn->setAccessibleName(QStringLiteral("Aktuelles Profil löschen"));
 	prof_del_btn->setProperty("class", "iconbtn");
@@ -1316,7 +1281,7 @@ void TextboxDock::create_row_widget(const TextboxCard &card)
 	lbl_css->setToolTip(QStringLiteral("CSS-Regeln ein-/ausklappen"));
 	auto *css_add_btn = new QToolButton(css_frame);
 	css_add_btn->setObjectName(QStringLiteral("tbCssAdd"));
-	css_add_btn->setFixedSize(24, 24);
+	css_add_btn->setFixedSize(btn_sz, btn_sz);
 	css_add_btn->setAutoRaise(true);
 	css_add_btn->setIcon(theme_icon("plus.svg"));
 	css_add_btn->setIconSize(QSize(16, 16));
@@ -1325,7 +1290,7 @@ void TextboxDock::create_row_widget(const TextboxCard &card)
 	css_add_btn->setProperty("class", "iconbtn");
 	auto *css_del_btn = new QToolButton(css_frame);
 	css_del_btn->setObjectName(QStringLiteral("tbCssDel"));
-	css_del_btn->setFixedSize(24, 24);
+	css_del_btn->setFixedSize(btn_sz, btn_sz);
 	css_del_btn->setAutoRaise(true);
 	css_del_btn->setIcon(theme_icon("trash.svg"));
 	css_del_btn->setIconSize(QSize(16, 16));
@@ -1349,15 +1314,18 @@ void TextboxDock::create_row_widget(const TextboxCard &card)
 	                      "--tb-color-text", "--tb-color-box", "--tb-corner-color-a", "--tb-corner-color-b",
 	                      "--tb-corner-opacity-a", "--tb-corner-opacity-b", "--tb-text-opacity",
 	                      "--tb-box-opacity", "--tb-rainbow",
-	                      "--anim-show", "--anim-file", "--anim-scale", "--anim-x", "--anim-y"})
+	                      "--anim-show", "--anim-file", "--anim-scale", "--anim-x", "--anim-y",
+	                      "--box-x", "--box-y", "--box-scale"})
 		css_var_model->append(QString::fromLatin1(v));
 
 	auto paint_color_swatch = [](QPushButton *btn, const QString &hex) {
 		const QColor col(hex);
 		const bool light = (col.red() + col.green() + col.blue()) > 160;
-		btn->setStyleSheet(QStringLiteral("background-color: %1; color: %2; font-weight: bold;")
-		                       .arg(hex)
-		                       .arg(light ? QStringLiteral("#1a1a1a") : QStringLiteral("#ffffff")));
+		QPalette pal = btn->palette();
+		pal.setColor(QPalette::Button, col);
+		pal.setColor(QPalette::ButtonText, light ? QColor(QStringLiteral("#1a1a1a")) : QColor(QStringLiteral("#ffffff")));
+		btn->setPalette(pal);
+		btn->setAutoFillBackground(true);
 	};
 
 	// Eine Regelzeile: Variablenname + Wert-Eingarte (Typ) + Wert-Widget.
@@ -1404,8 +1372,9 @@ void TextboxDock::create_row_widget(const TextboxCard &card)
 		return true;
 	};
 
+	const int fh = fontMetrics().height() + 8; // Zeilen-Höhe aus Schrift
 	auto build_value_widget =
-		[css_frame, paint_color_swatch, this](const QString &type, const QString &value,
+		[css_frame, paint_color_swatch, this, fh](const QString &type, const QString &value,
 		                                const std::function<void()> &on_change)
 			-> std::pair<QWidget *, std::function<QString()>> {
 			if (type == QLatin1String("num")) {
@@ -1414,14 +1383,14 @@ void TextboxDock::create_row_widget(const TextboxCard &card)
 				hl->setContentsMargins(0, 0, 0, 0);
 				hl->setSpacing(6);
 				auto *slider = new QSlider(Qt::Horizontal, row);
-				row->setMinimumWidth(96);
+				row->setMinimumWidth(fontMetrics().averageCharWidth() * 8);
 				slider->setRange(0, 255);
 				bool ok = false;
 				const int v = value.toInt(&ok);
 				slider->setValue(ok ? std::clamp(v, 0, 255) : 255);
 				auto *val = new QLabel(QString::number(slider->value()), row);
 				val->setObjectName(QStringLiteral("tbFieldLabel"));
-				val->setMinimumWidth(36);
+				val->setMinimumWidth(fontMetrics().averageCharWidth() * 3);
 				val->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
 				hl->addWidget(slider, 1);
 				hl->addWidget(val);
@@ -1437,8 +1406,8 @@ void TextboxDock::create_row_widget(const TextboxCard &card)
 				                                                         : QStringLiteral("#ffffff");
 				auto *btn = new QPushButton(hex.toUpper(), css_frame);
 				btn->setObjectName(QStringLiteral("tbTextColor"));
-				btn->setFixedHeight(32);
-				btn->setMinimumWidth(96);
+				btn->setFixedHeight(fh);
+				btn->setMinimumWidth(fontMetrics().averageCharWidth() * 8);
 				paint_color_swatch(btn, hex);
 				QObject::connect(btn, &QPushButton::clicked, btn,
 				                 [btn, on_change, paint_color_swatch]() {
@@ -1461,8 +1430,8 @@ void TextboxDock::create_row_widget(const TextboxCard &card)
 				if (!value.isEmpty() && combo->findText(value, Qt::MatchFixedString) < 0)
 					combo->addItem(value);
 				combo->setCurrentText(value.isEmpty() ? QStringLiteral("8px") : value);
-				combo->setFixedHeight(32);
-				combo->setMinimumWidth(96);
+				combo->setFixedHeight(fh);
+				combo->setMinimumWidth(fontMetrics().averageCharWidth() * 8);
 				QObject::connect(combo, &QComboBox::currentTextChanged, combo,
 				                 [on_change](const QString &) { on_change(); });
 				return {combo, [combo]() { return combo->currentText(); }};
@@ -1477,8 +1446,8 @@ void TextboxDock::create_row_widget(const TextboxCard &card)
 			if (type == QLatin1String("enum")) {
 				// Skalierungs-Dropdown: 1x..12x, Wert als nackte Zahl.
 				auto *combo = new QComboBox(css_frame);
-				combo->setFixedHeight(32);
-				combo->setMinimumWidth(96);
+				combo->setFixedHeight(fh);
+				combo->setMinimumWidth(fontMetrics().averageCharWidth() * 8);
 				const int kScaleValues[] = {1, 2, 3, 4, 6, 8, 10, 12};
 				int sidx = 2; // Default "3x"
 				for (int si = 0; si < 8; ++si) {
@@ -1498,9 +1467,9 @@ void TextboxDock::create_row_widget(const TextboxCard &card)
 				hl->setSpacing(6);
 				auto *edit = new QLineEdit(value, row);
 				edit->setPlaceholderText(QStringLiteral("Dateiname, Pfad oder URL"));
-				edit->setFixedHeight(32);
+				edit->setFixedHeight(fh);
 				auto *pick = new QPushButton(row);
-				pick->setFixedSize(34, 34);
+				pick->setFixedSize(fh + 2, fh + 2);
 				pick->setIcon(theme_icon("download.svg"));
 				pick->setIconSize(QSize(16, 16));
 				pick->setToolTip(QStringLiteral("Animationsdatei auswählen"));
@@ -1526,14 +1495,14 @@ void TextboxDock::create_row_widget(const TextboxCard &card)
 			}
 			auto *edit = new QLineEdit(value, css_frame);
 			edit->setPlaceholderText(QStringLiteral("wert"));
-			edit->setFixedHeight(32);
+			edit->setFixedHeight(fh);
 			QObject::connect(edit, &QLineEdit::textChanged, edit,
 			                 [on_change](const QString &) { on_change(); });
 			return {edit, [edit]() { return edit->text(); }};
 		};
 
 	auto make_rule_row =
-		[css_frame, css_layout, css_rows, css_var_model, build_value_widget, collect_css,
+		[this, fh, css_frame, css_layout, css_rows, css_var_model, build_value_widget, collect_css,
 		 schedule_save, css_collapsed](const QString &name, const QString &type,
 		                                const QString &value) {
 			auto *row = new QHBoxLayout();
@@ -1541,15 +1510,15 @@ void TextboxDock::create_row_widget(const TextboxCard &card)
 			row->setSpacing(6);
 			auto *nedit = new QLineEdit(name, css_frame);
 			nedit->setPlaceholderText(QStringLiteral("--variable"));
-			nedit->setMinimumWidth(100);
-			nedit->setFixedHeight(32);
+			nedit->setMinimumWidth(fontMetrics().averageCharWidth() * 8);
+			nedit->setFixedHeight(fh);
 			auto *comp = new QCompleter(*css_var_model, css_frame);
 			comp->setCaseSensitivity(Qt::CaseInsensitive);
 			nedit->setCompleter(comp);
 			nedit->setAccessibleName(QStringLiteral("Name der CSS-Regel %1").arg(name));
 			auto *tcombo = new QComboBox(css_frame);
-			tcombo->setFixedWidth(78);
-			tcombo->setFixedHeight(32);
+			tcombo->setFixedWidth(fontMetrics().averageCharWidth() * 7);
+			tcombo->setFixedHeight(fh);
 			tcombo->setToolTip(QStringLiteral(
 				"Wert-Eingarte: Text, Zahl 0-255 (Regler), HEX (Farbpicker), px (Dropdown), Bool, Enum (Dropdown), Datei (Picker)"));
 			tcombo->setAccessibleName(QStringLiteral("Typ der CSS-Regel %1").arg(name));
@@ -1665,6 +1634,10 @@ void TextboxDock::create_row_widget(const TextboxCard &card)
 		seed("--anim-scale", "enum", QString::number(c->anim_scale));
 		seed("--anim-x", "px", QString::number(c->anim_x) + QStringLiteral("px"));
 		seed("--anim-y", "px", QString::number(c->anim_y) + QStringLiteral("px"));
+		// IMP-T: Box-Position/Skalierung als generelle CSS-Regelzeilen
+		seed("--box-x", "px", QString::number(c->box_x) + QStringLiteral("px"));
+		seed("--box-y", "px", QString::number(c->box_y) + QStringLiteral("px"));
+		seed("--box-scale", "enum", QString::number(c->box_scale));
 	};
 
 	rebuild_css_rows();
@@ -1707,13 +1680,13 @@ void TextboxDock::create_row_widget(const TextboxCard &card)
 	tpl_edit->setObjectName(QStringLiteral("tbTemplatePath"));
 	tpl_edit->setPlaceholderText(QStringLiteral("index.html (leer = classic) oder Pfad zur Vorlage"));
 	tpl_edit->setToolTip(lbl_tpl->toolTip());
-	tpl_edit->setFixedHeight(24);
+	tpl_edit->setFixedHeight(btn_sz);
 	tpl_edit->setText(QString::fromUtf8(card.template_id.c_str()));
 	tpl_edit->setAccessibleName(
 		QStringLiteral("Vorlagenpfad der Karte %1").arg(QString::fromUtf8(card.id.c_str())));
 	auto *tpl_pick = new QPushButton(style_section);
 	tpl_pick->setObjectName(QStringLiteral("tbTemplatePick"));
-	tpl_pick->setFixedSize(24, 24);
+	tpl_pick->setFixedSize(btn_sz, btn_sz);
 	tpl_pick->setIcon(theme_icon("download.svg"));
 	tpl_pick->setIconSize(QSize(16, 16));
 	tpl_pick->setToolTip(QStringLiteral("Vorlagen-Datei (.html) auswählen"));
@@ -1777,13 +1750,13 @@ void TextboxDock::create_row_widget(const TextboxCard &card)
 
 	auto *to_scene_btn = new QPushButton(QStringLiteral("Zu Szene"), card_inner);
 	to_scene_btn->setObjectName(QStringLiteral("tbBtnGreen"));
-	to_scene_btn->setFixedHeight(24);
+	to_scene_btn->setFixedHeight(btn_sz);
 	to_scene_btn->setToolTip(
 		QStringLiteral("Karte als Text-Quelle in die aktuelle Szene legen oder aktualisieren"));
 
 	auto *clear_src_btn = new QPushButton(QStringLiteral("Leeren"), card_inner);
 	clear_src_btn->setObjectName(QStringLiteral("tbBtnRed"));
-	clear_src_btn->setFixedHeight(24);
+	clear_src_btn->setFixedHeight(btn_sz);
 	clear_src_btn->setToolTip(
 		QStringLiteral("Text der Quelle auf leer setzen — die Quelle bleibt in der Szene"));
 	clear_src_btn->setProperty("tbDanger", true);
@@ -2404,9 +2377,15 @@ void TextboxDock::set_dock_status(const QString &msg, bool is_error)
 	if (!dock_status_lbl_)
 		return;
 	dock_status_lbl_->setText(msg);
-	dock_status_lbl_->setStyleSheet(
-		is_error ? QStringLiteral("color: #E85E75; font-size: 10pt; font-weight: bold;")
-			 : QStringLiteral("color: #969696; font-size: 10pt;"));
+	{
+		QPalette pal = dock_status_lbl_->palette();
+		if (is_error) {
+			pal.setColor(QPalette::WindowText, QColor(QStringLiteral("#E85E75")));
+		} else {
+			pal.setColor(QPalette::WindowText, palette().color(QPalette::Mid));
+		}
+		dock_status_lbl_->setPalette(pal);
+	}
 	dock_status_lbl_->setVisible(!msg.isEmpty());
 	if (dock_status_close_)
 		dock_status_close_->setVisible(!msg.isEmpty());
@@ -2481,8 +2460,7 @@ void TextboxDock::on_open_import_dialog()
 	QDialog dlg(this);
 	dlg.setObjectName(QStringLiteral("tbImportDialog"));
 	dlg.setWindowTitle(QStringLiteral("Datenarchiv"));
-	dlg.setStyleSheet(textbox_theme::stylesheet(icon_dir_));
-	dlg.setMinimumWidth(540);
+	dlg.setMinimumWidth(fontMetrics().averageCharWidth() * 50);
 
 	// Inhalt scrollbar machen: nach URL-Import wächst der Detail-Block über
 	// die Bildschirmhöhe hinaus (Dialog > Monitor), Buttons wären off-screen.
@@ -2568,7 +2546,7 @@ void TextboxDock::on_open_import_dialog()
 	lbl_service_select->setObjectName(QStringLiteral("tbFieldLabel"));
 	auto *service_combo = new QComboBox(kopf_group);
 	service_combo->setObjectName(QStringLiteral("tbServiceSelect"));
-	service_combo->setFixedHeight(34);
+	service_combo->setFixedHeight(fontMetrics().height() + 12);
 	service_combo->setAccessibleName(QStringLiteral("Einreichungsauswahl"));
 	// Sehr lange Einreichungs-Items würden sonst das Content-Widget auf
 	// mehrere tausend Pixel Breite aufblähen (QComboBox::minimumSizeHint =
@@ -2593,7 +2571,7 @@ void TextboxDock::on_open_import_dialog()
 
 	auto *kopf_edit_btn = new QPushButton(kopf_group);
 	kopf_edit_btn->setObjectName(QStringLiteral("tbBtnKopfEdit"));
-	kopf_edit_btn->setFixedSize(34, 34);
+	kopf_edit_btn->setFixedSize(fontMetrics().height() + 12, fontMetrics().height() + 12);
 	kopf_edit_btn->setIcon(theme_icon("rename.svg"));
 	kopf_edit_btn->setIconSize(QSize(16, 16));
 	kopf_edit_btn->setToolTip(QStringLiteral("Anzuzeigende Kopfdaten-Felder auswählen"));
@@ -2710,7 +2688,7 @@ void TextboxDock::on_open_import_dialog()
 		new PromptTabEdit(QString::fromUtf8(init_prompt.c_str()), prompt_body);
 	ai_prompt_edit->setObjectName(QStringLiteral("tbAiSystemPrompt"));
 	ai_prompt_edit->setAccessibleName(QStringLiteral("Master-Prompt"));
-	ai_prompt_edit->setFixedHeight(110);
+	ai_prompt_edit->setFixedHeight(fontMetrics().height() * 8);
 
 	auto *ai_prompt_reset_btn =
 		new QPushButton(QStringLiteral("Zurücksetzen"), prompt_body);
@@ -2775,7 +2753,7 @@ void TextboxDock::on_open_import_dialog()
 	ai_table->verticalHeader()->setVisible(false);
 	ai_table->setEditTriggers(QAbstractItemView::NoEditTriggers);
 	ai_table->setSelectionBehavior(QAbstractItemView::SelectRows);
-	ai_table->setMinimumHeight(160);
+	ai_table->setMinimumHeight(fontMetrics().height() * 10);
 
 	auto *ai_apply_btn = new QPushButton(QStringLiteral("Übernehmen"), ai_preview_group);
 	ai_apply_btn->setObjectName(QStringLiteral("tbBtnAiApply"));
@@ -2938,8 +2916,7 @@ void TextboxDock::on_open_import_dialog()
 			QDialog edit_dlg(&dlg);
 			edit_dlg.setObjectName(QStringLiteral("tbKopfEditDialog"));
 			edit_dlg.setWindowTitle(QStringLiteral("Kopfdaten-Felder auswählen"));
-			edit_dlg.setStyleSheet(textbox_theme::stylesheet(icon_dir_));
-			edit_dlg.setMinimumWidth(340);
+			edit_dlg.setMinimumWidth(fontMetrics().averageCharWidth() * 30);
 
 			auto *lay = new QVBoxLayout(&edit_dlg);
 			lay->setContentsMargins(14, 14, 14, 14);
@@ -3519,8 +3496,7 @@ void TextboxDock::on_open_quick_profiles_dialog()
 	QDialog dlg(this);
 	dlg.setObjectName(QStringLiteral("tbQuickProfilesDialog"));
 	dlg.setWindowTitle(QStringLiteral("Schnell-Profile"));
-	dlg.setStyleSheet(textbox_theme::stylesheet(icon_dir_));
-	dlg.setMinimumWidth(460);
+	dlg.setMinimumWidth(fontMetrics().averageCharWidth() * 42);
 
 	auto *root = new QVBoxLayout(&dlg);
 	root->setContentsMargins(16, 16, 16, 16);
@@ -3562,7 +3538,7 @@ void TextboxDock::on_open_quick_profiles_dialog()
 	list_layout->setSpacing(8);
 
 	auto *combo = new QComboBox(list_group);
-	combo->setFixedHeight(34);
+	combo->setFixedHeight(fontMetrics().height() + 12);
 	combo->setAccessibleName(QStringLiteral("Schnellprofil-Auswahl"));
 
 	auto *action_row = new QHBoxLayout();
@@ -3769,8 +3745,7 @@ void TextboxDock::on_open_settings_dialog()
 	QDialog dlg(this);
 	dlg.setObjectName(QStringLiteral("tbSettingsDialog"));
 	dlg.setWindowTitle(QStringLiteral("Einstellungen"));
-	dlg.setStyleSheet(textbox_theme::stylesheet(icon_dir_));
-	dlg.setMinimumWidth(520);
+	dlg.setMinimumWidth(fontMetrics().averageCharWidth() * 48);
 
 	auto *root = new QVBoxLayout(&dlg);
 	root->setContentsMargins(16, 16, 16, 16);
@@ -3910,7 +3885,7 @@ void TextboxDock::on_open_settings_dialog()
 	profiles_layout->setContentsMargins(12, 16, 12, 12);
 	profiles_layout->setSpacing(8);
 
-	/* F1: Das Dock-Theme ist aktuell fest OBS Yami Dark (textbox-theme.hpp) —
+	/* F1: Das Dock-Theme ist aktuell fest OBS Yami Dark —
 	 * kein umschaltbares Preset. Statische Info-Zeile statt eines funktionslosen
 	 * Combos; getrennt von den Karten-Farbprofilen, die hier darunter stehen. */
 	auto *lbl_dock_theme = new QLabel(QStringLiteral("Dock-Theme: OBS Yami Dark"), profiles_group);
@@ -3923,8 +3898,8 @@ void TextboxDock::on_open_settings_dialog()
 
 	auto *profile_list = new QListWidget(profiles_group);
 	profile_list->setObjectName(QStringLiteral("tbProfileList"));
-	profile_list->setMinimumHeight(80);
-	profile_list->setMaximumHeight(130);
+	profile_list->setMinimumHeight(fontMetrics().height() * 6);
+	profile_list->setMaximumHeight(fontMetrics().height() * 10);
 
 	auto *del_prof_btn = new QPushButton(QStringLiteral("Löschen"), profiles_group);
 	del_prof_btn->setObjectName(QStringLiteral("tbBtnDeleteProfile"));
@@ -3939,7 +3914,7 @@ void TextboxDock::on_open_settings_dialog()
 	auto *yaml_combo = new QComboBox(profiles_group);
 	yaml_combo->setObjectName(QStringLiteral("tbYamlProfileCombo"));
 	yaml_combo->setAccessibleName(QStringLiteral("YAML-Profil-Auswahl"));
-	yaml_combo->setFixedHeight(34);
+	yaml_combo->setFixedHeight(fontMetrics().height() + 12);
 
 	auto *yaml_btn_row = new QHBoxLayout();
 	yaml_btn_row->setSpacing(8);

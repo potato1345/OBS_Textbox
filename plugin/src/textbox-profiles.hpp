@@ -249,7 +249,7 @@ inline void apply_style_rules(CardT &card)
 			card.box_opacity = to_int(rule.value);
 		else if (rule.name == "--tb-rainbow")
 			card.rainbow_corners = rule.value == "1";
-		else if (rule.name == "--anim-show")
+		else if (rule.name == "--anim-show" || rule.name == "--show-anim")
 			card.show_anim = rule.value == "1";
 		else if (rule.name == "--anim-file")
 			card.anim_file = rule.value;
@@ -263,6 +263,16 @@ inline void apply_style_rules(CardT &card)
 		} else if (rule.name == "--anim-y") {
 			const int v = parse_int(rule.value);
 			card.anim_y = v < -1200 ? -1200 : (v > 1200 ? 1200 : v);
+		} else if (rule.name == "--box-x") {
+			const int v = parse_int(rule.value);
+			card.box_x = v < -1200 ? -1200 : (v > 1200 ? 1200 : v);
+		} else if (rule.name == "--box-y") {
+			const int v = parse_int(rule.value);
+			card.box_y = v < -1200 ? -1200 : (v > 1200 ? 1200 : v);
+		} else if (rule.name == "--box-scale") {
+			const int s = parse_int(rule.value);
+			if (s > 0)
+				card.box_scale = s;
 		}
 	}
 }

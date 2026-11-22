@@ -42,6 +42,9 @@ struct TextboxCard {
 	int anim_scale = 3; // 1,2,3,4,6,8,10,12 (v2-Optionen); Default 3
 	int anim_x = 0; // -1200..1200 px
 	int anim_y = 0; // -1200..1200 px
+	int box_x = 0; // -1200..1200 px (Box-Verschiebung horizontal)
+	int box_y = 0; // -1200..1200 px (Box-Verschiebung vertikal)
+	int box_scale = 1; // 1,2,3,4,6,8,10,12 (Box-Skalierung; Default 1)
 	std::string template_id = ""; // "" = classic (CSS-Injektion in index.html)
 	std::vector<TextboxRow> rows; // dynamische Zeilen (max kMaxCardRows); leer = Legacy zeile1..3
 	std::vector<TextboxStyleRule> style; // generelle CSS-Regeln (--name: value)
@@ -59,7 +62,9 @@ struct TextboxCard {
 		       rainbow_corners == other.rainbow_corners &&
 		       anim_file == other.anim_file && show_anim == other.show_anim &&
 		       anim_scale == other.anim_scale && anim_x == other.anim_x &&
-		       anim_y == other.anim_y && template_id == other.template_id &&
+		       anim_y == other.anim_y && box_x == other.box_x &&
+		       box_y == other.box_y && box_scale == other.box_scale &&
+		       template_id == other.template_id &&
 		       rows == other.rows && style == other.style;
 	}
 };

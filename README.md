@@ -1,31 +1,31 @@
 # Textbox Studio — OBS-Plugin
 
 Text-Karten als OBS-Overlays (Browser-Sources) mit einem Dock-Panel direkt in OBS:
-Karten erstellen, bearbeiten, importieren und live ins Scene senden. Reines C++/Qt-Plugin
+Karten erstellen, bearbeiten, importieren und live in die Szene senden. Reines C++/Qt-Plugin
 (C++17, Qt-freier Core) — kein Server, keine externen Prozesse außer dem optionalen
 AI-Sidecar (Python).
 
-Aktuelle Version: **1.2.1** · [Releases](https://github.com/potato1345/OBS_Textbox/releases) · [Issues](https://github.com/potato1345/OBS_Textbox/issues)
+Aktuelle Version: **1.2.2** · [Releases](https://github.com/potato1345/OBS_Textbox/releases) · [Issues](https://github.com/potato1345/OBS_Textbox/issues)
 
 ## Vorlagen-Galerie
 
-| Template | Description | Screenshot |
+| Template | Beschreibung | Screenshot |
 |----------|-------------|------------|
 | **standard** | Drei Textzeilen mit farbigen Eck-Akzenten und Regenbogen-Modus | ![Standard](assets/screenshots/standard.png) |
 | **badge** | Horizontale Pill-Badge mit Akzent-Punkten an den Enden | ![Badge](assets/screenshots/badge.png) |
 | **board** | Platinenform: Leiterplatten-Panel mit Kupfer-Traces, Pads und Vias, die über die Card-Grenze nach außen führen | ![Board](assets/screenshots/board.png) |
 | **display** | Große Zahl mit Akzent-Balken und Meta-Label | ![Display](assets/screenshots/display.png) |
-| **minimal** | Drei Textzeilen mit 4px-Eck-Dots, transparenter Hintergrund (hier auf dunklem Yami gezeigt) | ![Minimal](assets/screenshots/minimal.png) |
+| **minimal** | Drei Textzeilen mit 4px-Eck-Dots, transparenter Hintergrund | ![Minimal](assets/screenshots/minimal.png) |
 
 Alle Vorlagen sind im Vorlagen-Ordner des Plugins (`Settings > Vorlagen-Ordner öffnen`) einsehbar und pro Karte im Feld **VORLAGE** auswählbar. Eigene `.html`-Vorlagen im Templates-Ordner werden sofort akzeptiert.
 
 ## Features
 
-- **Karten**: dynamische Anzahl (im Zustand gespeichert, z. B. 12), jede als eigene Browser-Source.
-- **Vorlagen (Templates)**: `standard.html`, `display.html`, `minimal.html`, `badge.html`, `board.html` — jede nutzt `{{token}}`-Platzhalter (`zeile1..3`, `box_color`, `text_color`, …).
-- **16 Style-Properties pro Karte**: Schrift, Farbe/Transparenz, Box-Farbe, Corner-Farbe/-Opacity, Animation, Regenbogen-Ecken.
+- **Karten**: dynamische Anzahl (im Zustand gespeichert), jede als eigene Browser-Source.
+- **Vorlagen (Templates)**: `standard.html`, `display.html`, `minimal.html`, `badge.html`, `board.html` — jede nutzt `{{token}}`-Platzhalter.
+- **Style-Properties pro Karte**: Schrift, Farbe/Transparenz, Box-Farbe, Corner-Farbe/-Opacity, CSS-Regeln, Animation, Regenbogen-Ecken.
 - **Animationen**: relative Pfade, HTTP/HTTPS-URLs oder Data-URIs (mitgeliefert: `sparkle.webp`, `pulse.webp`).
-- **Dock „Textbox Studio“**: Kartenliste, CSS-Regeln pro Karte, Schnell-Profile, Live-Vorschau, Undo.
+- **Dock „Textbox Studio“**: Kartenliste, CSS-Regeln pro Karte, Schnell-Profile, Undo.
 - **OBS-WebSocket**: externe Steuerung via `textbox_card_update` (JSON) und `textbox_clear` Events.
 - **Persistence**: Einstellungen via OBS-Plugin-Settings; Karten-Zustand in `textbox-state.json`.
 
@@ -42,7 +42,6 @@ Toolbar-Icon ⤓ öffnet den Import-Dialog mit drei unabhängigen Wegen:
 Für den AI-Import wird **Python 3.10+** mit dem Paket `markitdown` benötigt. Installation:
 
 ```bash
-winget install Python.Python.3.12
 python -m pip install markitdown
 ```
 
@@ -58,48 +57,115 @@ Der Pfad kann manuell im **Gear-Menü → MARKITDOWN-PYTHON-PFAD** überschriebe
 - *"MarkItDown-Python nicht gefunden"* → kein Python-Interpreter gefunden oder `markitdown` nicht installiert. Die Meldung erscheint auch, wenn der Pfad im Gear-Menü gesetzt, aber ungültig ist.  
 - *"markitdown fehlt im gefundenen Python"* → Python wurde gefunden, aber das Paket `markitdown` fehlt. Im selben Python `python -m pip install markitdown` ausführen.
 
-## OBS-Kompatibilität
+## Unterstützte OBS-Versionen
 
-**Live-getestet (Real-World-Installation und Betrieb, Windows x64):**
-- **OBS 33.0.1** — vollständiger Live-Test: Plugin lädt, Dock „Textbox Studio“, Karten, Preview, Szenen-Integration
-- **OBS 32.2.2** — Live-Test am 22.11.2026 mit portable OBS 32.2.2: Release-ZIP ins Installations-Wurzelverzeichnis entpackt, Plugin lädt (Log „Plugin erfolgreich geladen“), Dock registriert, Karten aus textbox-state.json geladen, Preview korrekt
+| Platform | OBS Versionen | Build |
+|----------|-------------|-------|
+| Windows x64 | 28+, 32.2.2, 33.0.1 | Per CMake-Preset gegen obs-deps |
+| macOS Universal | 28+, 32.2.2, 33.0.1 | Per CMake-Preset gegen obs-deps |
+| Linux x86_64 | 28+, System-libobs-dev | Gegen Ubuntu `libobs-dev`-Paket |
 
-**Nicht live-getestet (nur in GitHub Actions gebaut):**
-- macOS Universal und Linux x86_64 — die CI baut diese Assets, aber kein Real-World-Test in einer echten OBS-Installation auf diesen Plattformen wurde durchgeführt.
+Windows-Assets wurden real in OBS 32.2.2 und 33.0.1 getestet; macOS- und Linux-Assets sind CI-gebaut, aber nicht auf einer echten OBS-Installation getestet. Die `obs-frontend-api` ist seit OBS 28 ABI-stabil.
 
-**Kompatibel erwartet (nicht getestet):** OBS ≥ 28 (stabile Plugin-ABI via `obs-frontend-api`); OBS 32.2.3 (Patch-Release mit identischer ABI zur 32.2.2).
+## Installation
 
-## Erster Live-Betrieb (Checkliste)
+1. **Runtime-Voraussetzungen** — die Plugin-DLL linkt die Visual-C++-Laufzeitbibliotheken dynamisch (`VCRUNTIME140.dll`, `VCRUNTIME140_1.dll`, `MSVCP140.dll`):
+   - **Microsoft Visual C++ 2015–2022 Redistributable (x64)**: [vc_redist.x64.exe](https://aka.ms/vc14/vc_redist.x64.exe) — installiert alle drei DLLs systemweit.
+   - **Windows 10/11 x64** (UCRT ist ab Win 10 enthalten).
+   - **OBS ≥ 28 x64** mit Qt6 (`Qt6Core/Qt6Gui/Qt6Widgets.dll` in `bin\64bit`).
 
-- Release-ZIP der passenden OBS-Version installieren und OBS neu starten
-- Dock "Textbox Studio" über Menü Docks öffnen
+2. OBS komplett schließen.
+
+3. Release-ZIP in das **OBS-Installations-Wurzelverzeichnis** entpacken. Der ZIP enthält `obs-plugins/` und `data/` — **beide Ordner müssen direkt neben `bin/`** im OBS-Installationsverzeichnis liegen (z. B. `C:\Program Files\obs-studio\`). Nicht in `%APPDATA%` und nicht nur in den `obs-plugins\`-Unterordner.
+
+4. Alte Plugin-Version vollständig entfernen (alte DLL in `obs-plugins\64bit`, alter Datenordner unter `data\obs-plugins\`).
+
+5. OBS starten. Nach einem Absturz kann OBS im abgesicherten Modus starten — dann werden Dritt-Plugins nicht geladen. Dialog mit „Im normalen Modus starten“ beantworten.
+
+6. Log kontrollieren: `%APPDATA%\obs-studio\logs\<datum>.txt` muss `[textbox] Plugin erfolgreich geladen` zeigen.
+
+### Selbstcheck
+
+Das Repo enthält ein PowerShell-Skript zur Vorprüfung der Systemvoraussetzungen:
+
+```powershell
+.\plugin\.github\scripts\check-prereq.ps1
+```
+
+Es prüft VC-Redist, DLLs, Datenordner, Qt6 und das letzte Plugin-Log.
+
+## Erste Schritte
+
+- Dock "Textbox Studio" öffnen (erscheint automatisch oder über Menü Docks)
 - Karten erstellen oder über das Import-Icon füllen (Google-Formular, CSV/XLSX, AI)
 - Pro Karte Vorlage (VORLAGE) und Farbprofil setzen
-- "Zu Szene" legt die Karte als Browser-Source ins aktuelle Scene; Source-Position bei Bedarf im Scene-Editor anpassen
-- Karten bleiben in textbox-state.json erhalten; Backup/Restore über das Gear-Menü
+- "Zu Szene" legt die Karte als Browser-Source in die aktuelle Szene
+- Karten bleiben in `textbox-state.json` erhalten; Backup/Restore über das Gear-Menü
 
-## Installation auf einem Prod-PC (Windows)
+## Templates und Template-Tokens
 
-0. **Runtime-Voraussetzungen einmalig installieren** — die Plugin-DLL linkt die Visual-C++-Laufzeitbibliotheken dynamisch (`VCRUNTIME140.dll`, `VCRUNTIME140_1.dll`, `MSVCP140.dll`). Diese liegen **nicht** im ZIP und **nicht** im OBS-Ordner — ohne sie bricht OBS beim Plugin-Laden still ab:
-   - **Microsoft Visual C++ 2015–2022 Redistributable (x64)**: https://aka.ms/vc14/vc_redist.x64.exe — installiert alle drei DLLs systemweit.
-   - **Windows 10/11 x64** (UCRT `api-ms-win-crt-*` ist ab Win 10 dabei; Win 7/8 brauchen das UCRT-KB).
-   - **OBS 32.2.2 oder 33.0.1 x64** mit Qt6 (`Qt6Core/Qt6Gui/Qt6Widgets.dll` in `bin\64bit`) — das stellt OBS selbst.
-   - Selbstcheck ohne OBS: `plugin\.github\scripts\check-prereq.ps1` (im Repo) ausführen (prüft VC-Redist, DLL, Datenordner, Qt6, letztes Plugin-Log).
-1. OBS komplett schließen (nicht nur das Fenster — es darf kein `obs64.exe` mehr laufen).
-2. Installationsort des OBS herausfinden (Short-Ziel, z. B. `C:\Program Files\obs-studio\` oder Steam-Ordner). Der ZIP enthält `obs-plugins\` und `data\` — **beide Ordner müssen in das Installations-Wurzelverzeichnis** des OBS entpackt (direkt neben `bin\`), nicht in `%APPDATA%` und nicht nur in `obs-plugins\`.
-3. Altes Plugin komplett entfernen (alte DLL im `obs-plugins\64bit`, alter Datenordner unter `data\obs-plugins\`, altes Dock „Textbox control“ im Menü Docks abwählen) — sonst konkurrieren zwei Plugin-Versionen.
-4. OBS starten. Nach einem Absturz kann OBS im **abgesicherten Modus** starten — dann werden Dritt-Plugins nicht geladen und das Dock erscheint nicht. Dialog mit „Im normalen Modus starten“ beantworten.
-5. Log kontrollieren: `%APPDATA%\obs-studio\logs\<datum>.txt` muss `[textbox] Plugin erfolgreich geladen` und „Dock registriert … Erfolg=ja“ zeigen.
+Eigene HTML-Vorlagen werden im Vorlagen-Ordner (`Settings > Vorlagen-Ordner öffnen`) abgelegt. Folgende Token werden beim Schreiben substituiert:
 
-| Platform | OBS Versions | Build |
-|----------|-------------|-------|
-| Windows x64 | 32.2.2, 33.0.1 | Per CMake-Preset gegen obs-deps |
-| macOS Universal | 32.2.2, 33.0.1 | Per CMake-Preset gegen obs-deps |
-| Linux x86_64 | System-libobs-dev | Gegen Ubuntu `libobs-dev`-Paket |
+| Token | Beschreibung |
+|-------|-------------|
+| `{{zeile1}}`, `{{zeile2}}`, `{{zeile3}}` | Textzeilen (bei clear=1 leer) |
+| `{{zeile-N}}` (N=1..8) | Dynamische Zeilen-Werte |
+| `{{zeile-count}}` | Anzahl aktiver Zeilen |
+| `{{text_color}}` | Textfarbe als `rgba(...)` |
+| `{{box_color}}` | Box-Hintergrundfarbe als `rgba(...)` |
+| `{{corner_a}}`, `{{corner_b}}` | Eckfarben als `rgba(...)` |
+| `{{corner_op_a}}`, `{{corner_op_b}}` | Eck-Transparenz (0..255) |
+| `{{text_opacity}}` | Text-Transparenz (0..255) |
+| `{{box_opacity}}` | Box-Transparenz (0..255) |
+| `{{rainbow}}` | `"1"` oder `"0"` |
+| `{{anim_src}}` | Animations-Pfad (Data-URI oder file://) |
+| `{{show_anim}}` | `"1"` oder `"0"` |
+| `{{anim_scale}}`, `{{anim_x}}`, `{{anim_y}}` | Animations-Skalierung/-Position |
+| `{{box_x}}`, `{{box_y}}` | Box-Verschiebung (px, -1200..1200) |
+| `{{box_scale}}` | Box-Skalierung (1,2,3,4,6,8,10,12) |
+| `{{card_id}}` | Karten-ID (z. B. `box1`) |
+| `{{clear}}` | `"1"` bei clear, sonst `"0"` |
 
-Download-ZIPs folgen dem Schema `textbox-studio-<ver>-obs-<OBSVER>-<platform>.zip`.
-Die Tabelle ist die CI-Build-Matrix — **nur die Windows-Assets wurden real in OBS getestet** (32.2.2 und 33.0.1); macOS- und Linux-Assets sind CI-gebaut, aber ungetestet.
-Die `obs-frontend-api` ist seit OBS 28 ABI-stabil. Für andere OBS-Versionen: Abhängigkeiten neu ziehen (CMake lädt die passende Version) und neu bauen.
+## CSS-Variablen-Referenz
+
+Über das CSS-Regel-Panel pro Karte (▼ GENERELLE CSS-REGELN) können folgende Variablen gesetzt werden:
+
+### Layout
+- `--tb-radius` — Rahmenradius der Box (px)
+- `--tb-padding`, `--tb-padding-top`, `--tb-padding-left` — Innenabstand
+- `--tb-gap` — Abstand zwischen Zeilen
+- `--tb-min-width`, `--tb-max-width` — Box-Breite
+- `--tb-text-align` — Textausrichtung
+- `--tb-font-family`, `--tb-font-first`, `--tb-font-first-weight` — Schrift (erste Zeile)
+- `--tb-font-rest`, `--tb-font-rest-weight` — Schrift (restliche Zeilen)
+- `--tb-corner-size` — Größe der Ecken-Dreiecke
+
+### Farbe/Transparenz
+- `--tb-color-text`, `--tb-color-box` — Text-/Box-Farbe
+- `--tb-corner-color-a`, `--tb-corner-color-b` — Eckfarben
+- `--tb-corner-opacity-a`, `--tb-corner-opacity-b` — Eck-Transparenz
+- `--tb-text-opacity`, `--tb-box-opacity` — Text-/Box-Transparenz
+- `--tb-rainbow` — Regenbogen-Ecken (0/1)
+
+### Animation
+- `--anim-show`, `--show-anim` — Animation ein/aus (0/1)
+- `--anim-file` — Animations-Dateipfad
+- `--anim-scale` — Animations-Skalierung (1,2,3,4,6,8,10,12)
+- `--anim-x`, `--anim-y` — Animations-Verschiebung (px, -1200..1200)
+
+### Box-Position/Skalierung
+- `--box-x`, `--box-y` — Box-Verschiebung (px, -1200..1200)
+- `--box-scale` — Box-Skalierung (1,2,3,4,6,8,10,12)
+
+## Gear-Einstellungen
+
+Das Zahnrad-Menü (⚙) bietet:
+
+- **Schnell-Profile** — komplette Karten-Konfiguration speichern/wiederherstellen
+- **Einstellungen** — Google-Form-ID, OAuth-Token-Pfad, OpenRouter-API-Key, MarkItDown-Python-Pfad, Animations-Verzeichnis, Referenztabelle, Textbox-Pfad, AI-System-Prompt
+- **Vorlagen-Ordner öffnen** — öffnet den user-Templates-Ordner im Datei-Explorer
+- **Vorlage aus classic kopieren** — kopiert `index.html` als `classic.html` in den Templates-Ordner
+- **Backup erstellen/wiederherstellen** — exportiert/importiert den aktuellen Karten-Zustand
 
 ## Bau
 
@@ -115,47 +181,49 @@ cmake --build build_x64 --config RelWithDebInfo
 ctest --test-dir build_x64 -C RelWithDebInfo
 ```
 
-8 Test-Suiten decken den Qt-freien Core ab: Controls, HTML-Rendering, Tabellen-Import, AI-Import (Stub-LLM) und Qt6-Render-Test.
+Die Test-Suiten decken den Qt-freien Core ab: State, HTML-Rendering, Tabellen-Import, AI-Import (Stub-LLM) und Qt6-Render-Tests.
 
 ### Deploy nach OBS Studio
-
-DLL + PDB nach `<OBS>\obs-plugins\64bit\` und `<OBS>\bin\64bit\` kopieren;
-Plugin-Data unter `<OBS>\data\obs-plugins\textbox-studio\` per `cmake --install`:
 
 ```bash
 cmake --install build_x64 --config RelWithDebInfo --prefix "C:/Program Files/obs-studio"
 ```
 
-Das `--prefix` muss auf das OBS-Installationsverzeichnis zeigen (alternativ `<OBS>`).
-Der Befehl kopiert `index.html`, Vorlagen und Animationen in das Plugin-Data-Verzeichnis.
-
-## Nutzung
-
-1. OBS starten — das Dock „Textbox Studio“ erscheint automatisch.
-2. Kartendaten eingeben — die Vorschau aktualisiert live.
-3. „Zu Szene“ legt die Browser-Source automatisch an (alternativ manuell: Browser-Source mit der Overlay-HTML, mind. 1200×600 px).
-4. Externe Steuerung: OBS-WebSocket mit `textbox_card_update`-Events.
-
-## Release
-
-GitHub Actions baut bei **Tag-Push** `v*` für Windows/macOS/Linux und veröffentlicht als GitHub-Release.
-
-```bash
-git tag -f vX.Y.Z <commit> && git push -f origin vX.Y.Z
-```
+Das `--prefix` muss auf das OBS-Installationsverzeichnis zeigen. Der Befehl kopiert `index.html`, Vorlagen und Animationen in das Plugin-Data-Verzeichnis.
 
 ## Struktur
 
 ```
 plugin/                     OBS-Plugin (Quellcode, CMake, Data, Tests)
-plugin/src/                 Quellen (Controls, Dock, Overlay, HTML, Import, AI, Theme)
-plugin/src/tests/           Qt-freie Test-Suiten + samples
+plugin/src/                 Quellen (Dock, Overlay, HTML, Import, AI)
+plugin/src/tests/           Test-Suiten + samples
 plugin/templates/           Overlay-Vorlagen (standard/display/minimal/badge/board)
+plugin/data/                Plugin-Data (index.html, Animationen, Locale)
+plugin/.github/scripts/     Hilfsskripte (check-prereq.ps1)
 docs/DESIGN.md              UI-Design-Spec (Spacing-Raster, Theme-Tokens)
 docs/native-style-notes.md  Referenz: natives OBS-Plugin-Styling
-tools/ui_spacing_check.py   UI-Audit-Tool (Pixel-Gaps gegen DESIGN.md)
-assets/screenshots/         Vorlagen-Galerie-Bilder
 ```
+
+## Fehlerbehebung
+
+### Plugin wird nicht geladen
+
+- Log prüfen: `%APPDATA%\obs-studio\logs\<datum>.txt` — nach `[textbox]` suchen.
+- Fehlt `[textbox] Plugin erfolgreich geladen` → VC-Redist nicht installiert oder DLL fehlt.
+- OBS im abgesicherten Modus? → Dialog „Im normalen Modus starten".
+- Alte Plugin-DLL im `obs-plugins\64bit`? → Nur eine Version darf existieren.
+
+### Browser-Sources funktionieren nicht
+
+- Sicherstellen, dass `events_listen` in den Browser-Quellen aktiviert ist (das Plugin setzt es automatisch).
+- Bei schwarzen Boxen: `shutdown`-Setting darf nicht gesetzt sein.
+- Live-Push benötigt den `javascript_event`-Proc-Handler der Browser-Source.
+
+### OBS lässt sich nicht schließen (Close-Hang)
+
+- Wenn das Plugin geladen ist, aber Browser-Sources in Szenen verbleiben, kann CEF den Shutdown blockieren.
+- Ab Version 1.2.2 registriert das Plugin einen Shutdown-Event-Callback, der alle Karten-Sources vor dem Herunterfahren entfernt.
+- Workaround: Alle Karten manuell löschen oder Szenen ohne Textbox-Sources wechseln, bevor OBS geschlossen wird.
 
 ## Lizenz
 

@@ -280,13 +280,13 @@ int main()
 		textbox_html::push_update(dummy_src, c, true);
 		const nlohmann::json jt2 =
 			nlohmann::json::parse(textbox_html::last_push_update_json(), nullptr, false);
-		check(jt1.is_object() && jt1.size() == 18 &&
+		check(jt1.is_object() && jt1.size() == 21 &&
 			jt1.value("template_id", "") == "rounded" &&
 			jt1.contains("vn") &&
 			jt1.value("vn", nlohmann::json::array()).size() >= 1 &&
 			jt1.value("vn", nlohmann::json::array())[0].get<std::string>() == "--zeile-1" && jt2.is_object() &&
-			jt2.size() == 18 && jt2.value("template_id", "") == "rounded",
-			"4d. push_update (IMP-G): JSON hat 18 Schlüssel inkl. template_id + zeilen/style/vn (auch bei clear=true)");
+			jt2.size() == 21 && jt2.value("template_id", "") == "rounded",
+			"4d. push_update (IMP-G): JSON hat 21 Schlüssel (inkl. box_x/box_y/box_scale) + template_id + zeilen/style/vn (auch bei clear=true)");
 	}
 
 	// 5. normalize_anim_src: Data-URI, relativ + Traversal-Guard, http/https, portable Absolutpfade

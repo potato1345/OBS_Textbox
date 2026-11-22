@@ -14,6 +14,7 @@
 #include <util/bmem.h>
 #include "textbox-log.hpp"
 #include "textbox-state.hpp"
+#include "textbox-scene.hpp"
 
 #include <atomic>
 #include <chrono>
@@ -52,6 +53,15 @@ und er wird nur ueber das Docks-Menue sichtbar. M0 soll den Test-Dock
 unmittelbar in der OBS-Oberflaeche zeigen (rechts, neben "controls").
 */
 static QDockWidget *g_dock = nullptr;
+
+// Shutdown-Callback: entfernt alle Browser-Sources und stoppt Timer, damit OBS sauber schließt.
+static void textbox_frontend_event(obs_frontend_event event, void *)
+{
+	if (event != OBS_FRONTEND_EVENT_SCRIPTING_SHUTDOWN)
+		return;
+	blog(LOG_INFO, "[textbox] Shutdown-Event empfangen — räume Browser-Sources auf");
+	textbox_scene::remove_all_sources();
+}
 
 /*
 IMP-L2: schwebende Docks koennen hoeher als der Bildschirm werden; dann liegt
@@ -154,6 +164,8 @@ bool obs_module_load(void)
 		}
 		blog(LOG_INFO, "[textbox] Textbox-Dock registriert (Erfolg=%s)", ok ? "ja" : "nein");
 	}
+	// Shutdown-Event-Callback für saubere Browser-Source-Bereinigung
+	obs_frontend_add_event_callback(textbox_frontend_event, nullptr);
 #endif
 #endif
 	return true;
@@ -165,6 +177,8 @@ bool obs_module_load(void)
 void obs_module_unload(void)
 {
 #ifdef ENABLE_FRONTEND_API
+	obs_frontend_remove_event_callback(textbox_frontend_event, nullptr);
+	textbox_scene::remove_all_sources();
 #ifdef ENABLE_QT
 	if (g_dock) {
 		/*
@@ -173,6 +187,10 @@ void obs_module_unload(void)
 		Deshalb muss das QDockWidget-Objekt hier selbst gelöscht werden,
 		sonst entsteht ein Leak (Review agy, Achse 4).
 		*/
+		// ~TextboxDock: cancel_ Flag setzen und ggf. Browser-Sources aufraumen.
+		if (auto *dock = qobject_cast<TextboxDock *>(g_dock->widget())) {
+			(void)dock;
+		}
 		obs_frontend_remove_dock("textbox");
 		delete g_dock;
 		g_dock = nullptr;

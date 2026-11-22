@@ -122,6 +122,12 @@ TextboxCard card_from_json(const nlohmann::json &item)
 		c.anim_x = item["anim_x"].get<int>();
 	if (item.contains("anim_y") && item["anim_y"].is_number_integer())
 		c.anim_y = item["anim_y"].get<int>();
+	if (item.contains("box_x") && item["box_x"].is_number_integer())
+		c.box_x = item["box_x"].get<int>();
+	if (item.contains("box_y") && item["box_y"].is_number_integer())
+		c.box_y = item["box_y"].get<int>();
+	if (item.contains("box_scale") && item["box_scale"].is_number_integer())
+		c.box_scale = item["box_scale"].get<int>();
 	if (item.contains("template_id") && item["template_id"].is_string())
 		c.template_id = item["template_id"].get<std::string>();
 	// CSS-Regeln sind die authoritative Quelle für Farben/Deckkraft.
@@ -166,6 +172,9 @@ nlohmann::json card_to_json(const TextboxCard &c)
 		{"anim_scale", c.anim_scale},
 		{"anim_x", c.anim_x},
 		{"anim_y", c.anim_y},
+		{"box_x", c.box_x},
+		{"box_y", c.box_y},
+		{"box_scale", c.box_scale},
 		{"template_id", c.template_id},
 	};
 }

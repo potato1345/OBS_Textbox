@@ -319,7 +319,7 @@ int main()
 		const nlohmann::json j = nlohmann::json::parse(raw, nullptr, false);
 
 		const bool ok =
-			!j.is_discarded() && j.is_object() && j.size() == 18 &&
+			!j.is_discarded() && j.is_object() && j.size() == 21 &&
 			j.contains("zeilen") && j.contains("style") &&
 			j.value("zeile1", "") == "Sanctus" &&
 			j.value("zeile2", "") == "198, 1" &&
@@ -335,8 +335,11 @@ int main()
 			j.value("anim_scale", -1) == 4 &&
 			j.value("anim_x", 0) == -15 &&
 			j.value("anim_y", 0) == 30 &&
+			j.value("box_x", 0) == 0 &&
+			j.value("box_y", 0) == 0 &&
+			j.value("box_scale", -1) == 1 &&
 			j.value("template_id", "") == "rounded";
-		check(ok, "8. push_update: enthält alle 14 alten Keys unverändert + template_id=\"rounded\"",
+		check(ok, "8. push_update: enthält alle Keys (inkl. box_x/box_y/box_scale) unverändert + template_id=\"rounded\"",
 		      raw);
 	}
 

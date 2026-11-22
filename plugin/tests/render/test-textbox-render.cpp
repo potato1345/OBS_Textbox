@@ -662,7 +662,7 @@ int main(int argc, char *argv[])
 		check(ok_12g, "12g. (M5.1) http/file/empty Pass-through");
 	}
 
-	// 11. (M5 #13 & #14) build_inject_css mit echten Anim-Werten, Escape und Defaults
+	// 11. (M5 #13 & #14) build_inject_css mit echten Anim-Werten, Escape und Defaults inkl. Box-Vars
 	{
 		TextboxSettings st;
 		TextboxCard c_anim;
@@ -673,6 +673,9 @@ int main(int argc, char *argv[])
 		c_anim.anim_scale = 4;
 		c_anim.anim_x = -1200;
 		c_anim.anim_y = 50;
+		c_anim.box_x = 10;
+		c_anim.box_y = -20;
+		c_anim.box_scale = 6;
 
 		const std::string css_anim = textbox_html::build_inject_css(c_anim, st);
 		const bool ok_13 =
@@ -680,7 +683,10 @@ int main(int argc, char *argv[])
 			css_anim.find("--show-anim: 1;") != std::string::npos &&
 			css_anim.find("--anim-scale: 4;") != std::string::npos &&
 			css_anim.find("--anim-x: -1200px;") != std::string::npos &&
-			css_anim.find("--anim-y: 50px;") != std::string::npos;
+			css_anim.find("--anim-y: 50px;") != std::string::npos &&
+			css_anim.find("--box-x: 10px;") != std::string::npos &&
+			css_anim.find("--box-y: -20px;") != std::string::npos &&
+			css_anim.find("--box-scale: 6;") != std::string::npos;
 
 		TextboxCard c_anim_q = c_anim;
 		c_anim_q.anim_file = "https://example.com/a\"b.gif";
@@ -704,6 +710,15 @@ int main(int argc, char *argv[])
 		      "11a. (M5 #13) build_inject_css mit Anim-State: --anim-file/show/scale/x/y exakt + '\"' escaped");
 		check(ok_14,
 		      "11b. (M5 #14) build_inject_css ohne Anim (Defaults): --anim-file: \"\"; --show-anim: 0;");
+
+		// 11c. Box-Vars in build_inject_css: c_anim hat benutzerdefinierte box_x/y/scale, c_def hat Defaults
+		check(css_anim.find("--box-x: 10px;") != std::string::npos &&
+		      css_anim.find("--box-y: -20px;") != std::string::npos &&
+		      css_anim.find("--box-scale: 6;") != std::string::npos &&
+		      css_def.find("--box-x: 0px;") != std::string::npos &&
+		      css_def.find("--box-y: 0px;") != std::string::npos &&
+		      css_def.find("--box-scale: 1;") != std::string::npos,
+		      "11c. build_inject_css: Box-Vars — c_anim hat 10px/-20px/6, c_def Defaults 0px/0px/1");
 	}
 
 	if (g_failures > 0) {

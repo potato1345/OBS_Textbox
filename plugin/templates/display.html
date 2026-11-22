@@ -24,6 +24,9 @@
         --anim-scale: {{anim_scale}};
         --anim-x: {{anim_x}}px;
         --anim-y: {{anim_y}}px;
+        --box-x: {{box_x}}px;
+        --box-y: {{box_y}}px;
+        --box-scale: {{box_scale}};
         /* Festes Layout: write_card substituiert nur den offiziellen Token-Set
            (zeile1..3, Farben, anim, rainbow, clear). Positionen/Groessen sind
            Bestandteil des Display-Layouts und keine Tokens. */
@@ -52,6 +55,8 @@
         background: transparent;
         overflow: hidden;
         font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        transform: translate(var(--box-x,0px), var(--box-y,0px)) scale(var(--box-scale,1));
+        transform-origin: top left;
     }
     /* Box-Hintergrund — full-canvas, deckt den gesamten Kartenbereich ab */
     .box-bg {
@@ -243,6 +248,9 @@
             if (d.anim_scale != null) setVar('--anim-scale', String(d.anim_scale));
             if (d.anim_x != null) setVar('--anim-x', String(d.anim_x) + 'px');
             if (d.anim_y != null) setVar('--anim-y', String(d.anim_y) + 'px');
+            if (d.box_x != null) setVar('--box-x', String(d.box_x) + 'px');
+            if (d.box_y != null) setVar('--box-y', String(d.box_y) + 'px');
+            if (d.box_scale != null) setVar('--box-scale', String(d.box_scale));
             document.body.classList.toggle('rainbow', !!d.rainbow);
         });
     })();

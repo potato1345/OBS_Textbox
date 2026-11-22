@@ -46,4 +46,7 @@ void remove_everywhere(const std::string &card_id);
 /** True, wenn mindestens eine Browser-Quelle "Textbox <card_id>" in irgendeiner Szene existiert. */
 bool source_exists(const std::string &card_id);
 
+/** Entfernt ALLE Karten-Sources aus allen Szenen (für Shutdown). */
+void remove_all_sources();
+
 } // namespace textbox_scene

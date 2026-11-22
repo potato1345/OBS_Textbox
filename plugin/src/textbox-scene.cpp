@@ -327,4 +327,30 @@ bool source_exists(const std::string &card_id)
 	return false;
 }
 
+// Entfernt ALLE Karten-Sources aus allen Szenen (für Shutdown — OBS_FRONTEND_EVENT_SCRIPTING_SHUTDOWN).
+void remove_all_sources()
+{
+	const std::vector<obs_scene_t *> scenes = collect_all_scenes();
+	for (obs_scene_t *scene : scenes) {
+		// Alle Scene-Items durchgehen; jeder "Textbox <name>" = Karten-Source.
+		auto *item = obs_scene_find_source(scene, "Textbox ");
+		// Es gibt keinen wildcard-Enum, also per obs_scene_enum_items.
+		auto enum_cb = [](obs_scene_t *, obs_sceneitem_t *item, void *param) {
+			auto *removed = static_cast<std::vector<std::string> *>(param);
+			obs_source_t *src = obs_sceneitem_get_source(item);
+			if (!src) return true;
+			const char *name = obs_source_get_name(src);
+			if (name && strncmp(name, "Textbox ", 8) == 0) {
+				obs_sceneitem_remove(item);
+				removed->push_back(name);
+			}
+			return true;
+		};
+		std::vector<std::string> removed;
+		obs_scene_enum_items(scene, enum_cb, &removed);
+		for (const auto &n : removed)
+			blog(LOG_INFO, "[textbox] Shutdown: Source '%s' entfernt", n.c_str());
+	}
+}
+
 } // namespace textbox_scene
