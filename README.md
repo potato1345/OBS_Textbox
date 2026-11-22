@@ -39,9 +39,14 @@ Toolbar-Icon ⤓ öffnet den Import-Dialog mit drei unabhängigen Wegen:
 
 ## OBS-Kompatibilität
 
-**Getestet:** OBS 32.2.2 und 33.0.1 (Windows/macOS/Linux).  
-**Kompatibel erwartet:** OBS ≥ 28 (stabile Plugin-ABI via `obs-frontend-api`).  
-**OBS 33:** Live-getestet mit OBS 33.0.1 (Windows); Release-Matrix baut obs-33.0.1-Assets.
+**Live-getestet (Real-World-Installation und Betrieb, Windows x64):**
+- **OBS 33.0.1** — vollständiger Live-Test: Plugin lädt, Dock „Textbox Studio“, Karten, Preview, Szenen-Integration
+- **OBS 32.2.2** — Live-Test am 22.11.2026 mit portable OBS 32.2.2: Release-ZIP ins Installations-Wurzelverzeichnis entpackt, Plugin lädt (Log „Plugin erfolgreich geladen“), Dock registriert, Karten aus textbox-state.json geladen, Preview korrekt
+
+**Nicht live-getestet (nur in GitHub Actions gebaut):**
+- macOS Universal und Linux x86_64 — die CI baut diese Assets, aber kein Real-World-Test in einer echten OBS-Installation auf diesen Plattformen wurde durchgeführt.
+
+**Kompatibel erwartet (nicht getestet):** OBS ≥ 28 (stabile Plugin-ABI via `obs-frontend-api`); OBS 32.2.3 (Patch-Release mit identischer ABI zur 32.2.2).
 
 ## Erster Live-Betrieb (Checkliste)
 
@@ -52,6 +57,14 @@ Toolbar-Icon ⤓ öffnet den Import-Dialog mit drei unabhängigen Wegen:
 - "Zu Szene" legt die Karte als Browser-Source ins aktuelle Scene; Source-Position bei Bedarf im Scene-Editor anpassen
 - Karten bleiben in textbox-state.json erhalten; Backup/Restore über das Gear-Menü
 
+## Installation auf einem Prod-PC (Windows)
+
+1. OBS komplett schließen (nicht nur das Fenster — es darf kein `obs64.exe` mehr laufen).
+2. Installationsort des OBS herausfinden (Short-Ziel, z. B. `C:\Program Files\obs-studio\` oder Steam-Ordner). Der ZIP enthält `obs-plugins\` und `data\` — **beide Ordner müssen in das Installations-Wurzelverzeichnis** des OBS entpackt (direkt neben `bin\`), nicht in `%APPDATA%` und nicht nur in `obs-plugins\`.
+3. Altes Plugin komplett entfernen (alte DLL im `obs-plugins\64bit`, alter Datenordner unter `data\obs-plugins\`, altes Dock „Textbox control“ im Menü Docks abwählen) — sonst konkurrieren zwei Plugin-Versionen.
+4. OBS starten. Nach einem Absturz kann OBS im **abgesicherten Modus** starten — dann werden Dritt-Plugins nicht geladen und das Dock erscheint nicht. Dialog mit „Im normalen Modus starten“ beantworten.
+5. Log kontrollieren: `%APPDATA%\obs-studio\logs\<datum>.txt` muss `[textbox] Plugin erfolgreich geladen` und „Dock registriert … Erfolg=ja“ zeigen.
+
 | Platform | OBS Versions | Build |
 |----------|-------------|-------|
 | Windows x64 | 32.2.2, 33.0.1 | Per CMake-Preset gegen obs-deps |
@@ -59,6 +72,7 @@ Toolbar-Icon ⤓ öffnet den Import-Dialog mit drei unabhängigen Wegen:
 | Linux x86_64 | System-libobs-dev | Gegen Ubuntu `libobs-dev`-Paket |
 
 Download-ZIPs folgen dem Schema `textbox-studio-<ver>-obs-<OBSVER>-<platform>.zip`.
+Die Tabelle ist die CI-Build-Matrix — **nur die Windows-Assets wurden real in OBS getestet** (32.2.2 und 33.0.1); macOS- und Linux-Assets sind CI-gebaut, aber ungetestet.
 Die `obs-frontend-api` ist seit OBS 28 ABI-stabil. Für andere OBS-Versionen: Abhängigkeiten neu ziehen (CMake lädt die passende Version) und neu bauen.
 
 ## Bau
