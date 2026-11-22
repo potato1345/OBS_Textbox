@@ -282,10 +282,15 @@ Abschluss Protokoll
 		const std::string ext_missing = extract_document_text(
 			doc_txt.u8string(), (temp_dir / "no_such_python.exe").u8string(),
 			err_missing);
-		check(ext_missing.empty() &&
-			      err_missing.find("MarkItDown-Python nicht gefunden") !=
-				      std::string::npos,
-		      "12b. extract_document_text mit nicht existenter Python-Exe liefert deutschen Fehler",
+		// Ungueltiger Gear-Pfad -> Auto-Detect: entweder Extraktion erfolgreich
+		// (Python + markitdown gefunden) oder deutscher Fehler
+		// ("nicht gefunden" ohne Python, "markitdown fehlt" ohne Modul).
+		check((ext_missing.find("101") != std::string::npos) ||
+		      (ext_missing.empty() &&
+		       (err_missing.find("MarkItDown-Python nicht gefunden") !=
+			        std::string::npos ||
+		        err_missing.find("markitdown fehlt") != std::string::npos)),
+		      "12b. extract_document_text mit nicht existenter Python-Exe: Auto-Detect oder deutscher Fehler",
 		      err_missing);
 
 		// 12c. extract_document_text mit leerem python_exe -> Auto-Detect und neuer Fehlertext

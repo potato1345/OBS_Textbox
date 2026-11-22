@@ -225,10 +225,17 @@ HttpResp winhttp_call(const std::string &method, const std::string &url,
 	return result;
 }
 
-// Durchsucht bekannte Windows-Pfade nach einem vorhandenen Python-Interpreter.
-// Reihenfolge: py.exe (System, LOCALAPPDATA), Python 3.14–3.10 (Program Files, LOCALAPPDATA), PATH.
+#endif // _WIN32
+
+} // namespace
+
+// Durchsucht bekannte Windows-Pfade nach einem vorhandenen Python-Interpreter
+// (Fallback, wenn der Gear-Pfad leer oder ungültig ist).
+// Reihenfolge: py.exe (System, LOCALAPPDATA), Python 3.14-3.10 (Program Files,
+// LOCALAPPDATA), PATH.
 std::string detect_python_exe()
 {
+#ifdef _WIN32
 	// 1. C:/Windows/py.exe
 	{
 		const std::filesystem::path p = L"C:/Windows/py.exe";
@@ -292,11 +299,10 @@ std::string detect_python_exe()
 	}
 
 	return "";
+#else
+	return "";
+#endif
 }
-
-#endif // _WIN32
-
-} // namespace
 
 std::string read_env_key(const std::string &env_file_path, std::string &err)
 {
