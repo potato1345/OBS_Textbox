@@ -690,7 +690,10 @@ std::string build_inject_css(const TextboxCard &card, const TextboxSettings &set
 	// Emissions-Reihenfolge: User-Regeln NACH den festen --anim-* Zeilen,
 	// damit User-Werte für --anim-show/--show-anim/--anim-file etc. Vorrang haben.
 	for (const auto &rule : card.style) {
-		const std::string var_name = sanitize_css_var_name(rule.name);
+		// Alias: aelterliche Seed-Zeilen heissen --anim-show; die Templates
+		// lesen --show-anim. Normalisierung hier haelt alte State-Dateuren kompatibel.
+		const std::string alias_name = rule.name == "--anim-show" ? "--show-anim" : rule.name;
+		const std::string var_name = sanitize_css_var_name(alias_name);
 		const std::string var_value = sanitize_css_value(rule.value);
 		if (var_name.empty() || var_value.empty())
 			continue;

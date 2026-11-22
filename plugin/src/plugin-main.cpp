@@ -52,7 +52,11 @@ add_dock_by_id legt den Dock versteckt + floating an (setVisible(false))
 und er wird nur ueber das Docks-Menue sichtbar. M0 soll den Test-Dock
 unmittelbar in der OBS-Oberflaeche zeigen (rechts, neben "controls").
 */
-static QDockWidget *g_dock = nullptr;
+/* QPointer: wird automatisch null, wenn OBS das Main-Window (Eltern des Docks)
+ * zerstört. OBSApp::~OBSApp zerstört das Fenster VOR obs_shutdown ->
+ * obs_module_unload; ein rohes delete wäre dann ein Double-Free (AV in
+ * qt6widgets, Crash beim Fenster-Schließen). */
+static QPointer<QDockWidget> g_dock;
 
 // Shutdown-Callback: entfernt alle Browser-Sources und stoppt Timer, damit OBS sauber schließt.
 static void textbox_frontend_event(obs_frontend_event event, void *)
@@ -117,7 +121,7 @@ bool obs_module_load(void)
 		bool ok = obs_frontend_add_custom_qdock("textbox", g_dock);
 		if (!ok) {
 			/* Registrierung fehlgeschlagen: Widget nicht hängen lassen */
-			delete g_dock;
+			delete g_dock.data();
 			g_dock = nullptr;
 		} else {
 			/* IMP-H8: OBS 32 versteckt Custom-QDockWidget per Default und
@@ -182,17 +186,14 @@ void obs_module_unload(void)
 #ifdef ENABLE_QT
 	if (g_dock) {
 		/*
-		obs_frontend_remove_dock loest den Custom-Dock nur aus dem
-		QMainWindow-Layout (extraCustomDocks = rohe Zeiger, kein shared_ptr).
-		Deshalb muss das QDockWidget-Objekt hier selbst gelöscht werden,
-		sonst entsteht ein Leak (Review agy, Achse 4).
+		obs_frontend_remove_dock loest den Custom-Dock aus dem
+		QMainWindow-Layout. Das QDockWidget wird nur hier selbst geloescht,
+		wenn es noch lebt (QPointer != null). Ist OBSs Main-Window bereits
+		zerstört (normaler Shutdown-Pfad), hat Qt das Dock schon geloescht;
+		ein weiteres delete waere ein Double-Free und crasht beim Schliessen.
 		*/
-		// ~TextboxDock: cancel_ Flag setzen und ggf. Browser-Sources aufraumen.
-		if (auto *dock = qobject_cast<TextboxDock *>(g_dock->widget())) {
-			(void)dock;
-		}
 		obs_frontend_remove_dock("textbox");
-		delete g_dock;
+		delete g_dock.data();
 		g_dock = nullptr;
 	}
 #endif

@@ -1314,7 +1314,7 @@ void TextboxDock::create_row_widget(const TextboxCard &card)
 	                      "--tb-color-text", "--tb-color-box", "--tb-corner-color-a", "--tb-corner-color-b",
 	                      "--tb-corner-opacity-a", "--tb-corner-opacity-b", "--tb-text-opacity",
 	                      "--tb-box-opacity", "--tb-rainbow",
-	                      "--anim-show", "--anim-file", "--anim-scale", "--anim-x", "--anim-y",
+	                      "--show-anim", "--anim-file", "--anim-scale", "--anim-x", "--anim-y",
 	                      "--box-x", "--box-y", "--box-scale"})
 		css_var_model->append(QString::fromLatin1(v));
 
@@ -1628,8 +1628,8 @@ void TextboxDock::create_row_widget(const TextboxCard &card)
 		seed("--tb-text-opacity", "num", QString::number(c->text_opacity));
 		seed("--tb-box-opacity", "num", QString::number(c->box_opacity));
 		seed("--tb-rainbow", "bool", c->rainbow_corners ? QStringLiteral("1") : QStringLiteral("0"));
-		// IMP-H6: Animation als generelle CSS-Regelzeilen (Template nutzt --anim-*).
-		seed("--anim-show", "bool", c->show_anim ? QStringLiteral("1") : QStringLiteral("0"));
+		// IMP-H6: Animation als generelle CSS-Regelzeilen (Template nutzt --show-anim).
+		seed("--show-anim", "bool", c->show_anim ? QStringLiteral("1") : QStringLiteral("0"));
 		seed("--anim-file", "file", QString::fromUtf8(c->anim_file.c_str()));
 		seed("--anim-scale", "enum", QString::number(c->anim_scale));
 		seed("--anim-x", "px", QString::number(c->anim_x) + QStringLiteral("px"));
