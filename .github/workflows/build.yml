@@ -65,6 +65,29 @@ jobs:
       - name: Build (RelWithDebInfo)
         run: cmake --build plugin/build_x64 --config RelWithDebInfo
 
+      - name: Version guard
+        shell: pwsh
+        run: |
+          if (-not ($env:GITHUB_REF -like 'refs/tags/v*')) {
+            Write-Host "version guard skipped (no v-tag)"
+            exit 0
+          }
+          $ver = "$env:GITHUB_REF_NAME".TrimStart('v')
+          $dll = Get-ChildItem plugin/build_x64 -Recurse -Filter 'textbox-studio.dll' | Select-Object -First 1
+          if (-not $dll) {
+            Write-Error "DLL nicht gefunden"
+            exit 1
+          }
+          $bytes = [System.IO.File]::ReadAllBytes($dll.FullName)
+          $text = [System.Text.Encoding]::Unicode.GetString($bytes)
+          $matches = [regex]::Matches($text, [regex]::Escape($ver))
+          $count = $matches.Count
+          if ($count -lt 1) {
+            Write-Error "DLL enthaelt Version '$ver' nicht (UTF-16LE)"
+            exit 1
+          }
+          Write-Host "version guard OK: '$ver' in DLL ($count Treffer)"
+
       - name: Unit tests (ctest)
         run: ctest --test-dir plugin/build_x64 -C RelWithDebInfo --output-on-failure
 
@@ -125,6 +148,26 @@ jobs:
 
       - name: Build (RelWithDebInfo)
         run: cmake --build plugin/build_macos --config RelWithDebInfo
+
+      - name: Version guard
+        shell: bash
+        run: |
+          if [[ ! "$GITHUB_REF" == refs/tags/v* ]]; then
+            echo "version guard skipped (no v-tag)"
+            exit 0
+          fi
+          ver="${GITHUB_REF_NAME#v}"
+          bin=$(find plugin/build_macos -path '*.plugin/Contents/MacOS/*' -type f | head -n1)
+          if [ -z "$bin" ]; then
+            echo "Plugin-Binary nicht gefunden"
+            exit 1
+          fi
+          if python3 -c "import sys; d=open(sys.argv[1],'rb').read(); v=sys.argv[2]; sys.exit(0 if (v.encode('utf-16-le') in d or v.encode('utf-8') in d) else 1)" "$bin" "$ver"; then
+            echo "version guard OK: '$ver' in Plugin-Binary"
+          else
+            echo "version guard FAIL: '$ver' nicht in Plugin-Binary"
+            exit 1
+          fi
 
       - name: Framework symlinks for ctest
         run: |
@@ -194,6 +237,26 @@ jobs:
 
       - name: Build (RelWithDebInfo)
         run: cmake --build plugin/build_x86_64
+
+      - name: Version guard
+        shell: bash
+        run: |
+          if [[ ! "$GITHUB_REF" == refs/tags/v* ]]; then
+            echo "version guard skipped (no v-tag)"
+            exit 0
+          fi
+          ver="${GITHUB_REF_NAME#v}"
+          bin=$(find plugin/build_x86_64 -name '*.so' -type f | head -n1)
+          if [ -z "$bin" ]; then
+            echo "Plugin-Binary nicht gefunden"
+            exit 1
+          fi
+          if python3 -c "import sys; d=open(sys.argv[1],'rb').read(); v=sys.argv[2]; sys.exit(0 if (v.encode('utf-16-le') in d or v.encode('utf-8') in d) else 1)" "$bin" "$ver"; then
+            echo "version guard OK: '$ver' in Plugin-Binary"
+          else
+            echo "version guard FAIL: '$ver' nicht in Plugin-Binary"
+            exit 1
+          fi
 
       - name: Unit tests (ctest)
         run: ctest --test-dir plugin/build_x86_64 -C RelWithDebInfo --output-on-failure
