@@ -225,6 +225,75 @@ HttpResp winhttp_call(const std::string &method, const std::string &url,
 	return result;
 }
 
+// Durchsucht bekannte Windows-Pfade nach einem vorhandenen Python-Interpreter.
+// Reihenfolge: py.exe (System, LOCALAPPDATA), Python 3.14–3.10 (Program Files, LOCALAPPDATA), PATH.
+std::string detect_python_exe()
+{
+	// 1. C:/Windows/py.exe
+	{
+		const std::filesystem::path p = L"C:/Windows/py.exe";
+		std::error_code ec;
+		if (std::filesystem::exists(p, ec))
+			return p.string();
+	}
+
+	// 2. %LOCALAPPDATA%/Microsoft/WindowsApps/py.exe
+	{
+		wchar_t buf[MAX_PATH];
+		DWORD len = GetEnvironmentVariableW(L"LOCALAPPDATA", buf, MAX_PATH);
+		if (len > 0 && len < MAX_PATH) {
+			const std::filesystem::path p =
+				std::wstring(buf) + L"\\Microsoft\\WindowsApps\\py.exe";
+			std::error_code ec;
+			if (std::filesystem::exists(p, ec))
+				return p.string();
+		}
+	}
+
+	// 3. C:/Program Files/Python3{14..10}/python.exe
+	// 4. %LOCALAPPDATA%/Programs/Python/Python3{14..10}/python.exe
+	{
+		wchar_t localappdata[MAX_PATH];
+		DWORD len = GetEnvironmentVariableW(L"LOCALAPPDATA", localappdata, MAX_PATH);
+		const std::wstring lappd = (len > 0 && len < MAX_PATH) ? std::wstring(localappdata) : L"";
+
+		for (int ver = 314; ver >= 310; --ver) {
+			const std::wstring ver_str = std::to_wstring(ver);
+			// Program Files
+			{
+				const std::filesystem::path p =
+					L"C:/Program Files/Python" + ver_str + L"/python.exe";
+				std::error_code ec;
+				if (std::filesystem::exists(p, ec))
+					return p.string();
+			}
+			// LOCALAPPDATA
+			if (!lappd.empty()) {
+				const std::filesystem::path p =
+					lappd + L"\\Programs\\Python\\Python" + ver_str +
+					L"\\python.exe";
+				std::error_code ec;
+				if (std::filesystem::exists(p, ec))
+					return p.string();
+			}
+		}
+	}
+
+	// 5. SearchPathW — PATH-Fallback (inkl. Store-Alias python.exe)
+	{
+		wchar_t buf[MAX_PATH];
+		DWORD ret = SearchPathW(nullptr, L"python.exe", nullptr, MAX_PATH, buf, nullptr);
+		if (ret > 0 && ret < MAX_PATH) {
+			std::error_code ec;
+			const std::filesystem::path p = std::wstring(buf);
+			if (std::filesystem::exists(p, ec))
+				return p.string();
+		}
+	}
+
+	return "";
+}
+
 #endif // _WIN32
 
 } // namespace
@@ -301,10 +370,25 @@ std::string extract_document_text(const std::string &file_path, const std::strin
 	       (path_arg.front() == ' ' || path_arg.front() == '\n' || path_arg.front() == '\r' || path_arg.front() == '	'))
 		path_arg.erase(0, 1);
 
+	std::string resolved_python = python_exe;
+	{
+		// Wenn python_exe leer oder nicht existent: Auto-Detect versuchen
+		std::error_code ec;
+		if (resolved_python.empty() ||
+		    !std::filesystem::exists(std::filesystem::u8path(resolved_python), ec) || ec) {
+			const std::string detected = detect_python_exe();
+			if (!detected.empty()) {
+				resolved_python = detected;
+			}
+		}
+	}
+
 	std::error_code ec;
-	const std::filesystem::path py_path = std::filesystem::u8path(python_exe);
-	if (python_exe.empty() || !std::filesystem::exists(py_path, ec) || ec) {
-		err = "MarkItDown-Python nicht gefunden: " + python_exe;
+	const std::filesystem::path py_path = std::filesystem::u8path(resolved_python);
+	if (resolved_python.empty() || !std::filesystem::exists(py_path, ec) || ec) {
+		err = "MarkItDown-Python nicht gefunden. Python installieren (z.B. winget install "
+		      "Python.Python.3.12), dann 'python -m pip install markitdown', oder im Gear-Menue "
+		      "MARKITDOWN-PYTHON-PFAD setzen.";
 		return "";
 	}
 
@@ -334,7 +418,7 @@ std::string extract_document_text(const std::string &file_path, const std::strin
 		SetHandleInformation(stderr_read, HANDLE_FLAG_INHERIT, 0);
 	}
 
-	std::wstring cmd = quote_win32_arg(utf8_to_wide(python_exe)) +
+	std::wstring cmd = quote_win32_arg(utf8_to_wide(resolved_python)) +
 			   L" -X utf8 -m markitdown " +
 			   quote_win32_arg(utf8_to_wide(path_arg));
 	std::vector<wchar_t> cmd_buf(cmd.begin(), cmd.end());
@@ -381,13 +465,15 @@ std::string extract_document_text(const std::string &file_path, const std::strin
 		}
 	});
 
-	std::thread err_reader([stderr_read]() {
+	std::string err_bytes;
+	std::thread err_reader([stderr_read, &err_bytes]() {
 		if (!stderr_read)
 			return;
 		char buf[4096];
 		DWORD bytes_read = 0;
 		while (ReadFile(stderr_read, buf, sizeof(buf), &bytes_read, nullptr) &&
 		       bytes_read > 0) {
+			err_bytes.append(buf, bytes_read);
 		}
 	});
 
@@ -439,7 +525,25 @@ std::string extract_document_text(const std::string &file_path, const std::strin
 	}
 
 	if (exit_code != 0) {
-		err = "Dokument-Extraktion fehlgeschlagen (Exit " + std::to_string(exit_code) + ")";
+		if (err_bytes.find("No module named markitdown") != std::string::npos) {
+			err = "markitdown fehlt im gefundenen Python: ausfuehren: " +
+			      resolved_python + " -m pip install markitdown";
+		} else {
+			std::string stderr_preview;
+			const std::string trimmed = trim_str(err_bytes);
+			if (!trimmed.empty()) {
+				stderr_preview = trimmed.substr(0, 200);
+				// Zeilenumbrüche zu Spaces
+				for (auto &ch : stderr_preview)
+					if (ch == '\n' || ch == '\r')
+						ch = ' ';
+				stderr_preview = trim_str(stderr_preview);
+			}
+			err = "Dokument-Extraktion fehlgeschlagen (Exit " +
+			      std::to_string(exit_code) + ")";
+			if (!stderr_preview.empty())
+				err += " (" + stderr_preview + ")";
+		}
 		return "";
 	}
 

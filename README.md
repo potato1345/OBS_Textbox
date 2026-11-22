@@ -37,6 +37,27 @@ Toolbar-Icon ⤓ öffnet den Import-Dialog mit drei unabhängigen Wegen:
 2. **Datei-Import (CSV / XLSX / ZIP)** — `.xlsx`, `.csv`, `.txt` oder ZIP-Archive mit erwartetem Block-Format (Nr/Titel/Zeilen).
 3. **AI-Import (PDF / DOCX)** — lokales Python mit `markitdown` extrahiert Text; optional OpenRouter-LLM analysiert und strukturiert als Karten.
 
+### MarkItDown (Text-Import aus PDF/Word/Bildern)
+
+Für den AI-Import wird **Python 3.10+** mit dem Paket `markitdown` benötigt. Installation:
+
+```bash
+winget install Python.Python.3.12
+python -m pip install markitdown
+```
+
+Das Plugin findet Python automatisch in folgender Reihenfolge:
+- `py.exe` (Windows Python Launcher, System und Microsoft Store)
+- `C:\Program Files\Python3xx\python.exe` (Python 3.14 bis 3.10, absteigend)
+- `%LOCALAPPDATA%\Programs\Python\Python3xx\python.exe`
+- `PATH`-Umgebungsvariable
+
+Der Pfad kann manuell im **Gear-Menü → MARKITDOWN-PYTHON-PFAD** überschrieben werden, falls die Auto-Erkennung nicht greift.
+
+**Fehlerbehebung:**  
+- *"MarkItDown-Python nicht gefunden"* → kein Python-Interpreter gefunden oder `markitdown` nicht installiert. Die Meldung erscheint auch, wenn der Pfad im Gear-Menü gesetzt, aber ungültig ist.  
+- *"markitdown fehlt im gefundenen Python"* → Python wurde gefunden, aber das Paket `markitdown` fehlt. Im selben Python `python -m pip install markitdown` ausführen.
+
 ## OBS-Kompatibilität
 
 **Live-getestet (Real-World-Installation und Betrieb, Windows x64):**

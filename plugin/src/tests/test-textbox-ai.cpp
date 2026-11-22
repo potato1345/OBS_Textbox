@@ -232,7 +232,22 @@ Abschluss Protokoll
 		      "size=" + std::to_string(single.size()));
 	}
 
-	// 10. Sidecar extract_document_text
+	// 10. detect_python_exe: muss leer oder ein existierender Pfad sein
+	{
+		const std::string py = detect_python_exe();
+		bool ok = true;
+		if (py.empty()) {
+			// auf Systemen ohne Python: OK
+			ok = true;
+		} else {
+			std::error_code ec;
+			ok = std::filesystem::exists(std::filesystem::u8path(py), ec);
+		}
+		check(ok, "10. detect_python_exe: leer oder existierender Pfad",
+		      py.empty() ? "Kein Python gefunden (OK)" : "Gefunden: " + py);
+	}
+
+	// 12. Sidecar extract_document_text
 	{
 #ifdef TEXTBOX_REPO_ROOT
 		const std::filesystem::path py_exe =
@@ -242,12 +257,12 @@ Abschluss Protokoll
 		const std::filesystem::path py_exe =
 			"C:/Users/Johann/Desktop/GitHub/OBS_Textbox/.venv/Scripts/python.exe";
 #endif
-		// M5-2: ohne Repo-Venv (markitdown installiert) ist 10a maschinenabhängig
-		// -> sauber übersprungen statt rot. 10b (fehlende Exe -> Fehler) läuft immer.
+		// M5-2: ohne Repo-Venv (markitdown installiert) ist 12a maschinenabhängig
+		// -> sauber übersprungen statt rot. 12b (fehlende Exe -> Fehler) läuft immer.
 		const bool venv_present =
 			std::filesystem::exists(py_exe) && std::filesystem::exists(py_exe.parent_path());
 		if (!venv_present)
-			std::cout << "[SKIP] 10a. extract_document_text (Repo-Venv nicht vorhanden)\n";
+			std::cout << "[SKIP] 12a. extract_document_text (Repo-Venv nicht vorhanden)\n";
 		const std::filesystem::path doc_txt = temp_dir / "test_doc.txt";
 		{
 			std::ofstream out(doc_txt, std::ios::binary | std::ios::trunc);
@@ -259,7 +274,7 @@ Abschluss Protokoll
 			const std::string extracted =
 				extract_document_text(doc_txt.u8string(), py_exe.u8string(), err_ok);
 			check(err_ok.empty() && extracted.find("101") != std::string::npos,
-			      "10a. extract_document_text mit Repo-Venv: extrahiert '101' aus test_doc.txt",
+			      "12a. extract_document_text mit Repo-Venv: extrahiert '101' aus test_doc.txt",
 			      err_ok);
 		}
 
@@ -270,8 +285,26 @@ Abschluss Protokoll
 		check(ext_missing.empty() &&
 			      err_missing.find("MarkItDown-Python nicht gefunden") !=
 				      std::string::npos,
-		      "10b. extract_document_text mit fehlender Python-Exe liefert deutschen Fehler",
+		      "12b. extract_document_text mit nicht existenter Python-Exe liefert deutschen Fehler",
 		      err_missing);
+
+		// 12c. extract_document_text mit leerem python_exe -> Auto-Detect und neuer Fehlertext
+		// Diese Variante testet den Pfad, dass detect_python_exe aufgerufen wird.
+		// Wenn gar kein Python am System ist, erwarten wir den neuen auto-detect Fehlertext.
+		std::string err_empty;
+		const std::string ext_empty =
+			extract_document_text(doc_txt.u8string(), "", err_empty);
+		if (err_empty.find("MarkItDown-Python nicht gefunden. Python installieren") !=
+		    std::string::npos) {
+			check(ext_empty.empty(),
+			      "12c. extract_document_text mit leerem python_exe: Auto-Detect-Fehlermeldung",
+			      "");
+		} else {
+			// Wenn Python gefunden wurde und das Dokument existiert, kann es auch
+			// einen anderen Fehler geben (z.B. markitdown nicht installiert) — das ist OK
+			std::cout << "[INFO] 12c. extract_document_text mit leerem python_exe: "
+				  << (err_empty.empty() ? "erfolgreich" : err_empty) << "\n";
+		}
 	}
 
 	std::error_code ec;

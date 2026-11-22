@@ -58,6 +58,11 @@ constexpr const char *kModelPriorities[] = {
 // err enthält die Fehlermeldung, falls der Key nicht gelesen werden konnte.
 std::string read_env_key(const std::string &env_file_path, std::string &err);
 
+// Durchsucht bekannte Windows-Pfade nach einem vorhandenen Python-Interpreter (py.exe Launcher,
+// Program Files, LOCALAPPDATA, PATH). Gibt den gefundenen Pfad oder einen leeren String zurück.
+// Nur unter _WIN32 sinnvoll; unter anderen Plattformen immer leer.
+std::string detect_python_exe();
+
 // Extrahiert Text aus einer PDF-/DOCX-Datei via markitdown Python-Subprozess (Win32 CreateProcess).
 // file_path = Pfad zum Dokument; python_exe = Python-Interpreter (mit installiertem markitdown).
 // Rückgabe: extrahierter Text als UTF-8; err bei Fehlern.
