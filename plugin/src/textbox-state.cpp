@@ -116,8 +116,8 @@ TextboxCard card_from_json(const nlohmann::json &item)
 		c.anim_file = item["anim_file"].get<std::string>();
 	if (item.contains("show_anim") && item["show_anim"].is_boolean())
 		c.show_anim = item["show_anim"].get<bool>();
-	if (item.contains("anim_scale") && item["anim_scale"].is_number_integer())
-		c.anim_scale = item["anim_scale"].get<int>();
+	if (item.contains("anim_scale") && item["anim_scale"].is_number())
+		c.anim_scale = item["anim_scale"].get<double>();
 	if (item.contains("anim_x") && item["anim_x"].is_number_integer())
 		c.anim_x = item["anim_x"].get<int>();
 	if (item.contains("anim_y") && item["anim_y"].is_number_integer())
@@ -126,8 +126,8 @@ TextboxCard card_from_json(const nlohmann::json &item)
 		c.box_x = item["box_x"].get<int>();
 	if (item.contains("box_y") && item["box_y"].is_number_integer())
 		c.box_y = item["box_y"].get<int>();
-	if (item.contains("box_scale") && item["box_scale"].is_number_integer())
-		c.box_scale = item["box_scale"].get<int>();
+	if (item.contains("box_scale") && item["box_scale"].is_number())
+		c.box_scale = item["box_scale"].get<double>();
 	if (item.contains("template_id") && item["template_id"].is_string())
 		c.template_id = item["template_id"].get<std::string>();
 	// CSS-Regeln sind die authoritative Quelle für Farben/Deckkraft.

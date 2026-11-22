@@ -39,12 +39,12 @@ struct TextboxCard {
 	bool rainbow_corners = false;
 	std::string anim_file = ""; // Dateiname, absoluter Pfad oder URL (roher Wert, wie eingegeben)
 	bool show_anim = false;
-	int anim_scale = 3; // 1,2,3,4,6,8,10,12 (v2-Optionen); Default 3
+	double anim_scale = 3.0; // 1,2,3,4,6,8,10,12 (v2-Optionen); auch Bruchwerte per CSS-Regel
 	int anim_x = 0; // -1200..1200 px
 	int anim_y = 0; // -1200..1200 px
 	int box_x = 0; // -1200..1200 px (Box-Verschiebung horizontal)
 	int box_y = 0; // -1200..1200 px (Box-Verschiebung vertikal)
-	int box_scale = 1; // 1,2,3,4,6,8,10,12 (Box-Skalierung; Default 1)
+	double box_scale = 1.0; // 1,2,3,4,6,8,10,12 (Box-Skalierung; Bruchwerte via CSS-Regel)
 	std::string template_id = ""; // "" = classic (CSS-Injektion in index.html)
 	std::vector<TextboxRow> rows; // dynamische Zeilen (max kMaxCardRows); leer = Legacy zeile1..3
 	std::vector<TextboxStyleRule> style; // generelle CSS-Regeln (--name: value)
