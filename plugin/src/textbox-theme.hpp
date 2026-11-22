@@ -131,7 +131,7 @@ QDialog#tbSettingsDialog {
 
 QWidget#textboxDock {
 	background-color: %1;
-	border: 1px solid %3;
+	border: none;
 	border-radius: 0px;
 }
 
@@ -185,7 +185,7 @@ QMenu::separator {
 QFrame#tbCardOuter {
 	background-color: transparent;
 	border: 1px solid %3;
-	border-radius: 4px;
+	border-radius: 2px;
 }
 
 QFrame#tbCardOuter:hover {
@@ -199,17 +199,14 @@ QFrame#tbCardOuter[tbHover="1"] {
 QFrame#tbCardInner {
 	background-color: %4;
 	border: none;
-	border-top-left-radius: 3px;
-	border-top-right-radius: 3px;
-	border-bottom-left-radius: 4px;
-	border-bottom-right-radius: 4px;
+	border-radius: 2px;
 }
 
 QFrame#tbIdBar {
 	background-color: %3;
 	border: none;
-	border-top-left-radius: 3px;
-	border-top-right-radius: 3px;
+	border-top-left-radius: 2px;
+	border-top-right-radius: 2px;
 	border-bottom-left-radius: 0px;
 	border-bottom-right-radius: 0px;
 }
@@ -267,7 +264,7 @@ QLineEdit,
 QPlainTextEdit {
 	background-color: %11;
 	border: 1px solid %3;
-	border-radius: 4px;
+	border-radius: 2px;
 	padding: 4px 8px;
 	min-height: 22px;
 	color: %2;
@@ -295,7 +292,7 @@ QPlainTextEdit:disabled {
 QComboBox {
 	background-color: %11;
 	border: 1px solid %3;
-	border-radius: 4px;
+	border-radius: 2px;
 	padding: 4px 8px;
 	min-height: 22px;
 	color: %2;
@@ -341,7 +338,7 @@ QComboBox QAbstractItemView::item:selected {
 QPushButton {
 	background-color: %3;
 	border: 1px solid %3;
-	border-radius: 4px;
+	border-radius: 2px;
 	padding: 6px 12px;
 	color: %2;
 	min-height: 24px;
