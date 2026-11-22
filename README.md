@@ -63,7 +63,7 @@ Toolbar-Icon ⤓ öffnet den Import-Dialog mit drei unabhängigen Wegen:
    - **Microsoft Visual C++ 2015–2022 Redistributable (x64)**: https://aka.ms/vc14/vc_redist.x64.exe — installiert alle drei DLLs systemweit.
    - **Windows 10/11 x64** (UCRT `api-ms-win-crt-*` ist ab Win 10 dabei; Win 7/8 brauchen das UCRT-KB).
    - **OBS 32.2.2 oder 33.0.1 x64** mit Qt6 (`Qt6Core/Qt6Gui/Qt6Widgets.dll` in `bin\64bit`) — das stellt OBS selbst.
-   - Selbstcheck ohne OBS: `tools\check-prereq.ps1` ausführen (prüft VC-Redist, DLL, Datenordner, Qt6, letztes Plugin-Log).
+   - Selbstcheck ohne OBS: `plugin\.github\scripts\check-prereq.ps1` (im Repo) ausführen (prüft VC-Redist, DLL, Datenordner, Qt6, letztes Plugin-Log).
 1. OBS komplett schließen (nicht nur das Fenster — es darf kein `obs64.exe` mehr laufen).
 2. Installationsort des OBS herausfinden (Short-Ziel, z. B. `C:\Program Files\obs-studio\` oder Steam-Ordner). Der ZIP enthält `obs-plugins\` und `data\` — **beide Ordner müssen in das Installations-Wurzelverzeichnis** des OBS entpackt (direkt neben `bin\`), nicht in `%APPDATA%` und nicht nur in `obs-plugins\`.
 3. Altes Plugin komplett entfernen (alte DLL im `obs-plugins\64bit`, alter Datenordner unter `data\obs-plugins\`, altes Dock „Textbox control“ im Menü Docks abwählen) — sonst konkurrieren zwei Plugin-Versionen.
