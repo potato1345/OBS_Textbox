@@ -58,13 +58,15 @@ unmittelbar in der OBS-Oberflaeche zeigen (rechts, neben "controls").
  * qt6widgets, Crash beim Fenster-Schließen). */
 static QPointer<QDockWidget> g_dock;
 
-// Shutdown-Callback: entfernt alle Browser-Sources und stoppt Timer, damit OBS sauber schließt.
+/* Shutdown-Callback: raeumt NUR Plugin-eigene Timer/Callbacks auf.
+ * Browser-Sources (Typ browser_source) sind eingebaut und koennen ohne
+ * Plugin weiterlaufen — sie beim Shutdown zu loeschen ware Data-Loss
+ * (User-Szene-Quellen gingen bei jedem OBS-Beenden verloren). */
 static void textbox_frontend_event(obs_frontend_event event, void *)
 {
 	if (event != OBS_FRONTEND_EVENT_SCRIPTING_SHUTDOWN)
 		return;
-	blog(LOG_INFO, "[textbox] Shutdown-Event empfangen — räume Browser-Sources auf");
-	textbox_scene::remove_all_sources();
+	blog(LOG_INFO, "[textbox] Shutdown-Event empfangen — Timer/Callbacks werden beendet");
 }
 
 /*
@@ -182,7 +184,9 @@ void obs_module_unload(void)
 {
 #ifdef ENABLE_FRONTEND_API
 	obs_frontend_remove_event_callback(textbox_frontend_event, nullptr);
-	textbox_scene::remove_all_sources();
+	/* KEIN remove_all_sources(): Browser-Sources sind eingebaut und bleiben
+	 * in der Szene erhalten (Data-Loss-Fix — Quellen durften beim Entladen
+	 * nicht verschwinden). */
 #ifdef ENABLE_QT
 	if (g_dock) {
 		/*
