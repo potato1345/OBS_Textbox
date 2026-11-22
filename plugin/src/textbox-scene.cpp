@@ -176,6 +176,13 @@ void send_to_current_scene(const TextboxCard &card, const TextboxSettings &setti
 			item = obs_scene_add(scene, src);
 			if (item) {
 				struct vec2 pos = {0.0f, 0.0f};
+				struct obs_video_info ovi;
+				if (obs_get_video_info(&ovi)) {
+					pos.x = (ovi.base_width - obs_source_get_width(src)) / 2.0f;
+					pos.y = (ovi.base_height - obs_source_get_height(src)) / 2.0f;
+					if (pos.x < 0.0f) pos.x = 0.0f;
+					if (pos.y < 0.0f) pos.y = 0.0f;
+				}
 				obs_sceneitem_set_pos(item, &pos);
 			}
 			obs_source_release(src);
