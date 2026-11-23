@@ -386,6 +386,82 @@ int main()
 		std::filesystem::remove_all(tmp_dir, ec);
 	}
 
+	// 6. build_inject_css: card.style mit anim_file (type "file") -> data-URI statt Rohpfad
+	{
+		const std::filesystem::path tmp_dir =
+			std::filesystem::temp_directory_path() / "textbox_html_suite7";
+		std::error_code ec;
+		std::filesystem::remove_all(tmp_dir, ec);
+		std::filesystem::create_directories(tmp_dir / "anim", ec);
+
+		// Minimales 1x1 transparentes GIF
+		// (GIF89a + Logical Screen Descriptor mit 1x1 + Image Descriptor + terminator)
+		const std::string tiny_gif =
+			"GIF89a\x01\x00\x01\x00\x80\x00\x00\xff\xff\xff\x00\x00\x00"
+			"\x21\xf9\x04\x00\x00\x00\x00\x00"
+			"\x2c\x00\x00\x00\x00\x01\x00\x01\x00\x00\x02\x02\x44\x01\x00"
+			"\x3b";
+		write_file_bytes(tmp_dir / "anim" / "anim_test.gif", tiny_gif);
+
+		TextboxSettings st;
+		st.animation_dir = (tmp_dir / "anim").u8string();
+
+		TextboxCard c;
+		c.id = "style_anim";
+		c.zeile1 = "Test";
+		c.box_opacity = 255;
+		c.text_opacity = 255;
+		// Card style-Regel mit file-Typ, die den Wert überschreibt
+		c.style.push_back({"--anim-file", (tmp_dir / "anim" / "anim_test.gif").u8string(), "file"});
+
+		const std::string css = textbox_html::build_inject_css(c, st);
+		// Der Rohpfad darf NICHT als letzter --anim-file-Wert vorkommen (User-Werte überschreiben
+		// die feste Zeile). Stattdessen muss ein data:image/gif;base64,... erscheinen.
+		const std::string raw_path = (tmp_dir / "anim" / "anim_test.gif").generic_u8string();
+		// Letztes Vorkommen von --anim-file im CSS extrahieren (User-Regeln stehen nach den festen)
+		const std::size_t last_pos = css.rfind("--anim-file:");
+		const bool last_is_data = last_pos != std::string::npos &&
+			css.find("data:image/gif;base64,", last_pos) != std::string::npos;
+		const bool raw_not_last = last_pos == std::string::npos ||
+			css.find(raw_path, last_pos) == std::string::npos;
+		check(last_is_data && raw_not_last,
+		      "6a. build_inject_css mit card.style --anim-file/file: letzter Wert ist data:image/gif;base64, nicht Rohpfad",
+		      css.substr(last_pos != std::string::npos ? last_pos : 0, 120));
+
+		// Regel mit type="file" (nicht name="--anim-file") -> ebenfalls normalisiert
+		TextboxCard c2;
+		c2.id = "style_other";
+		c2.zeile1 = "Test2";
+		c2.box_opacity = 255;
+		c2.text_opacity = 255;
+		c2.style.push_back({"--custom-anim", (tmp_dir / "anim" / "anim_test.gif").u8string(), "file"});
+		const std::string css2 = textbox_html::build_inject_css(c2, st);
+		check(css2.find("data:image/gif;base64,") != std::string::npos,
+		      "6b. build_inject_css mit type=file (anderer Name): Wert ist data-URI",
+		      css2.substr(css2.find("--custom-anim:"), 120));
+
+		// Pfad-Traversal außerhalb animation_dir -> normalize_anim_src gibt "" zurück
+		TextboxCard c3;
+		c3.id = "style_trav";
+		c3.zeile1 = "Test3";
+		c3.box_opacity = 255;
+		c3.text_opacity = 255;
+		c3.style.push_back({"--anim-file", "../outside.gif", "file"});
+		const std::string css3 = textbox_html::build_inject_css(c3, st);
+		// Die style-Regel sollte übersprungen sein (normalize_anim_src für "../outside.gif"
+		// gibt "" zurück wegen Path-Traversal-Guard);
+		// es bleibt nur die feste Zeile --anim-file: ""; (card.anim_file ist leer).
+		// Zähle wie oft --anim-file vorkommt: genau 1x (feste Zeile) = die style-Regel wurde übersprungen.
+		int count_anim_file = 0;
+		for (std::size_t p = 0; (p = css3.find("--anim-file:", p)) != std::string::npos; ++p)
+			++count_anim_file;
+		check(count_anim_file == 1,
+		      "6c. build_inject_css mit Path-Traversal file: Regel übersprungen (nur 1x --anim-file aus fester Zeile)",
+		      "count=" + std::to_string(count_anim_file));
+
+		std::filesystem::remove_all(tmp_dir, ec);
+	}
+
 	if (g_failures > 0) {
 		std::cerr << g_failures << " check(s) failed.\n";
 		return 1;

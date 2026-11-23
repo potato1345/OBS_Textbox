@@ -713,8 +713,24 @@ std::string build_inject_css(const TextboxCard &card, const TextboxSettings &set
 		// lesen --show-anim. Normalisierung hier haelt alte State-Dateuren kompatibel.
 		const std::string alias_name = rule.name == "--anim-show" ? "--show-anim" : rule.name;
 		const std::string var_name = sanitize_css_var_name(alias_name);
+		if (var_name.empty())
+			continue;
+		// file-Typen (anim_file) via normalize_anim_src auflösen: Qt WebEngine
+		// kann absolute Windows-Pfade aus file://-HTML nicht laden. normalize_anim_src
+		// liefert data-URI (Bilder) oder relative file-URL (Video) — beides ladbar.
+		// Existiert die Datei nicht (Rückgabe ""), wird die Regel ganz übersprungen.
+		// data-URIs enthalten ';' — sanitize_css_value würde das ';' im MIME-Typ
+		// ("data:image/gif;base64,...") entfernen, daher file-Werte gequotet und
+		// mit escape_css_string statt sanitize_css_value ausgeben.
+		if (rule.type == "file" || rule.name == "--anim-file" || alias_name == "--anim-file") {
+			const std::string norm = normalize_anim_src(rule.value, settings, copy_dir);
+			if (norm.empty())
+				continue;
+			oss << "  " << var_name << ": \"" << escape_css_string(norm) << "\";\n";
+			continue;
+		}
 		const std::string var_value = sanitize_css_value(rule.value);
-		if (var_name.empty() || var_value.empty())
+		if (var_value.empty())
 			continue;
 		oss << "  " << var_name << ": " << var_value << ";\n";
 	}
