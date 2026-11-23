@@ -18,6 +18,7 @@
 
 #include <atomic>
 #include <chrono>
+#include <cstdlib>
 #include <thread>
 
 // Zähler für aktuell laufende Hintergrund-Threads im Plugin.
@@ -98,6 +99,14 @@ static void clamp_dock_to_screen(QDockWidget *d)
  */
 bool obs_module_load(void)
 {
+	// GPU-Process-Konflikt mit OBS-GFX/NVIDIA Overlay führt zu Crashes;
+	// Software-Render für Text-Karten ist genug.
+#ifdef _WIN32
+	_putenv_s("QTWEBENGINE_CHROMIUM_FLAGS", "--disable-gpu --disable-gpu-compositing --in-process-gpu");
+#else
+	setenv("QTWEBENGINE_CHROMIUM_FLAGS", "--disable-gpu --disable-gpu-compositing --in-process-gpu", 1);
+#endif
+
 	blog(LOG_INFO, "[textbox] Plugin erfolgreich geladen (Version %s)", PLUGIN_VERSION);
 
 	// Optionale Referenztabelle im Plugin-Data-Verzeichnis via obs_module_file auflösen
