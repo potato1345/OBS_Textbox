@@ -513,6 +513,7 @@ TextboxDock::TextboxDock(const std::string &state_path, QWidget *parent) : OBSDo
 	dock_status_lbl_->setObjectName(QStringLiteral("tbDockStatus"));
 	dock_status_lbl_->setContentsMargins(4, 0, 4, 0);
 	dock_status_lbl_->setWordWrap(true);
+	dock_status_lbl_->setMinimumHeight(dock_status_lbl_->fontMetrics().lineSpacing() + 4);
 	dock_status_lbl_->setVisible(false);
 	dock_status_close_ = new QToolButton(tbTopRow); // c1: Schlie??en-Button f??r die Statusmeldung
 	dock_status_close_->setAttribute(Qt::WA_StyledBackground, true);
@@ -545,7 +546,7 @@ TextboxDock::TextboxDock(const std::string &state_path, QWidget *parent) : OBSDo
 	tbCardList_ = new CardListWidget(this);
 	tbCardList_->setAttribute(Qt::WA_StyledBackground, true);
 	tbCardList_->setFrameShape(QFrame::NoFrame);
-	tbCardList_->setDragDropMode(QAbstractItemView::NoDragDrop);
+	tbCardList_->setDragDropMode(QAbstractItemView::DropOnly);
 	tbCardList_->setSelectionMode(QAbstractItemView::SingleSelection);
 	tbCardList_->setFocusPolicy(Qt::StrongFocus);
 	tbCardList_->setUniformItemSizes(false);
