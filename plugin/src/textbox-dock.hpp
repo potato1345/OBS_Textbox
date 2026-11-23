@@ -25,8 +25,7 @@ extern std::atomic<int> g_active_jobs;
 
 namespace textbox_ai {
 // Überladung mit kooperativem Abbruch-Flag für den markitdown-Subprozess.
-std::string extract_document_text(const std::string &file_path, const std::string &python_exe,
-				  std::string &err,
+std::string extract_document_text(const std::string &file_path, const std::string &python_exe, std::string &err,
 				  std::shared_ptr<std::atomic<bool>> cancel);
 
 // Überladung mit kooperativem Abbruch-Flag für OpenRouter-Anfragen und Retries.
@@ -45,9 +44,20 @@ class QToolButton;
 class QVBoxLayout;
 
 /**
+ * Triviale Zwischenklasse — Theme-QSS matcht per MetaObject-Klassename OBSDock
+ * (wie OBS-eigene Docks), sodass der Yami-Theme-Rand (bg_base, border, radius)
+ * auf das a??ere Dock-Widget gemalt wird.
+ */
+class OBSDock : public QWidget {
+	Q_OBJECT
+public:
+	explicit OBSDock(QWidget *parent = nullptr) : QWidget(parent) {}
+};
+
+/**
  * Haupt-UI-Panel des Plugins, eingebettet als QDockWidget in OBS Studio.
  */
-class TextboxDock : public QWidget {
+class TextboxDock : public OBSDock {
 	Q_OBJECT
 
 public:

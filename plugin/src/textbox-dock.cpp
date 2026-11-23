@@ -122,8 +122,10 @@ QWidget *deepest_child_at(QWidget *parent, QPoint pos)
 // tbHover-Property auf dem tbCardOuter-Ancestor. Nur EINE Karte gleichzeitig aktiv.
 class CardHoverFilter : public QObject {
 	QWidget *hovered_ = nullptr;
+
 public:
 	explicit CardHoverFilter(QObject *parent = nullptr) : QObject(parent) {}
+
 protected:
 	bool eventFilter(QObject *obj, QEvent *ev) override
 	{
@@ -181,7 +183,7 @@ protected:
 		return QObject::eventFilter(obj, ev);
 	}
 };
-}
+} // namespace
 #include <QShortcut>
 #include <QSignalBlocker>
 #include <QSizePolicy>
@@ -256,7 +258,8 @@ struct ActiveJobGuard {
 // reicht die Tasten an die Dialog-Fokus-Kette weiter.
 struct PromptTabEdit : QPlainTextEdit {
 	explicit PromptTabEdit(const QString &text, QWidget *parent = nullptr) : QPlainTextEdit(text, parent) {}
-	void keyPressEvent(QKeyEvent *ke) override {
+	void keyPressEvent(QKeyEvent *ke) override
+	{
 		if (ke->key() == Qt::Key_Tab || ke->key() == Qt::Key_Backtab) {
 			if (focusNextPrevChild(ke->key() == Qt::Key_Tab))
 				return;
@@ -267,8 +270,8 @@ struct PromptTabEdit : QPlainTextEdit {
 
 // Hält die Timer- und Zustandsdaten für das verzögerte Speichern pro Dock-Instanz.
 struct DockSaveScheduler {
-	QPointer<QTimer> timer;         // Debounce-Timer (150 ms) für save_state()
-	QPointer<QPushButton> undo_btn; // Referenz auf den Undo-Button (Enabled-State)
+	QPointer<QTimer> timer;               // Debounce-Timer (150 ms) für save_state()
+	QPointer<QPushButton> undo_btn;       // Referenz auf den Undo-Button (Enabled-State)
 	std::vector<std::string> dirty_cards; // Karten-IDs, deren HTML neu geschrieben werden muss
 };
 
@@ -350,8 +353,7 @@ void mark_card_dirty_and_schedule(const TextboxDock *dock, const std::string &ca
 	it->second.timer->start(150);
 }
 
-std::map<std::string, std::pair<std::string, std::string>>
-load_reference_table(const std::string &referenz_path)
+std::map<std::string, std::pair<std::string, std::string>> load_reference_table(const std::string &referenz_path)
 {
 	if (referenz_path.empty())
 		return {};
@@ -382,8 +384,7 @@ TextboxCard make_default_card(std::size_t i)
 // Prüft, ob zeile1 der Karte i einem Standard-Eintrag entspricht.
 bool is_standard_card(const TextboxCard &c, std::size_t i)
 {
-	return i < textbox_import::PROGRAM_POINTS.size() &&
-	       c.zeile1 == textbox_import::PROGRAM_POINTS[i];
+	return i < textbox_import::PROGRAM_POINTS.size() && c.zeile1 == textbox_import::PROGRAM_POINTS[i];
 }
 
 // IMP-N: Nach dem Löschen eines Farbprofils referencieren Karten evtl. einen
@@ -410,8 +411,7 @@ bool reconcile_profiles_after_delete(TextboxState &state)
 // Szenensammlung und nach Szenenwechsel (die Quelle gehört pro Szene).
 void textbox_self_heal_event(obs_frontend_event event, void *data)
 {
-	if (event != OBS_FRONTEND_EVENT_FINISHED_LOADING &&
-	    event != OBS_FRONTEND_EVENT_SCENE_CHANGED)
+	if (event != OBS_FRONTEND_EVENT_FINISHED_LOADING && event != OBS_FRONTEND_EVENT_SCENE_CHANGED)
 		return;
 	auto *dock = static_cast<TextboxDock *>(data);
 	if (dock)
@@ -435,9 +435,7 @@ void TextboxDock::ensure_card_sources()
 	}
 }
 
-TextboxDock::TextboxDock(const std::string &state_path, QWidget *parent)
-	: QWidget(parent),
-	  state_path_(state_path)
+TextboxDock::TextboxDock(const std::string &state_path, QWidget *parent) : OBSDock(parent), state_path_(state_path)
 {
 	setObjectName(QStringLiteral("OBSDock"));
 	setAttribute(Qt::WA_StyledBackground, true);
@@ -448,21 +446,17 @@ TextboxDock::TextboxDock(const std::string &state_path, QWidget *parent)
 	save_timer->setInterval(150);
 	g_dock_schedulers[this].timer = save_timer;
 	connect(save_timer, &QTimer::timeout, this, &TextboxDock::save_state);
-	connect(this, &QObject::destroyed, [this]() {
-		g_dock_schedulers.erase(this);
-	});
+	connect(this, &QObject::destroyed, [this]() { g_dock_schedulers.erase(this); });
 
 	/* OBS-Theme-Icons aus der DLL nach <config>/textbox-studio/icons/ schreiben. */
 	if (!state_path_.empty()) {
-		const std::filesystem::path icons_dir =
-			std::filesystem::u8path(state_path_).parent_path() / "icons";
+		const std::filesystem::path icons_dir = std::filesystem::u8path(state_path_).parent_path() / "icons";
 		std::string icon_err;
 		if (textbox_theme_icons::write_icons(icons_dir, false, &icon_err)) {
 			const auto u8 = icons_dir.u8string();
 			icon_dir_ = QString::fromUtf8(u8.data(), static_cast<int>(u8.size()));
 		} else {
-			blog(LOG_WARNING, "[textbox] Icons konnten nicht geschrieben werden: %s",
-			     icon_err.c_str());
+			blog(LOG_WARNING, "[textbox] Icons konnten nicht geschrieben werden: %s", icon_err.c_str());
 		}
 	}
 
@@ -470,11 +464,22 @@ TextboxDock::TextboxDock(const std::string &state_path, QWidget *parent)
 	root_layout->setContentsMargins(4, 4, 4, 4);
 	root_layout->setSpacing(4);
 
+	// Container f??r die Toolbar-Zeile + Statuszeile (unterbindet Theme-Einzel-Border
+	// f??r direkte Kind-QWidgets des Dock-Widgets — stattdessen kriegt nur tbTopRow
+	// den OBS-Dock-Border ab).
+	auto *tbTopRow = new QWidget(this);
+	tbTopRow->setObjectName(QStringLiteral("tbTopRow"));
+	tbTopRow->setAttribute(Qt::WA_StyledBackground, true);
+
+	auto *tb_layout = new QVBoxLayout(tbTopRow);
+	tb_layout->setContentsMargins(0, 0, 0, 0);
+	tb_layout->setSpacing(0);
+
 	auto *top_row = new QHBoxLayout();
 	top_row->setContentsMargins(4, 0, 4, 2);
 	top_row->setSpacing(8);
 
-	profil_select_ = new QComboBox(this);
+	profil_select_ = new QComboBox(tbTopRow);
 	profil_select_->setAttribute(Qt::WA_StyledBackground, true);
 	profil_select_->setEditable(true);
 	profil_select_->setInsertPolicy(QComboBox::NoInsert);
@@ -487,14 +492,13 @@ TextboxDock::TextboxDock(const std::string &state_path, QWidget *parent)
 		c->setFilterMode(Qt::MatchContains);
 	}
 	if (profil_select_->lineEdit()) {
-		profil_select_->lineEdit()->setPlaceholderText(
-			QStringLiteral("Schnellprofil suchen…"));
+		profil_select_->lineEdit()->setPlaceholderText(QStringLiteral("Schnellprofil suchen…"));
 		profil_select_->lineEdit()->setAccessibleName(QStringLiteral("Schnellprofil-Wahl"));
 		profil_select_->lineEdit()->setToolTip(
 			QStringLiteral("Schnellprofile-Liste (gespeicherte Karten-Sets, nicht Kartenfarben)"));
 	}
 
-	card_search_ = new QComboBox(this);
+	card_search_ = new QComboBox(tbTopRow);
 	card_search_->setAttribute(Qt::WA_StyledBackground, true);
 	card_search_->setEditable(true);
 	card_search_->setInsertPolicy(QComboBox::NoInsert);
@@ -510,7 +514,7 @@ TextboxDock::TextboxDock(const std::string &state_path, QWidget *parent)
 	}
 
 	top_row->addWidget(profil_select_, 1);
-	profil_del_btn_ = new QToolButton(this);
+	profil_del_btn_ = new QToolButton(tbTopRow);
 	profil_del_btn_->setAttribute(Qt::WA_StyledBackground, true);
 	profil_del_btn_->setObjectName(QStringLiteral("tbProfilDelBtn"));
 	const int btn_icon_sz = style()->pixelMetric(QStyle::PM_ButtonIconSize, nullptr, this);
@@ -525,44 +529,24 @@ TextboxDock::TextboxDock(const std::string &state_path, QWidget *parent)
 	profil_del_btn_->setProperty("tbDanger", true);
 	top_row->addWidget(profil_del_btn_);
 	top_row->addWidget(card_search_, 1);
-	root_layout->addLayout(top_row);
 
-	scroll_area_ = new QScrollArea(this);
-	scroll_area_->setAttribute(Qt::WA_StyledBackground, true);
-	scroll_area_->setWidgetResizable(true);
-	scroll_area_->setFrameShape(QFrame::NoFrame);
+	tb_layout->addLayout(top_row);
 
-	// Karten-Hover-Propagation: tbCardOuter :hover auch bei Maus über Kindern.
-	auto *hover_filter = new CardHoverFilter(scroll_area_);
-	scroll_area_->viewport()->setMouseTracking(true);
-	scroll_area_->viewport()->installEventFilter(hover_filter);
-
-	auto *cards_container = new QWidget(scroll_area_);
-	cards_container->setObjectName(QStringLiteral("tbCardsContainer"));
-	cards_container->setAttribute(Qt::WA_StyledBackground, true);
-
-	cards_layout_ = new QVBoxLayout(cards_container);
-	cards_layout_->setContentsMargins(4, 4, 16, 4); // rechter Rand 16px für Scrollbar-Abstand
-	cards_layout_->setSpacing(8);
-	cards_layout_->addStretch(1);
-
-	scroll_area_->setWidget(cards_container);
-	root_layout->addWidget(scroll_area_, 1);
-
-	dock_status_lbl_ = new QLabel(this);
+	// Statuszeile innerhalb des tbTopRow-Containers (unter der Toolbar).
+	dock_status_lbl_ = new QLabel(tbTopRow);
 	dock_status_lbl_->setAttribute(Qt::WA_StyledBackground, true);
 	dock_status_lbl_->setObjectName(QStringLiteral("tbDockStatus"));
 	dock_status_lbl_->setContentsMargins(4, 0, 4, 0);
 	dock_status_lbl_->setWordWrap(true);
 	dock_status_lbl_->setVisible(false);
-	dock_status_close_ = new QToolButton(this); // c1: Schließen-Button für die Statusmeldung
+	dock_status_close_ = new QToolButton(tbTopRow); // c1: Schlie??en-Button f??r die Statusmeldung
 	dock_status_close_->setAttribute(Qt::WA_StyledBackground, true);
 	dock_status_close_->setObjectName(QStringLiteral("tbDockStatusClose"));
 	dock_status_close_->setAutoRaise(true);
 	dock_status_close_->setIcon(theme_icon("close.svg"));
 	dock_status_close_->setIconSize(QSize(12, 12));
-	dock_status_close_->setToolTip(QStringLiteral("Meldung schließen"));
-	dock_status_close_->setAccessibleName(QStringLiteral("Meldung schließen"));
+	dock_status_close_->setToolTip(QStringLiteral("Meldung schlie??en"));
+	dock_status_close_->setAccessibleName(QStringLiteral("Meldung schlie??en"));
 	dock_status_close_->setVisible(false);
 	connect(dock_status_close_, &QToolButton::clicked, this, [this]() {
 		if (dock_status_lbl_)
@@ -572,19 +556,45 @@ TextboxDock::TextboxDock(const std::string &state_path, QWidget *parent)
 		if (dock_status_timer_)
 			dock_status_timer_->stop();
 	});
+
 	auto *status_row = new QHBoxLayout();
 	status_row->setContentsMargins(4, 0, 4, 0);
 	status_row->setSpacing(4);
 	status_row->addWidget(dock_status_lbl_, 1);
 	status_row->addWidget(dock_status_close_, 0);
-	root_layout->addLayout(status_row);
+	tb_layout->addLayout(status_row);
+
+	// tbTopRow als erstes Kind in root_layout.
+	root_layout->addWidget(tbTopRow);
+
+	scroll_area_ = new QScrollArea(this);
+	scroll_area_->setAttribute(Qt::WA_StyledBackground, true);
+	scroll_area_->setWidgetResizable(true);
+	scroll_area_->setFrameShape(QFrame::NoFrame);
+
+	// Karten-Hover-Propagation: tbCardOuter :hover auch bei Maus ??ber Kindern.
+	auto *hover_filter = new CardHoverFilter(scroll_area_);
+	scroll_area_->viewport()->setMouseTracking(true);
+	scroll_area_->viewport()->installEventFilter(hover_filter);
+
+	auto *cards_container = new QWidget(scroll_area_);
+	cards_container->setObjectName(QStringLiteral("tbCardsContainer"));
+	cards_container->setAttribute(Qt::WA_StyledBackground, true);
+
+	cards_layout_ = new QVBoxLayout(cards_container);
+	cards_layout_->setContentsMargins(4, 4, 16, 4); // rechter Rand 16px f??r Scrollbar-Abstand
+	cards_layout_->setSpacing(8);
+	cards_layout_->addStretch(1);
+
+	scroll_area_->setWidget(cards_container);
+	root_layout->addWidget(scroll_area_, 1);
 
 	auto *bottom_toolbar = new QHBoxLayout();
 	bottom_toolbar->setContentsMargins(4, 4, 4, 4);
 	bottom_toolbar->setSpacing(6);
 
 	auto make_tool_btn = [this, btn_icon_sz](const QString &obj_name, const char *icon_name,
-				    const QString &tooltip) -> QToolButton * {
+						 const QString &tooltip) -> QToolButton * {
 		auto *btn = new QToolButton(this);
 		btn->setObjectName(obj_name);
 		btn->setFixedSize(btn_icon_sz, btn_icon_sz);
@@ -597,23 +607,19 @@ TextboxDock::TextboxDock(const std::string &state_path, QWidget *parent)
 		return btn;
 	};
 
-	auto *tool_add = make_tool_btn(QStringLiteral("tbToolAdd"), "plus.svg",
-				       QStringLiteral("Neue Karte"));
+	auto *tool_add = make_tool_btn(QStringLiteral("tbToolAdd"), "plus.svg", QStringLiteral("Neue Karte"));
 	// Kompakter Button für einstufiges Rückgängig (Undo)
 	auto *tool_undo = new QPushButton(QStringLiteral("↶ Rückgängig"), this);
 	tool_undo->setObjectName(QStringLiteral("tbToolUndo"));
 	tool_undo->setFixedHeight(btn_icon_sz);
-	tool_undo->setToolTip(
-		QStringLiteral("Letzte destruktive Aktion rückgängig machen (Strg+Z)"));
+	tool_undo->setToolTip(QStringLiteral("Letzte destruktive Aktion rückgängig machen (Strg+Z)"));
 	tool_undo->setEnabled(state_.undo_available_);
 	g_dock_schedulers[this].undo_btn = tool_undo;
 
-	auto *tool_import = make_tool_btn(
-		QStringLiteral("tbToolImport"), "download.svg",
-		QStringLiteral("AI-Import / Datei-Import (CSV, XLSX, ZIP, Google)"));
-	auto *tool_settings = make_tool_btn(
-		QStringLiteral("tbToolSettings"), "cogs.svg",
-		QStringLiteral("Schnell-Profile / Einstellungen / Backup / Restore"));
+	auto *tool_import = make_tool_btn(QStringLiteral("tbToolImport"), "download.svg",
+					  QStringLiteral("AI-Import / Datei-Import (CSV, XLSX, ZIP, Google)"));
+	auto *tool_settings = make_tool_btn(QStringLiteral("tbToolSettings"), "cogs.svg",
+					    QStringLiteral("Schnell-Profile / Einstellungen / Backup / Restore"));
 	tool_settings->setPopupMode(QToolButton::InstantPopup);
 
 	auto *settings_menu = new QMenu(tool_settings);
@@ -621,10 +627,8 @@ TextboxDock::TextboxDock(const std::string &state_path, QWidget *parent)
 	settings_menu->addSeparator();
 	QAction *act_settings = settings_menu->addAction(QStringLiteral("Einstellungen…"));
 	// IMP-F (F2b): Karten-Vorlagen (Templates) direkt im Zahnrad-Menü.
-	QAction *act_tpl_folder =
-		settings_menu->addAction(QStringLiteral("Vorlagen-Ordner öffnen"));
-	QAction *act_tpl_copy =
-		settings_menu->addAction(QStringLiteral("Vorlage aus index.html (classic) kopieren"));
+	QAction *act_tpl_folder = settings_menu->addAction(QStringLiteral("Vorlagen-Ordner öffnen"));
+	QAction *act_tpl_copy = settings_menu->addAction(QStringLiteral("Vorlage aus index.html (classic) kopieren"));
 	settings_menu->addSeparator();
 	QAction *act_backup = settings_menu->addAction(QStringLiteral("Backup erstellen"));
 	QAction *act_restore = settings_menu->addAction(QStringLiteral("Backup wiederherstellen"));
@@ -704,8 +708,7 @@ TextboxDock::TextboxDock(const std::string &state_path, QWidget *parent)
 			if (query.isEmpty() || query == QStringLiteral("(keines)"))
 				return;
 			for (const auto &qp : state_.quick_profiles) {
-				if (QString::fromUtf8(qp.name.c_str())
-					    .compare(query, Qt::CaseInsensitive) == 0) {
+				if (QString::fromUtf8(qp.name.c_str()).compare(query, Qt::CaseInsensitive) == 0) {
 					apply_quick_profile(qp.name);
 					return;
 				}
@@ -714,8 +717,8 @@ TextboxDock::TextboxDock(const std::string &state_path, QWidget *parent)
 	}
 
 	sync_profil_del_state();
-	connect(profil_select_, QOverload<int>::of(&QComboBox::currentIndexChanged),
-		this, [this](int) { sync_profil_del_state(); });
+	connect(profil_select_, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
+		[this](int) { sync_profil_del_state(); });
 	connect(profil_del_btn_, &QToolButton::clicked, this, [this]() {
 		const int idx = profil_select_->currentIndex();
 		if (idx <= 0 || idx >= profil_select_->count())
@@ -728,9 +731,7 @@ TextboxDock::TextboxDock(const std::string &state_path, QWidget *parent)
 				state_.active_profile.clear();
 			save_state();
 			refresh_top_row();
-			const QString msg =
-				QStringLiteral("Schnell-Profil gelöscht: %1")
-					.arg(prof_name);
+			const QString msg = QStringLiteral("Schnell-Profil gelöscht: %1").arg(prof_name);
 			set_dock_status(msg, false);
 		}
 	});
@@ -749,18 +750,15 @@ TextboxDock::TextboxDock(const std::string &state_path, QWidget *parent)
 				return;
 			int match_idx = -1;
 			for (int i = 0; i < card_search_->count(); ++i) {
-				if (card_search_->itemData(i).toString().compare(
-					    query, Qt::CaseInsensitive) == 0 ||
-				    card_search_->itemText(i).compare(query, Qt::CaseInsensitive) ==
-					    0) {
+				if (card_search_->itemData(i).toString().compare(query, Qt::CaseInsensitive) == 0 ||
+				    card_search_->itemText(i).compare(query, Qt::CaseInsensitive) == 0) {
 					match_idx = i;
 					break;
 				}
 			}
 			if (match_idx < 0) {
 				for (int i = 0; i < card_search_->count(); ++i) {
-					if (card_search_->itemText(i).contains(
-						    query, Qt::CaseInsensitive)) {
+					if (card_search_->itemText(i).contains(query, Qt::CaseInsensitive)) {
 						match_idx = i;
 						break;
 					}
@@ -798,18 +796,16 @@ TextboxDock::TextboxDock(const std::string &state_path, QWidget *parent)
 	if (!err.empty()) {
 		if (!state_path_.empty()) {
 			std::error_code ec;
-			std::filesystem::copy_file(
-				std::filesystem::u8path(state_path_),
-				std::filesystem::u8path(state_path_ + ".bak"),
-				std::filesystem::copy_options::overwrite_existing, ec);
+			std::filesystem::copy_file(std::filesystem::u8path(state_path_),
+						   std::filesystem::u8path(state_path_ + ".bak"),
+						   std::filesystem::copy_options::overwrite_existing, ec);
 		}
 		for (int i = 0; i < kDefaultCardCount; ++i) {
 			state_.cards.push_back(make_default_card(static_cast<std::size_t>(i)));
 		}
 		state_.next_id = kDefaultCardCount + 1;
-		set_dock_status(
-			QStringLiteral("Warnung: textbox-state.json war beschädigt (Backup .bak angelegt)"),
-			true);
+		set_dock_status(QStringLiteral("Warnung: textbox-state.json war beschädigt (Backup .bak angelegt)"),
+				true);
 	} else if (!file_exists) {
 		for (int i = 0; i < kDefaultCardCount; ++i) {
 			state_.add_card();
@@ -847,8 +843,7 @@ TextboxDock::TextboxDock(const std::string &state_path, QWidget *parent)
 
 	rebuild_rows();
 
-	tb_event_log(tb_event_log_dir_from_state_path(state_path_),
-		     "Dock geöffnet/registriert");
+	tb_event_log(tb_event_log_dir_from_state_path(state_path_), "Dock geöffnet/registriert");
 
 	// Spec F2b: Karten-HTML ab Start aus Zustand + Vorlagen neu erzeugen und die
 	// Browser-Dokumente neu laden — so wirken Vorlagen (auch Vorlagen-Ordner-
@@ -1033,22 +1028,22 @@ void TextboxDock::create_row_widget(const TextboxCard &card)
 	auto move_row = std::make_shared<std::function<void(QLineEdit *, int)>>();
 
 	connect(lbl_rows, &QToolButton::clicked, rows_frame,
-	        [rows_collapsed, label_edits, value_edits, move_btns, lbl_rows, rows_frame]() {
-		        *rows_collapsed = !*rows_collapsed;
-		        const QString title = *rows_collapsed
-			        ? QStringLiteral("▶ SPEZIFISCHE CSS-REGELN")
-			        : QStringLiteral("▼ SPEZIFISCHE CSS-REGELN");
-		        lbl_rows->setText(title);
-		        rows_frame->setTitle(title);
-		        for (auto *e : *label_edits)
-			        e->setVisible(!*rows_collapsed);
-		        for (auto *e : *value_edits)
-			        e->setVisible(!*rows_collapsed);
-		        for (auto *b : *move_btns)
-			        b->setVisible(!*rows_collapsed);
-	        });
+		[rows_collapsed, label_edits, value_edits, move_btns, lbl_rows, rows_frame]() {
+			*rows_collapsed = !*rows_collapsed;
+			const QString title = *rows_collapsed ? QStringLiteral("▶ SPEZIFISCHE CSS-REGELN")
+							      : QStringLiteral("▼ SPEZIFISCHE CSS-REGELN");
+			lbl_rows->setText(title);
+			rows_frame->setTitle(title);
+			for (auto *e : *label_edits)
+				e->setVisible(!*rows_collapsed);
+			for (auto *e : *value_edits)
+				e->setVisible(!*rows_collapsed);
+			for (auto *b : *move_btns)
+				b->setVisible(!*rows_collapsed);
+		});
 
-	auto add_row_edit = [this, card_inner, rows_layout, rows_collapsed, move_row, move_btns, fh, btn_sz](const QString &label, const QString &value) {
+	auto add_row_edit = [this, card_inner, rows_layout, rows_collapsed, move_row, move_btns, fh,
+			     btn_sz](const QString &label, const QString &value) {
 		auto *row = new QHBoxLayout();
 		row->setContentsMargins(0, 0, 0, 0);
 		row->setSpacing(6);
@@ -1078,9 +1073,9 @@ void TextboxDock::create_row_widget(const TextboxCard &card)
 		down_btn->setAccessibleName(QStringLiteral("Zeile nach unten verschieben"));
 		down_btn->setProperty("class", "iconbtn");
 		QObject::connect(up_btn, &QToolButton::clicked, card_inner,
-		                 [move_row, ledit]() { (*move_row)(ledit, -1); });
+				 [move_row, ledit]() { (*move_row)(ledit, -1); });
 		QObject::connect(down_btn, &QToolButton::clicked, card_inner,
-		                 [move_row, ledit]() { (*move_row)(ledit, +1); });
+				 [move_row, ledit]() { (*move_row)(ledit, +1); });
 		if (*rows_collapsed) {
 			ledit->setVisible(false);
 			vedit->setVisible(false);
@@ -1132,77 +1127,82 @@ void TextboxDock::create_row_widget(const TextboxCard &card)
 			card_search_->lineEdit()->setText(prev_text);
 	};
 
-	auto wire_row_edits = [this, label_edits, value_edits, schedule_save, collect_rows, update_search_entry](
-			      QLineEdit *ledit, QLineEdit *vedit) {
+	auto wire_row_edits = [this, label_edits, value_edits, schedule_save, collect_rows,
+			       update_search_entry](QLineEdit *ledit, QLineEdit *vedit) {
 		connect(ledit, &QLineEdit::textChanged, this, [schedule_save, collect_rows](const QString &) {
 			if (collect_rows())
 				schedule_save();
 		});
-		connect(vedit, &QLineEdit::textChanged, this, [schedule_save, collect_rows, update_search_entry](const QString &text) {
-			if (!collect_rows())
-				return;
-			schedule_save();
-			update_search_entry(text);
-		});
+		connect(vedit, &QLineEdit::textChanged, this,
+			[schedule_save, collect_rows, update_search_entry](const QString &text) {
+				if (!collect_rows())
+					return;
+				schedule_save();
+				update_search_entry(text);
+			});
 	};
 
 	const auto init_rows = effective_rows(card);
 	for (size_t i = 0; i < init_rows.size(); ++i) {
 		const QString lbl = !init_rows[i].label.empty()
-			       ? QString::fromUtf8(init_rows[i].label.c_str())
-			       : QString::fromUtf8(kTextboxRowLabels[std::min(i, size_t(2))]);
+					    ? QString::fromUtf8(init_rows[i].label.c_str())
+					    : QString::fromUtf8(kTextboxRowLabels[std::min(i, size_t(2))]);
 		auto pr = add_row_edit(lbl, QString::fromUtf8(init_rows[i].value.c_str()));
 		label_edits->push_back(pr.first);
 		value_edits->push_back(pr.second);
 		wire_row_edits(pr.first, pr.second);
 	}
 
-	connect(row_add_btn, &QToolButton::clicked, this, [this, label_edits, value_edits, add_row_edit, wire_row_edits, collect_rows, schedule_save]() {
-		if (label_edits->size() >= kMaxCardRows)
-			return;
-		const size_t idx = label_edits->size();
-		const QString lbl = QStringLiteral("--zeile-%1").arg(idx + 1);
-		auto pr = add_row_edit(lbl, QString());
-		label_edits->push_back(pr.first);
-		value_edits->push_back(pr.second);
-		wire_row_edits(pr.first, pr.second);
-		if (collect_rows())
-			schedule_save();
-	});
+	connect(row_add_btn, &QToolButton::clicked, this,
+		[this, label_edits, value_edits, add_row_edit, wire_row_edits, collect_rows, schedule_save]() {
+			if (label_edits->size() >= kMaxCardRows)
+				return;
+			const size_t idx = label_edits->size();
+			const QString lbl = QStringLiteral("--zeile-%1").arg(idx + 1);
+			auto pr = add_row_edit(lbl, QString());
+			label_edits->push_back(pr.first);
+			value_edits->push_back(pr.second);
+			wire_row_edits(pr.first, pr.second);
+			if (collect_rows())
+				schedule_save();
+		});
 
-	connect(row_del_btn, &QToolButton::clicked, this, [label_edits, value_edits, move_btns, rows_layout, collect_rows, schedule_save]() {
-		if (label_edits->size() <= 1)
-			return;
-		// Letzte Zeilen-HLayout entfernen (Header-Layout bleibt index 0).
-		QLayout *row_l = rows_layout->itemAt(rows_layout->count() - 1)->layout();
-		if (row_l) {
-			for (int k = row_l->count() - 1; k >= 0; --k) {
-				auto *item = row_l->takeAt(k);
-				if (item->widget())
-					item->widget()->deleteLater();
-				delete item;
+	connect(row_del_btn, &QToolButton::clicked, this,
+		[label_edits, value_edits, move_btns, rows_layout, collect_rows, schedule_save]() {
+			if (label_edits->size() <= 1)
+				return;
+			// Letzte Zeilen-HLayout entfernen (Header-Layout bleibt index 0).
+			QLayout *row_l = rows_layout->itemAt(rows_layout->count() - 1)->layout();
+			if (row_l) {
+				for (int k = row_l->count() - 1; k >= 0; --k) {
+					auto *item = row_l->takeAt(k);
+					if (item->widget())
+						item->widget()->deleteLater();
+					delete item;
+				}
+				delete row_l;
 			}
-			delete row_l;
-		}
-		label_edits->pop_back();
-		value_edits->pop_back();
-		if (move_btns->size() >= 2) {
-			move_btns->pop_back();
-			move_btns->pop_back();
-		}
-		if (collect_rows())
-			schedule_save();
-	});
+			label_edits->pop_back();
+			value_edits->pop_back();
+			if (move_btns->size() >= 2) {
+				move_btns->pop_back();
+				move_btns->pop_back();
+			}
+			if (collect_rows())
+				schedule_save();
+		});
 
 	// Zeilen-Umordnung: vertauscht Inhalte zweier Reihen und die Edit-Pointer.
-	*move_row = [this, card_id, label_edits, value_edits, schedule_save, collect_rows](
-		    QLineEdit *ledit, int dir) {
+	*move_row = [this, card_id, label_edits, value_edits, schedule_save, collect_rows](QLineEdit *ledit, int dir) {
 		auto &labs = *label_edits;
 		auto &vals = *value_edits;
 		size_t i = 0;
 		bool found = false;
 		for (; i < labs.size(); ++i)
-			if (labs[i] == ledit) { found = true; break; }
+			if (labs[i] == ledit) {
+				found = true;
+				break;
+			}
 		if (!found)
 			return;
 		const int j = int(i) + dir;
@@ -1235,8 +1235,7 @@ void TextboxDock::create_row_widget(const TextboxCard &card)
 	style_layout->setSpacing(8);
 
 	auto *prof_grp = new QGroupBox(QStringLiteral("PROFIL"), style_section);
-	prof_grp->setToolTip(
-		QStringLiteral("Karten-Farbprofil (Text/Box/Ecken/Deckkraft)"));
+	prof_grp->setToolTip(QStringLiteral("Karten-Farbprofil (Text/Box/Ecken/Deckkraft)"));
 	prof_grp->setAttribute(Qt::WA_StyledBackground, true);
 	auto *prof_grp_layout = new QVBoxLayout(prof_grp);
 	prof_grp_layout->setContentsMargins(4, 0, 4, 4);
@@ -1256,8 +1255,7 @@ void TextboxDock::create_row_widget(const TextboxCard &card)
 	profile_combo->setFixedHeight(fh);
 	profile_combo->setMinimumWidth(fontMetrics().averageCharWidth() * 16);
 	profile_combo->setSizeAdjustPolicy(QComboBox::AdjustToContentsOnFirstShow);
-	profile_combo->setToolTip(
-		QStringLiteral("Karten-Farbprofil (Text/Box/Ecken/Deckkraft)"));
+	profile_combo->setToolTip(QStringLiteral("Karten-Farbprofil (Text/Box/Ecken/Deckkraft)"));
 	profile_combo->setAccessibleName(
 		QStringLiteral("Karten-Farbprofil %1").arg(QString::fromUtf8(card.id.c_str())));
 	int selected_index = 0;
@@ -1273,8 +1271,7 @@ void TextboxDock::create_row_widget(const TextboxCard &card)
 	auto *new_prof_btn = new QPushButton(QStringLiteral("Profil +"), style_section);
 	new_prof_btn->setObjectName(QStringLiteral("tbBtnNewProfile"));
 	new_prof_btn->setFixedHeight(fh);
-	new_prof_btn->setToolTip(
-		QStringLiteral("Aktuelles Karten-Farbprofil (Text/Box/Ecken/Deckkraft) speichern"));
+	new_prof_btn->setToolTip(QStringLiteral("Aktuelles Karten-Farbprofil (Text/Box/Ecken/Deckkraft) speichern"));
 
 	auto *prof_rename_btn = new QPushButton(style_section);
 	prof_rename_btn->setObjectName(QStringLiteral("tbBtnRenameProfile"));
@@ -1342,15 +1339,37 @@ void TextboxDock::create_row_widget(const TextboxCard &card)
 
 	// Übliche Template-Variablen als Autovervollständigung für Regel-Namen.
 	auto css_var_model = std::make_shared<QStringList>();
-	for (const char *v : {"--tb-radius", "--tb-padding", "--tb-padding-top", "--tb-padding-left",
-	                      "--tb-gap", "--tb-min-width", "--tb-max-width", "--tb-text-align",
-	                      "--tb-font-family", "--tb-font-first", "--tb-font-first-weight",
-	                      "--tb-font-rest", "--tb-font-rest-weight", "--tb-corner-size",
-	                      "--tb-color-text", "--tb-color-box", "--tb-corner-color-a", "--tb-corner-color-b",
-	                      "--tb-corner-opacity-a", "--tb-corner-opacity-b", "--tb-text-opacity",
-	                      "--tb-box-opacity", "--tb-rainbow",
-	                      "--show-anim", "--anim-file", "--anim-scale", "--anim-x", "--anim-y",
-	                      "--box-x", "--box-y", "--box-scale"})
+	for (const char *v : {"--tb-radius",
+			      "--tb-padding",
+			      "--tb-padding-top",
+			      "--tb-padding-left",
+			      "--tb-gap",
+			      "--tb-min-width",
+			      "--tb-max-width",
+			      "--tb-text-align",
+			      "--tb-font-family",
+			      "--tb-font-first",
+			      "--tb-font-first-weight",
+			      "--tb-font-rest",
+			      "--tb-font-rest-weight",
+			      "--tb-corner-size",
+			      "--tb-color-text",
+			      "--tb-color-box",
+			      "--tb-corner-color-a",
+			      "--tb-corner-color-b",
+			      "--tb-corner-opacity-a",
+			      "--tb-corner-opacity-b",
+			      "--tb-text-opacity",
+			      "--tb-box-opacity",
+			      "--tb-rainbow",
+			      "--show-anim",
+			      "--anim-file",
+			      "--anim-scale",
+			      "--anim-x",
+			      "--anim-y",
+			      "--box-x",
+			      "--box-y",
+			      "--box-scale"})
 		css_var_model->append(QString::fromLatin1(v));
 
 	auto paint_color_swatch = [](QPushButton *btn, const QString &hex) {
@@ -1358,7 +1377,8 @@ void TextboxDock::create_row_widget(const TextboxCard &card)
 		const bool light = (col.red() + col.green() + col.blue()) > 160;
 		QPalette pal = btn->palette();
 		pal.setColor(QPalette::Button, col);
-		pal.setColor(QPalette::ButtonText, light ? QColor(QStringLiteral("#1a1a1a")) : QColor(QStringLiteral("#ffffff")));
+		pal.setColor(QPalette::ButtonText,
+			     light ? QColor(QStringLiteral("#1a1a1a")) : QColor(QStringLiteral("#ffffff")));
 		btn->setPalette(pal);
 		btn->setAutoFillBackground(true);
 	};
@@ -1373,21 +1393,19 @@ void TextboxDock::create_row_widget(const TextboxCard &card)
 	};
 	auto css_rows = std::make_shared<std::vector<CssRuleRow>>();
 
-// Einklappen/ausklappen der CSS-Regelzeilen.
-	QObject::connect(lbl_css, &QToolButton::clicked, this,
-		[this, lbl_css, css_collapsed, css_rows, css_frame]() {
-			*css_collapsed = !*css_collapsed;
-			const QString title = *css_collapsed
-				? QStringLiteral("▶ GENERELLE CSS-REGELN")
-				: QStringLiteral("▼ GENERELLE CSS-REGELN");
-			lbl_css->setText(title);
-			css_frame->setTitle(title);
-			for (auto &r : *css_rows) {
-				r.name_edit->setVisible(!*css_collapsed);
-				r.type_combo->setVisible(!*css_collapsed);
-				r.value_widget->setVisible(!*css_collapsed);
-			}
-		});
+	// Einklappen/ausklappen der CSS-Regelzeilen.
+	QObject::connect(lbl_css, &QToolButton::clicked, this, [this, lbl_css, css_collapsed, css_rows, css_frame]() {
+		*css_collapsed = !*css_collapsed;
+		const QString title = *css_collapsed ? QStringLiteral("▶ GENERELLE CSS-REGELN")
+						     : QStringLiteral("▼ GENERELLE CSS-REGELN");
+		lbl_css->setText(title);
+		css_frame->setTitle(title);
+		for (auto &r : *css_rows) {
+			r.name_edit->setVisible(!*css_collapsed);
+			r.type_combo->setVisible(!*css_collapsed);
+			r.value_widget->setVisible(!*css_collapsed);
+		}
+	});
 
 	auto collect_css = [this, card_id, css_rows]() -> bool {
 		TextboxCard *c = find_card_mut(card_id);
@@ -1396,10 +1414,8 @@ void TextboxDock::create_row_widget(const TextboxCard &card)
 		std::vector<TextboxStyleRule> rules;
 		for (auto &r : *css_rows) {
 			TextboxStyleRule rule;
-			rule.name = textbox_html::sanitize_css_var_name(
-				r.name_edit->text().toUtf8().toStdString());
-			rule.value = textbox_html::sanitize_css_value(
-				r.getter().toUtf8().toStdString());
+			rule.name = textbox_html::sanitize_css_var_name(r.name_edit->text().toUtf8().toStdString());
+			rule.value = textbox_html::sanitize_css_value(r.getter().toUtf8().toStdString());
 			rule.type = r.type_combo->currentData().toString().toUtf8().toStdString();
 			if (rule.name.empty())
 				continue;
@@ -1411,218 +1427,222 @@ void TextboxDock::create_row_widget(const TextboxCard &card)
 	};
 
 	auto build_value_widget =
-		[css_frame, paint_color_swatch, this, fh](const QString &type, const QString &value,
-		                                const std::function<void()> &on_change)
-			-> std::pair<QWidget *, std::function<QString()>> {
-			if (type == QLatin1String("num")) {
-				auto *row = new QWidget(css_frame);
-				auto *hl = new QHBoxLayout(row);
-				hl->setContentsMargins(0, 0, 0, 0);
-				hl->setSpacing(6);
-				auto *slider = new QSlider(Qt::Horizontal, row);
-				row->setMinimumWidth(fontMetrics().averageCharWidth() * 8);
-				slider->setRange(0, 255);
-				bool ok = false;
-				const int v = value.toInt(&ok);
-				slider->setValue(ok ? std::clamp(v, 0, 255) : 255);
-				auto *val = new QLabel(QString::number(slider->value()), row);
-				val->setObjectName(QStringLiteral("tbFieldLabel"));
-				val->setMinimumWidth(fontMetrics().averageCharWidth() * 3);
-				val->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
-				hl->addWidget(slider, 1);
-				hl->addWidget(val);
-				QObject::connect(slider, &QSlider::valueChanged, row,
-				                 [val, on_change](int s) {
-				                 val->setText(QString::number(s));
-				                 on_change();
-			                 });
-				return {row, [slider]() { return QString::number(slider->value()); }};
-			}
-			if (type == QLatin1String("hex")) {
-				const QString hex = value.startsWith(QLatin1String("#")) ? value
-				                                                         : QStringLiteral("#ffffff");
-				auto *btn = new QPushButton(hex.toUpper(), css_frame);
-				btn->setObjectName(QStringLiteral("tbTextColor"));
-				btn->setFixedHeight(fh);
-				btn->setMinimumWidth(fontMetrics().averageCharWidth() * 8);
-				paint_color_swatch(btn, hex);
-				QObject::connect(btn, &QPushButton::clicked, btn,
-				                 [btn, on_change, paint_color_swatch]() {
-				                 const QColor chosen = QColorDialog::getColor(QColor(btn->text()), btn);
-				                 if (chosen.isValid()) {
-				                 const QString h = chosen.name(QColor::HexRgb);
-				                 btn->setText(h.toUpper());
-				                 paint_color_swatch(btn, h);
-				                 on_change();
-			                 }
-		                 });
-				return {btn, [btn]() { return btn->text(); }};
-			}
-			if (type == QLatin1String("px")) {
-				auto *combo = new QComboBox(css_frame);
-				combo->setEditable(true);
-				for (const char *p : {"0px", "2px", "4px", "6px", "8px", "10px", "12px", "14px",
-				                     "16px", "20px", "24px", "28px", "32px", "40px", "48px", "60px"})
-					combo->addItem(QString::fromLatin1(p));
-				if (!value.isEmpty() && combo->findText(value, Qt::MatchFixedString) < 0)
-					combo->addItem(value);
-				combo->setCurrentText(value.isEmpty() ? QStringLiteral("8px") : value);
-				combo->setFixedHeight(fh);
-				combo->setMinimumWidth(fontMetrics().averageCharWidth() * 8);
-				QObject::connect(combo, &QComboBox::currentTextChanged, combo,
-				                 [on_change](const QString &) { on_change(); });
-				return {combo, [combo]() { return combo->currentText(); }};
-			}
-			if (type == QLatin1String("bool")) {
-				auto *cb = new QCheckBox(QStringLiteral("1 = an"), css_frame);
-				cb->setChecked(value == QLatin1String("1"));
-				QObject::connect(cb, &QCheckBox::toggled, cb,
-				                 [on_change](bool) { on_change(); });
-				return {cb, [cb]() { return cb->isChecked() ? QStringLiteral("1") : QStringLiteral("0"); }};
-			}
-			if (type == QLatin1String("enum")) {
-				// Skalierungs-Dropdown: 1x..12x, Wert als nackte Zahl.
-				auto *combo = new QComboBox(css_frame);
-				combo->setFixedHeight(fh);
-				combo->setMinimumWidth(fontMetrics().averageCharWidth() * 8);
-				const int kScaleValues[] = {1, 2, 3, 4, 6, 8, 10, 12};
-				int sidx = 2; // Default "3x"
-				for (int si = 0; si < 8; ++si) {
-					combo->addItem(QStringLiteral("%1x").arg(kScaleValues[si]), kScaleValues[si]);
-					if (kScaleValues[si] == value.toInt())
-						sidx = si;
+		[css_frame, paint_color_swatch, this,
+		 fh](const QString &type, const QString &value,
+		     const std::function<void()> &on_change) -> std::pair<QWidget *, std::function<QString()>> {
+		if (type == QLatin1String("num")) {
+			auto *row = new QWidget(css_frame);
+			auto *hl = new QHBoxLayout(row);
+			hl->setContentsMargins(0, 0, 0, 0);
+			hl->setSpacing(6);
+			auto *slider = new QSlider(Qt::Horizontal, row);
+			row->setMinimumWidth(fontMetrics().averageCharWidth() * 8);
+			slider->setRange(0, 255);
+			bool ok = false;
+			const int v = value.toInt(&ok);
+			slider->setValue(ok ? std::clamp(v, 0, 255) : 255);
+			auto *val = new QLabel(QString::number(slider->value()), row);
+			val->setObjectName(QStringLiteral("tbFieldLabel"));
+			val->setMinimumWidth(fontMetrics().averageCharWidth() * 3);
+			val->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
+			hl->addWidget(slider, 1);
+			hl->addWidget(val);
+			QObject::connect(slider, &QSlider::valueChanged, row, [val, on_change](int s) {
+				val->setText(QString::number(s));
+				on_change();
+			});
+			return {row, [slider]() {
+					return QString::number(slider->value());
+				}};
+		}
+		if (type == QLatin1String("hex")) {
+			const QString hex = value.startsWith(QLatin1String("#")) ? value : QStringLiteral("#ffffff");
+			auto *btn = new QPushButton(hex.toUpper(), css_frame);
+			btn->setObjectName(QStringLiteral("tbTextColor"));
+			btn->setFixedHeight(fh);
+			btn->setMinimumWidth(fontMetrics().averageCharWidth() * 8);
+			paint_color_swatch(btn, hex);
+			QObject::connect(btn, &QPushButton::clicked, btn, [btn, on_change, paint_color_swatch]() {
+				const QColor chosen = QColorDialog::getColor(QColor(btn->text()), btn);
+				if (chosen.isValid()) {
+					const QString h = chosen.name(QColor::HexRgb);
+					btn->setText(h.toUpper());
+					paint_color_swatch(btn, h);
+					on_change();
 				}
-				combo->setCurrentIndex(sidx);
-				QObject::connect(combo, QOverload<int>::of(&QComboBox::currentIndexChanged), combo,
-				                 [on_change](int) { on_change(); });
-				return {combo, [combo]() { return QString::number(combo->currentData().toInt()); }};
+			});
+			return {btn, [btn]() {
+					return btn->text();
+				}};
+		}
+		if (type == QLatin1String("px")) {
+			auto *combo = new QComboBox(css_frame);
+			combo->setEditable(true);
+			for (const char *p : {"0px", "2px", "4px", "6px", "8px", "10px", "12px", "14px", "16px", "20px",
+					      "24px", "28px", "32px", "40px", "48px", "60px"})
+				combo->addItem(QString::fromLatin1(p));
+			if (!value.isEmpty() && combo->findText(value, Qt::MatchFixedString) < 0)
+				combo->addItem(value);
+			combo->setCurrentText(value.isEmpty() ? QStringLiteral("8px") : value);
+			combo->setFixedHeight(fh);
+			combo->setMinimumWidth(fontMetrics().averageCharWidth() * 8);
+			QObject::connect(combo, &QComboBox::currentTextChanged, combo,
+					 [on_change](const QString &) { on_change(); });
+			return {combo, [combo]() {
+					return combo->currentText();
+				}};
+		}
+		if (type == QLatin1String("bool")) {
+			auto *cb = new QCheckBox(QStringLiteral("1 = an"), css_frame);
+			cb->setChecked(value == QLatin1String("1"));
+			QObject::connect(cb, &QCheckBox::toggled, cb, [on_change](bool) { on_change(); });
+			return {cb, [cb]() {
+					return cb->isChecked() ? QStringLiteral("1") : QStringLiteral("0");
+				}};
+		}
+		if (type == QLatin1String("enum")) {
+			// Skalierungs-Dropdown: 1x..12x, Wert als nackte Zahl.
+			auto *combo = new QComboBox(css_frame);
+			combo->setFixedHeight(fh);
+			combo->setMinimumWidth(fontMetrics().averageCharWidth() * 8);
+			const int kScaleValues[] = {1, 2, 3, 4, 6, 8, 10, 12};
+			int sidx = 2; // Default "3x"
+			for (int si = 0; si < 8; ++si) {
+				combo->addItem(QStringLiteral("%1x").arg(kScaleValues[si]), kScaleValues[si]);
+				if (kScaleValues[si] == value.toInt())
+					sidx = si;
 			}
-			if (type == QLatin1String("file")) {
-				auto *row = new QWidget(css_frame);
-				auto *hl = new QHBoxLayout(row);
-				hl->setContentsMargins(0, 0, 0, 0);
-				hl->setSpacing(6);
-				auto *edit = new QLineEdit(value, row);
-				edit->setPlaceholderText(QStringLiteral("Dateiname, Pfad oder URL"));
-				edit->setFixedHeight(fh);
-				auto *pick = new QPushButton(row);
-				pick->setFixedSize(fh + 2, fh + 2);
-				pick->setIcon(theme_icon("download.svg"));
-				pick->setIconSize(QSize(16, 16));
-				pick->setToolTip(QStringLiteral("Animationsdatei auswählen"));
-				hl->addWidget(edit, 1);
-				hl->addWidget(pick);
-				QObject::connect(edit, &QLineEdit::textChanged, edit,
-				                 [on_change](const QString &) { on_change(); });
-				QObject::connect(pick, &QPushButton::clicked, row,
-				                 [this, edit, on_change]() {
-				                 const QString start_dir =
-				                     QString::fromUtf8(state_.settings.animation_dir.c_str());
-				                 const QString chosen = QFileDialog::getOpenFileName(
-				                     this, QStringLiteral("Animationsdatei wählen"), start_dir,
-				                     QStringLiteral(
-				                         "Animationen (*.gif *.webm *.mp4 *.mov *.m4v);;Bilder (*.png *.jpg *.jpeg);;Alle Dateien (*.*)"),
-				                     nullptr, dialog_options());
-				                 if (!chosen.isEmpty()) {
-				                     edit->setText(chosen);
-				                     on_change();
-				                 }
-				                 });
-				return {row, [edit]() { return edit->text(); }};
-			}
-			auto *edit = new QLineEdit(value, css_frame);
-			edit->setPlaceholderText(QStringLiteral("wert"));
+			combo->setCurrentIndex(sidx);
+			QObject::connect(combo, QOverload<int>::of(&QComboBox::currentIndexChanged), combo,
+					 [on_change](int) { on_change(); });
+			return {combo, [combo]() {
+					return QString::number(combo->currentData().toInt());
+				}};
+		}
+		if (type == QLatin1String("file")) {
+			auto *row = new QWidget(css_frame);
+			auto *hl = new QHBoxLayout(row);
+			hl->setContentsMargins(0, 0, 0, 0);
+			hl->setSpacing(6);
+			auto *edit = new QLineEdit(value, row);
+			edit->setPlaceholderText(QStringLiteral("Dateiname, Pfad oder URL"));
 			edit->setFixedHeight(fh);
+			auto *pick = new QPushButton(row);
+			pick->setFixedSize(fh + 2, fh + 2);
+			pick->setIcon(theme_icon("download.svg"));
+			pick->setIconSize(QSize(16, 16));
+			pick->setToolTip(QStringLiteral("Animationsdatei auswählen"));
+			hl->addWidget(edit, 1);
+			hl->addWidget(pick);
 			QObject::connect(edit, &QLineEdit::textChanged, edit,
-			                 [on_change](const QString &) { on_change(); });
-			return {edit, [edit]() { return edit->text(); }};
+					 [on_change](const QString &) { on_change(); });
+			QObject::connect(pick, &QPushButton::clicked, row, [this, edit, on_change]() {
+				const QString start_dir = QString::fromUtf8(state_.settings.animation_dir.c_str());
+				const QString chosen = QFileDialog::getOpenFileName(
+					this, QStringLiteral("Animationsdatei wählen"), start_dir,
+					QStringLiteral(
+						"Animationen (*.gif *.webm *.mp4 *.mov *.m4v);;Bilder (*.png *.jpg *.jpeg);;Alle Dateien (*.*)"),
+					nullptr, dialog_options());
+				if (!chosen.isEmpty()) {
+					edit->setText(chosen);
+					on_change();
+				}
+			});
+			return {row, [edit]() {
+					return edit->text();
+				}};
+		}
+		auto *edit = new QLineEdit(value, css_frame);
+		edit->setPlaceholderText(QStringLiteral("wert"));
+		edit->setFixedHeight(fh);
+		QObject::connect(edit, &QLineEdit::textChanged, edit, [on_change](const QString &) { on_change(); });
+		return {edit, [edit]() {
+				return edit->text();
+			}};
+	};
+
+	auto make_rule_row = [this, fh, css_frame, css_layout, css_rows, css_var_model, build_value_widget, collect_css,
+			      schedule_save,
+			      css_collapsed](const QString &name, const QString &type, const QString &value) {
+		auto *row = new QHBoxLayout();
+		row->setContentsMargins(0, 0, 0, 0);
+		row->setSpacing(6);
+		auto *nedit = new QLineEdit(name, css_frame);
+		nedit->setPlaceholderText(QStringLiteral("--variable"));
+		nedit->setMinimumWidth(fontMetrics().averageCharWidth() * 8);
+		nedit->setFixedHeight(fh);
+		auto *comp = new QCompleter(*css_var_model, css_frame);
+		comp->setCaseSensitivity(Qt::CaseInsensitive);
+		nedit->setCompleter(comp);
+		nedit->setAccessibleName(QStringLiteral("Name der CSS-Regel %1").arg(name));
+		auto *tcombo = new QComboBox(css_frame);
+		tcombo->setFixedWidth(fontMetrics().averageCharWidth() * 7);
+		tcombo->setFixedHeight(fh);
+		tcombo->setToolTip(QStringLiteral(
+			"Wert-Eingarte: Text, Zahl 0-255 (Regler), HEX (Farbpicker), px (Dropdown), Bool, Enum (Dropdown), Datei (Picker)"));
+		tcombo->setAccessibleName(QStringLiteral("Typ der CSS-Regel %1").arg(name));
+		tcombo->addItem(QStringLiteral("Text"), QStringLiteral("text"));
+		tcombo->addItem(QStringLiteral("0-255"), QStringLiteral("num"));
+		tcombo->addItem(QStringLiteral("HEX"), QStringLiteral("hex"));
+		tcombo->addItem(QStringLiteral("px"), QStringLiteral("px"));
+		tcombo->addItem(QStringLiteral("Bool"), QStringLiteral("bool"));
+		tcombo->addItem(QStringLiteral("Enum"), QStringLiteral("enum"));
+		tcombo->addItem(QStringLiteral("Datei"), QStringLiteral("file"));
+		const int ti = tcombo->findData(type);
+		tcombo->setCurrentIndex(ti >= 0 ? ti : 0);
+
+		CssRuleRow r;
+		r.name_edit = nedit;
+		r.type_combo = tcombo;
+		r.row_layout = row;
+		auto onchange = [collect_css, schedule_save]() {
+			if (collect_css())
+				schedule_save();
 		};
+		auto built = build_value_widget(tcombo->currentData().toString(), value, onchange);
+		r.value_widget = built.first;
+		if (r.value_widget && r.value_widget->inherits("QComboBox"))
+			r.value_widget->setAccessibleName(QStringLiteral("Wert der CSS-Regel %1").arg(name));
+		r.getter = built.second;
+		if (*css_collapsed) {
+			r.name_edit->hide();
+			r.type_combo->hide();
+			r.value_widget->hide();
+		}
+		row->addWidget(r.name_edit, 3);
+		row->addWidget(r.value_widget, 4);
+		row->addWidget(r.type_combo);
+		css_layout->addLayout(row);
+		css_rows->push_back(r);
+		const int idx = static_cast<int>(css_rows->size()) - 1;
 
-	auto make_rule_row =
-		[this, fh, css_frame, css_layout, css_rows, css_var_model, build_value_widget, collect_css,
-		 schedule_save, css_collapsed](const QString &name, const QString &type,
-		                                const QString &value) {
-			auto *row = new QHBoxLayout();
-			row->setContentsMargins(0, 0, 0, 0);
-			row->setSpacing(6);
-			auto *nedit = new QLineEdit(name, css_frame);
-			nedit->setPlaceholderText(QStringLiteral("--variable"));
-			nedit->setMinimumWidth(fontMetrics().averageCharWidth() * 8);
-			nedit->setFixedHeight(fh);
-			auto *comp = new QCompleter(*css_var_model, css_frame);
-			comp->setCaseSensitivity(Qt::CaseInsensitive);
-			nedit->setCompleter(comp);
-			nedit->setAccessibleName(QStringLiteral("Name der CSS-Regel %1").arg(name));
-			auto *tcombo = new QComboBox(css_frame);
-			tcombo->setFixedWidth(fontMetrics().averageCharWidth() * 7);
-			tcombo->setFixedHeight(fh);
-			tcombo->setToolTip(QStringLiteral(
-				"Wert-Eingarte: Text, Zahl 0-255 (Regler), HEX (Farbpicker), px (Dropdown), Bool, Enum (Dropdown), Datei (Picker)"));
-			tcombo->setAccessibleName(QStringLiteral("Typ der CSS-Regel %1").arg(name));
-			tcombo->addItem(QStringLiteral("Text"), QStringLiteral("text"));
-			tcombo->addItem(QStringLiteral("0-255"), QStringLiteral("num"));
-			tcombo->addItem(QStringLiteral("HEX"), QStringLiteral("hex"));
-			tcombo->addItem(QStringLiteral("px"), QStringLiteral("px"));
-			tcombo->addItem(QStringLiteral("Bool"), QStringLiteral("bool"));
-			tcombo->addItem(QStringLiteral("Enum"), QStringLiteral("enum"));
-			tcombo->addItem(QStringLiteral("Datei"), QStringLiteral("file"));
-			const int ti = tcombo->findData(type);
-			tcombo->setCurrentIndex(ti >= 0 ? ti : 0);
+		QObject::connect(nedit, &QLineEdit::textChanged, css_frame,
+				 [onchange](const QString &) { onchange(); });
 
-			CssRuleRow r;
-			r.name_edit = nedit;
-			r.type_combo = tcombo;
-			r.row_layout = row;
-			auto onchange = [collect_css, schedule_save]() {
-				if (collect_css())
-					schedule_save();
-			};
-			auto built = build_value_widget(tcombo->currentData().toString(), value, onchange);
-			r.value_widget = built.first;
-			if (r.value_widget && r.value_widget->inherits("QComboBox"))
-				r.value_widget->setAccessibleName(
-					QStringLiteral("Wert der CSS-Regel %1").arg(name));
-			r.getter = built.second;
-			if (*css_collapsed) {
-				r.name_edit->hide();
-				r.type_combo->hide();
-				r.value_widget->hide();
-			}
-			row->addWidget(r.name_edit, 3);
-			row->addWidget(r.value_widget, 4);
-			row->addWidget(r.type_combo);
-			css_layout->addLayout(row);
-			css_rows->push_back(r);
-			const int idx = static_cast<int>(css_rows->size()) - 1;
+		// Typ-Wechsel: Wert-Widget neu aufbauen, bisherigen Wert übernehmen.
+		QObject::connect(tcombo, &QComboBox::textActivated, css_frame,
+				 [css_rows, build_value_widget, collect_css, schedule_save, idx]() {
+					 CssRuleRow &rr = css_rows->at(idx);
+					 const QString old = rr.getter();
+					 QWidget *oldw = rr.value_widget;
+					 QHBoxLayout *lay = rr.row_layout;
+					 const int pos = lay ? lay->indexOf(oldw) : -1;
+					 auto oc = [collect_css, schedule_save]() {
+						 if (collect_css())
+							 schedule_save();
+					 };
+					 auto built2 =
+						 build_value_widget(rr.type_combo->currentData().toString(), old, oc);
+					 rr.value_widget = built2.first;
+					 rr.getter = built2.second;
+					 rr.value_widget->setVisible(rr.name_edit->isVisible());
+					 if (lay && pos >= 0)
+						 lay->insertWidget(pos, built2.first);
+					 oldw->deleteLater();
+				 });
+	};
 
-			QObject::connect(nedit, &QLineEdit::textChanged, css_frame,
-			                 [onchange](const QString &) { onchange(); });
-
-			// Typ-Wechsel: Wert-Widget neu aufbauen, bisherigen Wert übernehmen.
-			QObject::connect(tcombo, &QComboBox::textActivated, css_frame,
-			                 [css_rows, build_value_widget, collect_css, schedule_save, idx]() {
-			                 CssRuleRow &rr = css_rows->at(idx);
-			                 const QString old = rr.getter();
-			                 QWidget *oldw = rr.value_widget;
-			                 QHBoxLayout *lay = rr.row_layout;
-			                 const int pos = lay ? lay->indexOf(oldw) : -1;
-			                 auto oc = [collect_css, schedule_save]() {
-				                 if (collect_css())
-					                 schedule_save();
-			                 };
-			                 auto built2 = build_value_widget(
-				                 rr.type_combo->currentData().toString(), old, oc);
-			                 rr.value_widget = built2.first;
-			                 rr.getter = built2.second;
-			                 rr.value_widget->setVisible(rr.name_edit->isVisible());
-			                 if (lay && pos >= 0)
-				                 lay->insertWidget(pos, built2.first);
-			                 oldw->deleteLater();
-		                 });
-		};
-
-	auto rebuild_css_rows = [this, card_id, css_layout, css_frame, css_rows, make_rule_row,
-	                         css_collapsed]() {
+	auto rebuild_css_rows = [this, card_id, css_layout, css_frame, css_rows, make_rule_row, css_collapsed]() {
 		while (css_layout->count() > 1) {
 			QLayoutItem *it = css_layout->takeAt(1);
 			if (QWidget *w = it->widget())
@@ -1638,7 +1658,7 @@ void TextboxDock::create_row_widget(const TextboxCard &card)
 			if (type.isEmpty())
 				type = QString::fromUtf8(infer_style_type(rule.value).c_str());
 			make_rule_row(QString::fromUtf8(rule.name.c_str()), type,
-			              QString::fromUtf8(rule.value.c_str()));
+				      QString::fromUtf8(rule.value.c_str()));
 		}
 		// Bekannte Farb-/Deckkraft-Variablen als Regelzeilen seedieren,
 		// damit Farben/Deckkraft/Rainbow immer als generelle Regeln sichtbar sind.
@@ -1679,12 +1699,11 @@ void TextboxDock::create_row_widget(const TextboxCard &card)
 
 	rebuild_css_rows();
 
-	connect(css_add_btn, &QToolButton::clicked, this,
-		[make_rule_row, collect_css, schedule_save]() {
-			make_rule_row(QStringLiteral("--"), QStringLiteral("text"), QString());
-			if (collect_css())
-				schedule_save();
-		});
+	connect(css_add_btn, &QToolButton::clicked, this, [make_rule_row, collect_css, schedule_save]() {
+		make_rule_row(QStringLiteral("--"), QStringLiteral("text"), QString());
+		if (collect_css())
+			schedule_save();
+	});
 
 	connect(css_del_btn, &QToolButton::clicked, this,
 		[this, card_id, css_layout, css_frame, css_rows, collect_css, schedule_save]() {
@@ -1704,9 +1723,9 @@ void TextboxDock::create_row_widget(const TextboxCard &card)
 	// voller Pfad = direkte .html-Datei anywhere. Wechsel -> write_card neu +
 	// Browser-Source-Reload (spec: Document-Neuerstellung), gequetscht per Timer.
 	auto *tpl_grp = new QGroupBox(QStringLiteral("VORLAGE"), style_section);
-	tpl_grp->setToolTip(QStringLiteral(
-		"Pfad zur Vorlagen-HTML. Leer = index.html (classic). Einfacher Name (z.B. minimal) = "
-		"Vorlagen-Ordner; voller Pfad = direkte Datei. Ordner-Icon wählt eine .html."));
+	tpl_grp->setToolTip(
+		QStringLiteral("Pfad zur Vorlagen-HTML. Leer = index.html (classic). Einfacher Name (z.B. minimal) = "
+			       "Vorlagen-Ordner; voller Pfad = direkte Datei. Ordner-Icon wählt eine .html."));
 	tpl_grp->setAttribute(Qt::WA_StyledBackground, true);
 	auto *tpl_grp_layout = new QVBoxLayout(tpl_grp);
 	tpl_grp_layout->setContentsMargins(4, 0, 4, 4);
@@ -1747,13 +1766,12 @@ void TextboxDock::create_row_widget(const TextboxCard &card)
 		if (!tpl_dir.empty()) {
 			QStringList html_files;
 			std::error_code ec;
-			for (const auto &entry : std::filesystem::directory_iterator(
-				     std::filesystem::u8path(tpl_dir), ec)) {
+			for (const auto &entry :
+			     std::filesystem::directory_iterator(std::filesystem::u8path(tpl_dir), ec)) {
 				if (!entry.is_regular_file())
 					continue;
 				const std::string name = entry.path().filename().u8string();
-				if (name.size() >= 6 &&
-				    name.compare(name.size() - 5, 5, ".html") == 0) {
+				if (name.size() >= 6 && name.compare(name.size() - 5, 5, ".html") == 0) {
 					html_files.append(QString::fromUtf8(name.c_str()));
 				}
 			}
@@ -1767,23 +1785,19 @@ void TextboxDock::create_row_widget(const TextboxCard &card)
 		}
 	}
 
-
 	style_section->setVisible(true);
 	inner_layout->addWidget(style_section);
 
-	connect(style_toggle_btn, &QToolButton::clicked, this,
-		[this, style_section, style_toggle_btn]() {
-			// M7-2: isHidden() statt isVisible() — isVisible() ist auch bei
-			// verstecktem Dock-Parent false und flippt das Chevron-Icon vor dem
-			// echten State-Change.
-			const bool expand = style_section->isHidden();
-			style_section->setVisible(expand);
-			style_toggle_btn->setIcon(
-				theme_icon(expand ? "chevron_down.svg" : "chevron_right.svg"));
-			style_toggle_btn->setToolTip(
-				expand ? QStringLiteral("Stil-Optionen einklappen")
-				       : QStringLiteral("Stil-Optionen ausklappen"));
-		});
+	connect(style_toggle_btn, &QToolButton::clicked, this, [this, style_section, style_toggle_btn]() {
+		// M7-2: isHidden() statt isVisible() — isVisible() ist auch bei
+		// verstecktem Dock-Parent false und flippt das Chevron-Icon vor dem
+		// echten State-Change.
+		const bool expand = style_section->isHidden();
+		style_section->setVisible(expand);
+		style_toggle_btn->setIcon(theme_icon(expand ? "chevron_down.svg" : "chevron_right.svg"));
+		style_toggle_btn->setToolTip(expand ? QStringLiteral("Stil-Optionen einklappen")
+						    : QStringLiteral("Stil-Optionen ausklappen"));
+	});
 
 	auto *actions_layout = new QHBoxLayout();
 	actions_layout->setContentsMargins(0, 4, 0, 0);
@@ -1798,8 +1812,7 @@ void TextboxDock::create_row_widget(const TextboxCard &card)
 	auto *clear_src_btn = new QPushButton(QStringLiteral("Leeren"), card_inner);
 	clear_src_btn->setObjectName(QStringLiteral("tbBtnRed"));
 	clear_src_btn->setFixedHeight(fh);
-	clear_src_btn->setToolTip(
-		QStringLiteral("Text der Quelle auf leer setzen — die Quelle bleibt in der Szene"));
+	clear_src_btn->setToolTip(QStringLiteral("Text der Quelle auf leer setzen — die Quelle bleibt in der Szene"));
 	clear_src_btn->setProperty("tbDanger", true);
 
 	actions_layout->addWidget(to_scene_btn, 1);
@@ -1814,9 +1827,9 @@ void TextboxDock::create_row_widget(const TextboxCard &card)
 				capture_undo_snapshot(this, state_); // vor der Mutation: Undo stellt alt wieder her
 				c->profile = profile_combo->currentText().toUtf8().toStdString();
 				if (const TextboxProfile *prof =
-					textbox_profile_lookup(c->profile, state_.color_profiles))
+					    textbox_profile_lookup(c->profile, state_.color_profiles))
 					profile_switch(*prof, *c); // Farb-Regeln des Profils übernehmen
-				rebuild_css_rows(); // Regelzeilen zeigen jetzt die Profil-Werte
+				rebuild_css_rows();                // Regelzeilen zeigen jetzt die Profil-Werte
 				schedule_save();
 			}
 		});
@@ -1826,16 +1839,13 @@ void TextboxDock::create_row_widget(const TextboxCard &card)
 	auto *tpl_timer = new QTimer(style_section);
 	tpl_timer->setSingleShot(true);
 	tpl_timer->setInterval(650);
-	connect(tpl_edit, &QLineEdit::textChanged, tpl_timer, [tpl_timer]() {
-		tpl_timer->start();
-	});
-	connect(tpl_timer, &QTimer::timeout, this,
-		[this, card_id, tpl_guard = QPointer<QLineEdit>(tpl_edit)]() {
-			// IMP-S: style_section (und damit tpl_edit) kann vor dem Timeout
-			// zerstört sein — QPointer guardet den dangling Zeiger.
-			if (!tpl_guard)
-				return;
-			const QString t = tpl_guard->text().trimmed();
+	connect(tpl_edit, &QLineEdit::textChanged, tpl_timer, [tpl_timer]() { tpl_timer->start(); });
+	connect(tpl_timer, &QTimer::timeout, this, [this, card_id, tpl_guard = QPointer<QLineEdit>(tpl_edit)]() {
+		// IMP-S: style_section (und damit tpl_edit) kann vor dem Timeout
+		// zerstört sein — QPointer guardet den dangling Zeiger.
+		if (!tpl_guard)
+			return;
+		const QString t = tpl_guard->text().trimmed();
 		// Beim Speichern: absoluten Pfad im Vorlagen-Ordner auf einfachen Namen normalisieren
 		const QString normalized = normalize_template_id(t);
 		TextboxCard *c = find_card_mut(card_id);
@@ -1847,8 +1857,7 @@ void TextboxDock::create_row_widget(const TextboxCard &card)
 		const QString start = QString::fromUtf8(textbox_html::templates_dir().c_str());
 		const QString chosen = QFileDialog::getOpenFileName(
 			this, QStringLiteral("Vorlage wählen"), start,
-			QStringLiteral("Vorlagen (*.html);;Alle Dateien (*.*)"),
-			nullptr, dialog_options());
+			QStringLiteral("Vorlagen (*.html);;Alle Dateien (*.*)"), nullptr, dialog_options());
 		if (!chosen.isEmpty()) {
 			// Picker: absoluten Pfad im Vorlagen-Ordner auf einfachen Namen normalisieren
 			const QString normalized = normalize_template_id(chosen);
@@ -1860,9 +1869,9 @@ void TextboxDock::create_row_widget(const TextboxCard &card)
 
 	connect(new_prof_btn, &QPushButton::clicked, this, [this, card_id]() {
 		bool ok = false;
-		const QString raw_name = QInputDialog::getText(
-			this, QStringLiteral("Farbprofil speichern"),
-			QStringLiteral("Profilname:"), QLineEdit::Normal, QString(), &ok);
+		const QString raw_name = QInputDialog::getText(this, QStringLiteral("Farbprofil speichern"),
+							       QStringLiteral("Profilname:"), QLineEdit::Normal,
+							       QString(), &ok);
 		if (!ok)
 			return;
 		const QString qname = raw_name.trimmed();
@@ -1891,9 +1900,7 @@ void TextboxDock::create_row_widget(const TextboxCard &card)
 		// IMP-H5: Profil = Snapshot der generellen CSS-Regeln der Karte.
 		prof.style = c->style;
 		auto it = std::find_if(state_.color_profiles.begin(), state_.color_profiles.end(),
-				       [&name_utf8](const TextboxProfile &p) {
-					       return p.name == name_utf8;
-				       });
+				       [&name_utf8](const TextboxProfile &p) { return p.name == name_utf8; });
 		if (it != state_.color_profiles.end()) {
 			*it = std::move(prof);
 		} else {
@@ -1908,7 +1915,7 @@ void TextboxDock::create_row_widget(const TextboxCard &card)
 				continue;
 			if (other.profile == name_utf8 || profile_name_canonical(other.profile) == canonical) {
 				if (const TextboxProfile *p =
-					textbox_profile_lookup(other.profile, state_.color_profiles))
+					    textbox_profile_lookup(other.profile, state_.color_profiles))
 					profile_switch(*p, other);
 				push_card_live(other, state_.settings);
 			}
@@ -1919,78 +1926,69 @@ void TextboxDock::create_row_widget(const TextboxCard &card)
 	});
 
 	// IMP-H5: Profil löschen (aktuelle Combo-Auswahl) — auch Standardprofile.
-	connect(prof_del_btn, &QPushButton::clicked, this,
-		[this, card_id, profile_combo]() {
-			const QString qname = profile_combo->currentText().trimmed();
-			if (qname.isEmpty())
-				return;
-			const std::string name_utf8 = qname.toUtf8().toStdString();
-			auto it = std::find_if(state_.color_profiles.begin(),
-				state_.color_profiles.end(),
-				[&name_utf8](const TextboxProfile &p) {
-					return p.name == name_utf8;
-				});
-			if (it == state_.color_profiles.end()) {
-				set_dock_status(QStringLiteral("Profil \"%1\" nicht gefunden.").arg(qname), true);
-				return;
-			}
-			state_.color_profiles.erase(it);
-			if (TextboxCard *c = find_card_mut(card_id))
-				c->profile = ""; // baked Farben bleiben (kein Auto-Reset)
-			// IMP-N: letzte Profile gelöscht -> Defaults nachsaaten, sonst ist
-			// das Profil-Combo dauerhaft leer; dangling Kartenreferenzen bereinigen.
-			const bool reseeded = reconcile_profiles_after_delete(state_);
-			save_state();
-			rebuild_rows();
-			set_dock_status(reseeded
-				? QStringLiteral("Profil \"%1\" gelöscht — Standardprofile nachgesät").arg(qname)
-				: QStringLiteral("Profil \"%1\" gelöscht").arg(qname),
-				false);
-		});
+	connect(prof_del_btn, &QPushButton::clicked, this, [this, card_id, profile_combo]() {
+		const QString qname = profile_combo->currentText().trimmed();
+		if (qname.isEmpty())
+			return;
+		const std::string name_utf8 = qname.toUtf8().toStdString();
+		auto it = std::find_if(state_.color_profiles.begin(), state_.color_profiles.end(),
+				       [&name_utf8](const TextboxProfile &p) { return p.name == name_utf8; });
+		if (it == state_.color_profiles.end()) {
+			set_dock_status(QStringLiteral("Profil \"%1\" nicht gefunden.").arg(qname), true);
+			return;
+		}
+		state_.color_profiles.erase(it);
+		if (TextboxCard *c = find_card_mut(card_id))
+			c->profile = ""; // baked Farben bleiben (kein Auto-Reset)
+		// IMP-N: letzte Profile gelöscht -> Defaults nachsaaten, sonst ist
+		// das Profil-Combo dauerhaft leer; dangling Kartenreferenzen bereinigen.
+		const bool reseeded = reconcile_profiles_after_delete(state_);
+		save_state();
+		rebuild_rows();
+		set_dock_status(
+			reseeded ? QStringLiteral("Profil \"%1\" gelöscht — Standardprofile nachgesät").arg(qname)
+				 : QStringLiteral("Profil \"%1\" gelöscht").arg(qname),
+			false);
+	});
 
 	// IMP-H5: Profil umbenennen; Karten mit altem Namen folgen dem neuen.
-	connect(prof_rename_btn, &QPushButton::clicked, this,
-		[this, profile_combo]() {
-			const QString old_name = profile_combo->currentText().trimmed();
-			if (old_name.isEmpty())
-				return;
-			bool ok = false;
-			const QString raw = QInputDialog::getText(
-				this, QStringLiteral("Profil umbenennen"),
-				QStringLiteral("Neuer Profilname:"), QLineEdit::Normal, old_name, &ok);
-			if (!ok)
-				return;
-			const QString qname = raw.trimmed();
-			if (qname.isEmpty() || qname == old_name)
-				return;
-			const std::string old_utf8 = old_name.toUtf8().toStdString();
-			const std::string new_utf8 = qname.toUtf8().toStdString();
-			for (const auto &cp : state_.color_profiles) {
-				if (cp.name == new_utf8) {
-					set_dock_status(
-						QStringLiteral("\"%1\" existiert bereits als Profil.").arg(qname), true);
-					return;
-				}
-			}
-			auto it = std::find_if(state_.color_profiles.begin(),
-				state_.color_profiles.end(),
-				[&old_utf8](const TextboxProfile &p) {
-					return p.name == old_utf8;
-				});
-			if (it == state_.color_profiles.end()) {
-				set_dock_status(QStringLiteral("Profil \"%1\" nicht gefunden.").arg(old_name), true);
+	connect(prof_rename_btn, &QPushButton::clicked, this, [this, profile_combo]() {
+		const QString old_name = profile_combo->currentText().trimmed();
+		if (old_name.isEmpty())
+			return;
+		bool ok = false;
+		const QString raw = QInputDialog::getText(this, QStringLiteral("Profil umbenennen"),
+							  QStringLiteral("Neuer Profilname:"), QLineEdit::Normal,
+							  old_name, &ok);
+		if (!ok)
+			return;
+		const QString qname = raw.trimmed();
+		if (qname.isEmpty() || qname == old_name)
+			return;
+		const std::string old_utf8 = old_name.toUtf8().toStdString();
+		const std::string new_utf8 = qname.toUtf8().toStdString();
+		for (const auto &cp : state_.color_profiles) {
+			if (cp.name == new_utf8) {
+				set_dock_status(QStringLiteral("\"%1\" existiert bereits als Profil.").arg(qname),
+						true);
 				return;
 			}
-			it->name = new_utf8;
-			for (auto &c : state_.cards) {
-				if (c.profile == old_utf8 || profile_name_canonical(c.profile) == old_utf8)
-					c.profile = new_utf8;
-			}
-			save_state();
-			rebuild_rows();
-			set_dock_status(QStringLiteral("Profil \"%1\" → \"%2\" umbenannt")
-				    .arg(old_name, qname), false);
-		});
+		}
+		auto it = std::find_if(state_.color_profiles.begin(), state_.color_profiles.end(),
+				       [&old_utf8](const TextboxProfile &p) { return p.name == old_utf8; });
+		if (it == state_.color_profiles.end()) {
+			set_dock_status(QStringLiteral("Profil \"%1\" nicht gefunden.").arg(old_name), true);
+			return;
+		}
+		it->name = new_utf8;
+		for (auto &c : state_.cards) {
+			if (c.profile == old_utf8 || profile_name_canonical(c.profile) == old_utf8)
+				c.profile = new_utf8;
+		}
+		save_state();
+		rebuild_rows();
+		set_dock_status(QStringLiteral("Profil \"%1\" → \"%2\" umbenannt").arg(old_name, qname), false);
+	});
 
 	connect(to_scene_btn, &QPushButton::clicked, this, [this, card_id]() {
 		if (TextboxCard *c = find_card_mut(card_id)) {
@@ -2013,12 +2011,13 @@ void TextboxDock::create_row_widget(const TextboxCard &card)
 		}
 		// Karte weg -> HTML-Datei ebenfalls löschen, sonst bleiben Orphan-Dateien.
 		std::error_code ec;
-		std::filesystem::remove(
-		    std::filesystem::u8path(textbox_html::cards_dir() + "/" + textbox_html::sanitize_card_id(card_id) + ".html"), ec);
+		std::filesystem::remove(std::filesystem::u8path(textbox_html::cards_dir() + "/" +
+								textbox_html::sanitize_card_id(card_id) + ".html"),
+					ec);
 		textbox_scene::remove_everywhere(card_id);
 		cards_layout_->removeWidget(row_widget);
 		row_widgets_.erase(std::remove(row_widgets_.begin(), row_widgets_.end(), row_widget),
-			   row_widgets_.end());
+				   row_widgets_.end());
 		row_widget->deleteLater();
 		refresh_top_row();
 	});
@@ -2047,49 +2046,49 @@ void TextboxDock::create_row_widget(const TextboxCard &card)
 	});
 
 	// ID-Umbenennung: validate, alte HTML-Datei + Sources entfernen, Widget neu bauen.
-	connect(id_edit, &QLineEdit::editingFinished, this,
-	        [this, card_id, id_edit, row_widget, schedule_save]() {
-		        const QString t = id_edit->text().trimmed();
-		        static const QRegularExpression re(QStringLiteral("^[A-Za-z0-9_-]{1,32}$"));
-		        const std::string new_id = t.toStdString();
-		        if (new_id == card_id)
-			        return;
-		        if (!re.match(t).hasMatch() || find_card_mut(new_id)) {
-			        id_edit->setText(QString::fromUtf8(card_id.c_str()));
-			        return;
-		        }
-		        TextboxCard *c = find_card_mut(card_id);
-		        if (!c)
-			        return;
-		        capture_undo_snapshot(this, state_);
-		        std::error_code ec;
-		        std::filesystem::remove(
-			        std::filesystem::u8path(textbox_html::cards_dir() + "/" + textbox_html::sanitize_card_id(card_id) + ".html"), ec);
-		        const bool had_text = [&c]() {
-			        if (!c->zeile1.empty() || !c->zeile2.empty() || !c->zeile3.empty())
-				        return true;
-			        for (const auto &r : c->rows)
-				        if (!r.value.empty())
-					        return true;
-			        return false;
-		        }();
-		        c->id = new_id;
-		        textbox_scene::remove_everywhere(card_id);
-		        save_state();
-		        if (had_text)
-			        textbox_scene::send_to_current_scene(*c, state_.settings);
-		        else
-			        textbox_scene::reload_everywhere(*c, state_.settings);
-		        // Widget mit neuer ID neu aufbauen (alte Handler capturen die alte ID).
-		        cards_layout_->removeWidget(row_widget);
-		        row_widgets_.erase(std::remove(row_widgets_.begin(), row_widgets_.end(), row_widget),
-			           row_widgets_.end());
-		        row_widget->deleteLater();
-		        create_row_widget(*c);
-		        refresh_top_row();
-		        // IMP-R: Dirty-Eintrag mit der NEUEN ID (die alte ID existiert nicht mehr).
-		        mark_card_dirty_and_schedule(this, new_id);
-	        });
+	connect(id_edit, &QLineEdit::editingFinished, this, [this, card_id, id_edit, row_widget, schedule_save]() {
+		const QString t = id_edit->text().trimmed();
+		static const QRegularExpression re(QStringLiteral("^[A-Za-z0-9_-]{1,32}$"));
+		const std::string new_id = t.toStdString();
+		if (new_id == card_id)
+			return;
+		if (!re.match(t).hasMatch() || find_card_mut(new_id)) {
+			id_edit->setText(QString::fromUtf8(card_id.c_str()));
+			return;
+		}
+		TextboxCard *c = find_card_mut(card_id);
+		if (!c)
+			return;
+		capture_undo_snapshot(this, state_);
+		std::error_code ec;
+		std::filesystem::remove(std::filesystem::u8path(textbox_html::cards_dir() + "/" +
+								textbox_html::sanitize_card_id(card_id) + ".html"),
+					ec);
+		const bool had_text = [&c]() {
+			if (!c->zeile1.empty() || !c->zeile2.empty() || !c->zeile3.empty())
+				return true;
+			for (const auto &r : c->rows)
+				if (!r.value.empty())
+					return true;
+			return false;
+		}();
+		c->id = new_id;
+		textbox_scene::remove_everywhere(card_id);
+		save_state();
+		if (had_text)
+			textbox_scene::send_to_current_scene(*c, state_.settings);
+		else
+			textbox_scene::reload_everywhere(*c, state_.settings);
+		// Widget mit neuer ID neu aufbauen (alte Handler capturen die alte ID).
+		cards_layout_->removeWidget(row_widget);
+		row_widgets_.erase(std::remove(row_widgets_.begin(), row_widgets_.end(), row_widget),
+				   row_widgets_.end());
+		row_widget->deleteLater();
+		create_row_widget(*c);
+		refresh_top_row();
+		// IMP-R: Dirty-Eintrag mit der NEUEN ID (die alte ID existiert nicht mehr).
+		mark_card_dirty_and_schedule(this, new_id);
+	});
 
 	const int insert_idx = std::max(0, cards_layout_->count() - 1);
 	cards_layout_->insertWidget(insert_idx, row_widget);
@@ -2135,20 +2134,20 @@ void TextboxDock::apply_template_id(const std::string &card_id, const std::strin
 
 	if (template_id.empty()) {
 		set_dock_status(QStringLiteral("Karte %1: Vorlage „index.html“ (classic)")
-			.arg(QString::fromUtf8(card_id.c_str())),
-			false);
+					.arg(QString::fromUtf8(card_id.c_str())),
+				false);
 	} else if (textbox_html::render_template_html(*c, template_id, true).empty()) {
 		// IMP-M: Pfad existiert/lesbar? Sonst fällt write_card still auf
 		// classic zurück — ohne Hinweis wäre das für den Nutzer unsichtbar.
 		set_dock_status(QStringLiteral("Vorlage \"%1\" nicht gefunden — Karte %2 nutzt „index.html“ (classic)")
-			.arg(QString::fromUtf8(template_id.c_str()),
-			     QString::fromUtf8(card_id.c_str())),
-			true);
+					.arg(QString::fromUtf8(template_id.c_str()),
+					     QString::fromUtf8(card_id.c_str())),
+				true);
 	} else {
 		set_dock_status(QStringLiteral("Vorlage \"%1\" auf Karte %2 angewendet")
-				.arg(QString::fromUtf8(template_id.c_str()),
-				     QString::fromUtf8(card_id.c_str())),
-			false);
+					.arg(QString::fromUtf8(template_id.c_str()),
+					     QString::fromUtf8(card_id.c_str())),
+				false);
 	}
 }
 
@@ -2192,35 +2191,32 @@ void TextboxDock::on_open_templates_folder()
 		for (const auto &entry : std::filesystem::directory_iterator(builtin, ec)) {
 			if (!entry.is_regular_file())
 				continue;
-			const std::filesystem::path dst =
-				std::filesystem::u8path(dir) / entry.path().filename();
+			const std::filesystem::path dst = std::filesystem::u8path(dir) / entry.path().filename();
 			if (std::filesystem::exists(dst, ec))
 				continue;
-			std::filesystem::copy_file(entry.path(), dst,
-					    std::filesystem::copy_options::overwrite_existing, ec);
+			std::filesystem::copy_file(entry.path(), dst, std::filesystem::copy_options::overwrite_existing,
+						   ec);
 		}
 	}
 	refresh_templates_ui();
 
 	const QUrl url = QUrl::fromLocalFile(QString::fromUtf8(dir.c_str()));
 	if (!QDesktopServices::openUrl(url)) {
-		set_dock_status(QStringLiteral("Ordner konnte nicht geöffnet werden: %1")
-				.arg(QString::fromUtf8(dir.c_str())),
+		set_dock_status(
+			QStringLiteral("Ordner konnte nicht geöffnet werden: %1").arg(QString::fromUtf8(dir.c_str())),
 			true);
 		return;
 	}
-	set_dock_status(QStringLiteral("Vorlagen-Ordner geöffnet: %1")
-				.arg(QString::fromUtf8(dir.c_str())),
-		false);
+	set_dock_status(QStringLiteral("Vorlagen-Ordner geöffnet: %1").arg(QString::fromUtf8(dir.c_str())), false);
 }
 
 void TextboxDock::on_copy_template_from_classic()
 {
 	bool ok = false;
-	const QString raw_name = QInputDialog::getText(
-		this, QStringLiteral("Vorlage aus index.html (classic) kopieren"),
-		QStringLiteral("Vorlagename (Datei <name>.html im Vorlagen-Ordner):"),
-		QLineEdit::Normal, QStringLiteral("meine-vorlage"), &ok);
+	const QString raw_name =
+		QInputDialog::getText(this, QStringLiteral("Vorlage aus index.html (classic) kopieren"),
+				      QStringLiteral("Vorlagename (Datei <name>.html im Vorlagen-Ordner):"),
+				      QLineEdit::Normal, QStringLiteral("meine-vorlage"), &ok);
 	if (!ok)
 		return;
 	QString name = raw_name.trimmed();
@@ -2233,8 +2229,8 @@ void TextboxDock::on_copy_template_from_classic()
 	const std::string src_path = textbox_html::resolve_textbox_path(state_.settings);
 	QFile src(QString::fromUtf8(src_path.c_str()));
 	if (!src.open(QIODevice::ReadOnly)) {
-		set_dock_status(QStringLiteral("index.html (classic) nicht lesbar: %1")
-				.arg(QString::fromUtf8(src_path.c_str())),
+		set_dock_status(
+			QStringLiteral("index.html (classic) nicht lesbar: %1").arg(QString::fromUtf8(src_path.c_str())),
 			true);
 		return;
 	}
@@ -2253,8 +2249,7 @@ void TextboxDock::on_copy_template_from_classic()
 	const QString dst = QString::fromUtf8(dir.c_str()) + "/" + name + ".html";
 	QFile out(dst);
 	if (!out.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
-		set_dock_status(QStringLiteral("Vorlage konnte nicht geschrieben werden: %1").arg(dst),
-			true);
+		set_dock_status(QStringLiteral("Vorlage konnte nicht geschrieben werden: %1").arg(dst), true);
 		return;
 	}
 	out.write(contents);
@@ -2272,8 +2267,7 @@ void TextboxDock::refresh_top_row()
 		profil_select_->addItem(QStringLiteral("(keines)"), QString());
 		int active_idx = 0;
 		for (std::size_t i = 0; i < state_.quick_profiles.size(); ++i) {
-			const QString qname =
-				QString::fromUtf8(state_.quick_profiles[i].name.c_str());
+			const QString qname = QString::fromUtf8(state_.quick_profiles[i].name.c_str());
 			profil_select_->addItem(qname, qname);
 			if (state_.quick_profiles[i].name == state_.active_profile)
 				active_idx = static_cast<int>(i) + 1;
@@ -2288,8 +2282,7 @@ void TextboxDock::refresh_top_row()
 		card_search_->clear();
 		for (const auto &card : state_.cards) {
 			const QString id_q = QString::fromUtf8(card.id.c_str());
-			card_search_->addItem(
-				card_search_label(id_q, QString::fromUtf8(card.zeile3.c_str())), id_q);
+			card_search_->addItem(card_search_label(id_q, QString::fromUtf8(card.zeile3.c_str())), id_q);
 		}
 		card_search_->setCurrentIndex(-1);
 		if (card_search_->lineEdit())
@@ -2311,17 +2304,14 @@ void TextboxDock::apply_quick_profile(const std::string &name)
 	if (state_.apply_quick_profile(name)) {
 		state_.undo_snapshot_ = std::move(prev_cards);
 		state_.undo_available_ = true;
-		if (auto it = g_dock_schedulers.find(this);
-		    it != g_dock_schedulers.end() && it->second.undo_btn) {
+		if (auto it = g_dock_schedulers.find(this); it != g_dock_schedulers.end() && it->second.undo_btn) {
 			it->second.undo_btn->setEnabled(true);
 		}
 		state_.active_profile = name;
 		save_state();
 		sync_all_cards_live(prev_ids);
 		rebuild_rows();
-		set_dock_status(QString("Profil \"%1\" geladen")
-					.arg(QString::fromStdString(name)),
-				false);
+		set_dock_status(QString("Profil \"%1\" geladen").arg(QString::fromStdString(name)), false);
 	}
 }
 
@@ -2390,8 +2380,7 @@ void TextboxDock::sync_all_cards_live(const std::vector<std::string> &previous_i
 void TextboxDock::set_dock_status(const QString &msg, bool is_error)
 {
 	if (!msg.isEmpty()) {
-		tb_event_log(tb_event_log_dir_from_state_path(state_path_),
-			     msg.toUtf8().toStdString());
+		tb_event_log(tb_event_log_dir_from_state_path(state_path_), msg.toUtf8().toStdString());
 	}
 	if (!dock_status_lbl_)
 		return;
@@ -2438,8 +2427,7 @@ void TextboxDock::apply_import_result(const textbox_import::TextboxImportResult 
 	std::vector<textbox_ai::AiPoint> enriched;
 	enriched.reserve(total_items);
 	for (std::size_t i = 0; i < total_items; ++i) {
-		enriched.push_back(textbox_ai::AiPoint{
-			punkte[i].nr, punkte[i].zeilen, punkte[i].titel});
+		enriched.push_back(textbox_ai::AiPoint{punkte[i].nr, punkte[i].zeilen, punkte[i].titel});
 	}
 	const auto ref_table = load_reference_table(state_.settings.referenz_path);
 	if (!ref_table.empty()) {
@@ -2503,15 +2491,13 @@ void TextboxDock::on_open_import_dialog()
 	google_layout->setSpacing(8);
 	google_group->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Preferred);
 
-	auto *google_info = new QLabel(
-		QStringLiteral("JSON-Antworten von einer URL laden"), google_group);
+	auto *google_info = new QLabel(QStringLiteral("JSON-Antworten von einer URL laden"), google_group);
 	google_info->setWordWrap(true);
 
 	auto *lbl_form_id = new QLabel(QStringLiteral("FORM-ID"), google_group);
 	lbl_form_id->setObjectName(QStringLiteral("tbFieldLabel"));
 	const std::string init_form_id = state_.settings.google_form_id;
-	auto *edit_form_id =
-		new QLineEdit(QString::fromUtf8(init_form_id.c_str()), google_group);
+	auto *edit_form_id = new QLineEdit(QString::fromUtf8(init_form_id.c_str()), google_group);
 	edit_form_id->setPlaceholderText(QStringLiteral("Google-Form-ID"));
 	edit_form_id->setAccessibleName(QStringLiteral("Google-Form-ID"));
 
@@ -2520,8 +2506,7 @@ void TextboxDock::on_open_import_dialog()
 	const std::string init_token_path = state_.settings.token_path.empty()
 						    ? textbox_import::default_token_path_str()
 						    : state_.settings.token_path;
-	auto *edit_token_path =
-		new QLineEdit(QString::fromUtf8(init_token_path.c_str()), google_group);
+	auto *edit_token_path = new QLineEdit(QString::fromUtf8(init_token_path.c_str()), google_group);
 	edit_token_path->setPlaceholderText(QString::fromUtf8(textbox_import::default_token_path_str()));
 	edit_token_path->setAccessibleName(QStringLiteral("OAuth-Token-Pfad"));
 
@@ -2598,8 +2583,7 @@ void TextboxDock::on_open_import_dialog()
 	kopf_fields_row->addWidget(kopf_fields_box, 1);
 	kopf_fields_row->addWidget(kopf_edit_btn, 0, Qt::AlignTop);
 
-	auto *service_apply_btn =
-		new QPushButton(QStringLiteral("In Karten übernehmen"), kopf_group);
+	auto *service_apply_btn = new QPushButton(QStringLiteral("In Karten übernehmen"), kopf_group);
 	service_apply_btn->setObjectName(QStringLiteral("tbBtnServiceApply"));
 
 	kopf_layout->addWidget(lbl_service_select);
@@ -2626,8 +2610,7 @@ void TextboxDock::on_open_import_dialog()
 	csv_layout->setSpacing(8);
 	csv_group->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Preferred);
 
-	auto *csv_btn = new QPushButton(
-		QStringLiteral("Datei importieren (CSV / XLSX / ZIP) …"), csv_group);
+	auto *csv_btn = new QPushButton(QStringLiteral("Datei importieren (CSV / XLSX / ZIP) …"), csv_group);
 	csv_btn->setObjectName(QStringLiteral("tbBtnCsvImport"));
 	csv_layout->addWidget(csv_btn);
 	root->addWidget(csv_group);
@@ -2660,15 +2643,12 @@ void TextboxDock::on_open_import_dialog()
 	auto *ai_key_row = new QHBoxLayout();
 	ai_key_row->setSpacing(6);
 	std::string env_key_err;
-	const std::string prefilled_key =
-		textbox_ai::read_env_key(state_.settings.openrouter_key_path, env_key_err);
-	auto *ai_key_edit =
-		new QLineEdit(QString::fromUtf8(prefilled_key.c_str()), ai_group);
+	const std::string prefilled_key = textbox_ai::read_env_key(state_.settings.openrouter_key_path, env_key_err);
+	auto *ai_key_edit = new QLineEdit(QString::fromUtf8(prefilled_key.c_str()), ai_group);
 	ai_key_edit->setObjectName(QStringLiteral("tbAiApiKey"));
 	ai_key_edit->setEchoMode(QLineEdit::Password);
 	ai_key_edit->setAccessibleName(QStringLiteral("OpenRouter API-Key"));
-	ai_key_edit->setPlaceholderText(
-		QStringLiteral("OpenRouter API-Key (leer = lokale Offline-Analyse)"));
+	ai_key_edit->setPlaceholderText(QStringLiteral("OpenRouter API-Key (leer = lokale Offline-Analyse)"));
 	/* Ui4: kein Auge-Emoji — natives Text-Toggle (OBS-Style: Text, kein Glyph). */
 	auto *ai_key_toggle = new QPushButton(QStringLiteral("Key zeigen"), ai_group);
 	ai_key_toggle->setObjectName(QStringLiteral("tbBtnAiKeyToggle"));
@@ -2681,8 +2661,7 @@ void TextboxDock::on_open_import_dialog()
 	connect(ai_key_toggle, &QPushButton::clicked, &dlg, [ai_key_edit, ai_key_toggle]() {
 		const bool now_visible = ai_key_edit->echoMode() != QLineEdit::Password;
 		ai_key_edit->setEchoMode(now_visible ? QLineEdit::Password : QLineEdit::Normal);
-		ai_key_toggle->setText(now_visible ? QStringLiteral("Key zeigen")
-		                                  : QStringLiteral("Key verbergen"));
+		ai_key_toggle->setText(now_visible ? QStringLiteral("Key zeigen") : QStringLiteral("Key verbergen"));
 	});
 
 	// Einklappbarer Master-Prompt (default ausgeklappt)
@@ -2700,17 +2679,14 @@ void TextboxDock::on_open_import_dialog()
 	prompt_body_layout->setContentsMargins(0, 0, 0, 0);
 	prompt_body_layout->setSpacing(6);
 
-	const std::string init_prompt = state_.settings.ai_system_prompt.empty()
-						? textbox_ai::kDefaultSystemPrompt
-						: state_.settings.ai_system_prompt;
-	QPlainTextEdit *ai_prompt_edit =
-		new PromptTabEdit(QString::fromUtf8(init_prompt.c_str()), prompt_body);
+	const std::string init_prompt = state_.settings.ai_system_prompt.empty() ? textbox_ai::kDefaultSystemPrompt
+										 : state_.settings.ai_system_prompt;
+	QPlainTextEdit *ai_prompt_edit = new PromptTabEdit(QString::fromUtf8(init_prompt.c_str()), prompt_body);
 	ai_prompt_edit->setObjectName(QStringLiteral("tbAiSystemPrompt"));
 	ai_prompt_edit->setAccessibleName(QStringLiteral("Master-Prompt"));
 	ai_prompt_edit->setFixedHeight(fontMetrics().height() * 8);
 
-	auto *ai_prompt_reset_btn =
-		new QPushButton(QStringLiteral("Zurücksetzen"), prompt_body);
+	auto *ai_prompt_reset_btn = new QPushButton(QStringLiteral("Zurücksetzen"), prompt_body);
 	ai_prompt_reset_btn->setObjectName(QStringLiteral("tbBtnAiPromptReset"));
 	prompt_body_layout->addWidget(ai_prompt_edit);
 	prompt_body_layout->addWidget(ai_prompt_reset_btn);
@@ -2720,8 +2696,7 @@ void TextboxDock::on_open_import_dialog()
 	ai_layout->addWidget(prompt_group);
 
 	connect(ai_prompt_reset_btn, &QPushButton::clicked, &dlg, [this, ai_prompt_edit]() {
-		ai_prompt_edit->setPlainText(
-			QString::fromUtf8(textbox_ai::kDefaultSystemPrompt));
+		ai_prompt_edit->setPlainText(QString::fromUtf8(textbox_ai::kDefaultSystemPrompt));
 		state_.settings.ai_system_prompt.clear();
 		save_state();
 	});
@@ -2730,24 +2705,20 @@ void TextboxDock::on_open_import_dialog()
 	ai_start_btn->setObjectName(QStringLiteral("tbBtnAiStart"));
 	ai_layout->addWidget(ai_start_btn);
 
-	auto *ai_status_lbl = new QLabel(
-		prefilled_key.empty()
-			? QStringLiteral("Kein API-Key – lokale Offline-Analyse")
-			: QStringLiteral("Bereit für AI-Import."),
-		ai_group);
+	auto *ai_status_lbl = new QLabel(prefilled_key.empty() ? QStringLiteral("Kein API-Key – lokale Offline-Analyse")
+							       : QStringLiteral("Bereit für AI-Import."),
+					 ai_group);
 	ai_status_lbl->setObjectName(QStringLiteral("tbImportStatus"));
 	ai_status_lbl->setWordWrap(true);
 	ai_layout->addWidget(ai_status_lbl);
 
-	connect(ai_key_edit, &QLineEdit::textChanged, &dlg,
-		[ai_status_lbl](const QString &txt) {
-			if (txt.trimmed().isEmpty()) {
-				ai_status_lbl->setText(
-					QStringLiteral("Kein API-Key – lokale Offline-Analyse"));
-			} else {
-				ai_status_lbl->setText(QStringLiteral("Bereit für AI-Import."));
-			}
-		});
+	connect(ai_key_edit, &QLineEdit::textChanged, &dlg, [ai_status_lbl](const QString &txt) {
+		if (txt.trimmed().isEmpty()) {
+			ai_status_lbl->setText(QStringLiteral("Kein API-Key – lokale Offline-Analyse"));
+		} else {
+			ai_status_lbl->setText(QStringLiteral("Bereit für AI-Import."));
+		}
+	});
 
 	// AI-Preview-Box (Tabelle + Quellen-Label + Übernehmen)
 	auto *ai_preview_group = new QGroupBox(QStringLiteral("Vorschau"), ai_group);
@@ -2798,12 +2769,10 @@ void TextboxDock::on_open_import_dialog()
 	dlg.resize(560, std::min(avail_h, dlg_content->sizeHint().height() + 8));
 
 	auto pending_ai_res = std::make_shared<textbox_ai::AiResult>();
-	auto loaded_services =
-		std::make_shared<std::vector<textbox_import::TextboxService>>();
+	auto loaded_services = std::make_shared<std::vector<textbox_import::TextboxService>>();
 
 	auto get_service_fields =
-		[](const textbox_import::TextboxService &svc)
-		-> std::vector<std::pair<std::string, std::string>> {
+		[](const textbox_import::TextboxService &svc) -> std::vector<std::pair<std::string, std::string>> {
 		if (!svc.fields.empty())
 			return svc.fields;
 		std::vector<std::pair<std::string, std::string>> fb;
@@ -2818,14 +2787,12 @@ void TextboxDock::on_open_import_dialog()
 		return fb;
 	};
 
-	auto collect_all_field_names =
-		[loaded_services, get_service_fields]() -> std::vector<std::string> {
+	auto collect_all_field_names = [loaded_services, get_service_fields]() -> std::vector<std::string> {
 		std::vector<std::string> names;
 		for (const auto &svc : *loaded_services) {
 			for (const auto &kv : get_service_fields(svc)) {
 				if (!kv.first.empty() &&
-				    std::find(names.begin(), names.end(), kv.first) ==
-					    names.end()) {
+				    std::find(names.begin(), names.end(), kv.first) == names.end()) {
 					names.push_back(kv.first);
 				}
 			}
@@ -2835,8 +2802,7 @@ void TextboxDock::on_open_import_dialog()
 
 	auto get_selected_fields_for_service =
 		[this, get_service_fields, collect_all_field_names](
-			const textbox_import::TextboxService &svc)
-		-> std::vector<std::pair<std::string, std::string>> {
+			const textbox_import::TextboxService &svc) -> std::vector<std::pair<std::string, std::string>> {
 		const auto all_svc_fields = get_service_fields(svc);
 		const auto &cfg = state_.settings.kopf_fields;
 		if (cfg.empty())
@@ -2860,74 +2826,59 @@ void TextboxDock::on_open_import_dialog()
 	};
 
 	auto format_service_joined =
-		[get_selected_fields_for_service](
-			const textbox_import::TextboxService &svc) -> QString {
+		[get_selected_fields_for_service](const textbox_import::TextboxService &svc) -> QString {
 		const auto sel = get_selected_fields_for_service(svc);
 		QStringList parts;
 		for (const auto &kv : sel) {
-			parts.append(QStringLiteral("%1: %2").arg(
-				QString::fromUtf8(kv.first.c_str()),
-				QString::fromUtf8(kv.second.c_str())));
+			parts.append(QStringLiteral("%1: %2").arg(QString::fromUtf8(kv.first.c_str()),
+								  QString::fromUtf8(kv.second.c_str())));
 		}
 		return parts.join(QStringLiteral(" · "));
 	};
 
 	// Aktualisiert die dynamischen Kopfdaten-Labels für die gewählte Einreichung.
-	auto update_kopf_labels =
-		[kopf_fields_box, kopf_fields_layout, get_selected_fields_for_service](
-			const textbox_import::TextboxService &svc) {
-			while (QLayoutItem *it = kopf_fields_layout->takeAt(0)) {
-				if (QWidget *w = it->widget())
-					delete w;
-				delete it;
-			}
-			const auto sel = get_selected_fields_for_service(svc);
-			for (const auto &kv : sel) {
-				auto *lbl = new QLabel(
-					QStringLiteral("%1: %2").arg(
-						QString::fromUtf8(kv.first.c_str()),
-						QString::fromUtf8(kv.second.c_str())),
-					kopf_fields_box);
-				lbl->setWordWrap(true);
-				kopf_fields_layout->addWidget(lbl);
-			}
-		};
+	auto update_kopf_labels = [kopf_fields_box, kopf_fields_layout,
+				   get_selected_fields_for_service](const textbox_import::TextboxService &svc) {
+		while (QLayoutItem *it = kopf_fields_layout->takeAt(0)) {
+			if (QWidget *w = it->widget())
+				delete w;
+			delete it;
+		}
+		const auto sel = get_selected_fields_for_service(svc);
+		for (const auto &kv : sel) {
+			auto *lbl = new QLabel(QStringLiteral("%1: %2").arg(QString::fromUtf8(kv.first.c_str()),
+									    QString::fromUtf8(kv.second.c_str())),
+					       kopf_fields_box);
+			lbl->setWordWrap(true);
+			kopf_fields_layout->addWidget(lbl);
+		}
+	};
 
-	auto refresh_services_view =
-		[loaded_services, service_combo, lbl_service_preview, format_service_joined,
-		 update_kopf_labels](int keep_index = 0) {
-			if (loaded_services->empty())
-				return;
-			const int clamped_idx = std::clamp(
-				keep_index, 0,
-				static_cast<int>(loaded_services->size()) - 1);
-			{
-				const QSignalBlocker blocker(service_combo);
-				service_combo->clear();
-				QStringList preview_lines;
-				for (const auto &svc : *loaded_services) {
-					const QString joined = format_service_joined(svc);
-					service_combo->addItem(
-						joined.isEmpty() ? QStringLiteral("—") : joined);
-					const std::size_t n_entries = count_service_blocks(svc);
-					if (joined.isEmpty()) {
-						preview_lines.append(
-							QStringLiteral("• %1 Einträge")
-								.arg(n_entries));
-					} else {
-						preview_lines.append(
-							QStringLiteral("• %1 · %2 Einträge")
-								.arg(joined)
-								.arg(n_entries));
-					}
+	auto refresh_services_view = [loaded_services, service_combo, lbl_service_preview, format_service_joined,
+				      update_kopf_labels](int keep_index = 0) {
+		if (loaded_services->empty())
+			return;
+		const int clamped_idx = std::clamp(keep_index, 0, static_cast<int>(loaded_services->size()) - 1);
+		{
+			const QSignalBlocker blocker(service_combo);
+			service_combo->clear();
+			QStringList preview_lines;
+			for (const auto &svc : *loaded_services) {
+				const QString joined = format_service_joined(svc);
+				service_combo->addItem(joined.isEmpty() ? QStringLiteral("—") : joined);
+				const std::size_t n_entries = count_service_blocks(svc);
+				if (joined.isEmpty()) {
+					preview_lines.append(QStringLiteral("• %1 Einträge").arg(n_entries));
+				} else {
+					preview_lines.append(
+						QStringLiteral("• %1 · %2 Einträge").arg(joined).arg(n_entries));
 				}
-				service_combo->setCurrentIndex(clamped_idx);
-				lbl_service_preview->setText(
-					preview_lines.join(QLatin1Char('\n')));
 			}
-			update_kopf_labels(
-				(*loaded_services)[static_cast<std::size_t>(clamped_idx)]);
-		};
+			service_combo->setCurrentIndex(clamped_idx);
+			lbl_service_preview->setText(preview_lines.join(QLatin1Char('\n')));
+		}
+		update_kopf_labels((*loaded_services)[static_cast<std::size_t>(clamped_idx)]);
+	};
 
 	connect(kopf_edit_btn, &QPushButton::clicked, &dlg,
 		[this, &dlg, service_combo, collect_all_field_names, refresh_services_view]() {
@@ -2952,11 +2903,9 @@ void TextboxDock::on_open_import_dialog()
 
 			std::vector<std::pair<std::string, QCheckBox *>> checks;
 			for (const auto &n : all_names) {
-				auto *cb = new QCheckBox(
-					QString::fromUtf8(n.c_str()), &edit_dlg);
-				const bool checked =
-					cfg.empty() || !has_overlap ||
-					(std::find(cfg.begin(), cfg.end(), n) != cfg.end());
+				auto *cb = new QCheckBox(QString::fromUtf8(n.c_str()), &edit_dlg);
+				const bool checked = cfg.empty() || !has_overlap ||
+						     (std::find(cfg.begin(), cfg.end(), n) != cfg.end());
 				cb->setChecked(checked);
 				lay->addWidget(cb);
 				checks.emplace_back(n, cb);
@@ -2964,8 +2913,7 @@ void TextboxDock::on_open_import_dialog()
 
 			auto *btn_row = new QHBoxLayout();
 			btn_row->setSpacing(8);
-			auto *cancel_btn =
-				new QPushButton(QStringLiteral("Abbrechen"), &edit_dlg);
+			auto *cancel_btn = new QPushButton(QStringLiteral("Abbrechen"), &edit_dlg);
 			cancel_btn->setObjectName(QStringLiteral("tbBtnKopfEditCancel"));
 			auto *ok_btn = new QPushButton(QStringLiteral("OK"), &edit_dlg);
 			ok_btn->setObjectName(QStringLiteral("tbBtnKopfEditOk"));
@@ -2974,8 +2922,7 @@ void TextboxDock::on_open_import_dialog()
 			btn_row->addWidget(ok_btn);
 			lay->addLayout(btn_row);
 
-			connect(cancel_btn, &QPushButton::clicked, &edit_dlg,
-				&QDialog::reject);
+			connect(cancel_btn, &QPushButton::clicked, &edit_dlg, &QDialog::reject);
 			connect(ok_btn, &QPushButton::clicked, &edit_dlg, &QDialog::accept);
 
 			if (edit_dlg.exec() == QDialog::Accepted) {
@@ -2987,26 +2934,21 @@ void TextboxDock::on_open_import_dialog()
 				state_.settings.kopf_fields = std::move(chosen);
 				save_state();
 				refresh_services_view(service_combo->currentIndex());
-				set_dock_status(
-					QStringLiteral("Kopfdaten-Felder gespeichert"), false);
+				set_dock_status(QStringLiteral("Kopfdaten-Felder gespeichert"), false);
 			}
 		});
 
 	connect(service_combo, QOverload<int>::of(&QComboBox::currentIndexChanged), &dlg,
 		[loaded_services, update_kopf_labels](int idx) {
-			if (idx >= 0 &&
-			    static_cast<std::size_t>(idx) < loaded_services->size()) {
-				update_kopf_labels(
-					(*loaded_services)[static_cast<std::size_t>(idx)]);
+			if (idx >= 0 && static_cast<std::size_t>(idx) < loaded_services->size()) {
+				update_kopf_labels((*loaded_services)[static_cast<std::size_t>(idx)]);
 			}
 		});
 
 	connect(service_apply_btn, &QPushButton::clicked, &dlg,
-		[this, service_combo, loaded_services, status_lbl, update_kopf_labels,
-		 format_service_joined]() {
+		[this, service_combo, loaded_services, status_lbl, update_kopf_labels, format_service_joined]() {
 			const int idx = service_combo->currentIndex();
-			if (idx < 0 ||
-			    static_cast<std::size_t>(idx) >= loaded_services->size())
+			if (idx < 0 || static_cast<std::size_t>(idx) >= loaded_services->size())
 				return;
 			const auto &svc = (*loaded_services)[static_cast<std::size_t>(idx)];
 			textbox_import::ImportResult single_res;
@@ -3020,20 +2962,16 @@ void TextboxDock::on_open_import_dialog()
 			apply_import_result(single_res);
 			update_kopf_labels(svc);
 			const QString joined = format_service_joined(svc);
-			const QString msg =
-				joined.isEmpty()
-					? QStringLiteral("Übernommen")
-					: QStringLiteral("Übernommen: %1").arg(joined);
+			const QString msg = joined.isEmpty() ? QStringLiteral("Übernommen")
+							     : QStringLiteral("Übernommen: %1").arg(joined);
 			status_lbl->setText(msg);
 			set_dock_status(msg, false);
 		});
 
 	connect(ai_file_btn, &QPushButton::clicked, &dlg, [&dlg, ai_file_edit]() {
 		const QString chosen = QFileDialog::getOpenFileName(
-			&dlg, QStringLiteral("Dokument auswählen"),
-			ai_file_edit->text(),
-			QStringLiteral("Dokumente (*.pdf *.docx);;Alle Dateien (*.*)"),
-			nullptr, dialog_options());
+			&dlg, QStringLiteral("Dokument auswählen"), ai_file_edit->text(),
+			QStringLiteral("Dokumente (*.pdf *.docx);;Alle Dateien (*.*)"), nullptr, dialog_options());
 		if (!chosen.isEmpty()) {
 			ai_file_edit->setText(chosen);
 		}
@@ -3043,10 +2981,9 @@ void TextboxDock::on_open_import_dialog()
 	QPointer<TextboxDock> self_ptr(this);
 	const auto cancel = cancel_;
 
-	auto handle_success = [cancel, self_ptr, kopf_group, loaded_services,
-			       refresh_services_view, status_lbl, error_lbl](
-				      const textbox_import::TextboxImportResult &res,
-				      const QString &source_name = QString()) {
+	auto handle_success = [cancel, self_ptr, kopf_group, loaded_services, refresh_services_view, status_lbl,
+			       error_lbl](const textbox_import::TextboxImportResult &res,
+					  const QString &source_name = QString()) {
 		if (*cancel || !self_ptr)
 			return;
 		self_ptr->apply_import_result(res);
@@ -3073,8 +3010,7 @@ void TextboxDock::on_open_import_dialog()
 		error_lbl->clear();
 		error_lbl->setVisible(false);
 		const std::size_t svc_count = loaded_services->size();
-		const QString count_str =
-			QStringLiteral("%1 Einreichungen gefunden").arg(svc_count);
+		const QString count_str = QStringLiteral("%1 Einreichungen gefunden").arg(svc_count);
 		const QString msg =
 			source_name.isEmpty()
 				? QStringLiteral(
@@ -3099,39 +3035,33 @@ void TextboxDock::on_open_import_dialog()
 	};
 
 	connect(ai_start_btn, &QPushButton::clicked, &dlg,
-		[this, &dlg, cancel, dlg_ptr, self_ptr, api_btn, csv_btn, ai_start_btn,
-		 ai_file_edit, ai_key_edit, ai_prompt_edit, ai_status_lbl, status_lbl, error_lbl,
-		 ai_preview_group, ai_source_lbl, ai_table, pending_ai_res]() {
+		[this, &dlg, cancel, dlg_ptr, self_ptr, api_btn, csv_btn, ai_start_btn, ai_file_edit, ai_key_edit,
+		 ai_prompt_edit, ai_status_lbl, status_lbl, error_lbl, ai_preview_group, ai_source_lbl, ai_table,
+		 pending_ai_res]() {
 			QString doc_file = ai_file_edit->text().trimmed();
 			if (doc_file.isEmpty()) {
 				doc_file = QFileDialog::getOpenFileName(
-					&dlg, QStringLiteral("Dokument auswählen"),
-					QString(),
-					QStringLiteral(
-						"Dokumente (*.pdf *.docx);;Alle Dateien (*.*)"),
-					nullptr, dialog_options());
+					&dlg, QStringLiteral("Dokument auswählen"), QString(),
+					QStringLiteral("Dokumente (*.pdf *.docx);;Alle Dateien (*.*)"), nullptr,
+					dialog_options());
 				if (doc_file.isEmpty())
 					return;
 				ai_file_edit->setText(doc_file);
 			}
 
-			const std::string prompt_str =
-				ai_prompt_edit->toPlainText().trimmed().toUtf8().toStdString();
+			const std::string prompt_str = ai_prompt_edit->toPlainText().trimmed().toUtf8().toStdString();
 			state_.settings.ai_system_prompt =
 				(prompt_str == textbox_ai::kDefaultSystemPrompt) ? "" : prompt_str;
 			save_state();
 
 			const std::string file_utf8 = doc_file.toUtf8().toStdString();
 			const std::filesystem::path doc_fsp = std::filesystem::u8path(file_utf8);
-			set_dock_status(
-				QStringLiteral("AI-Import gestartet: %1")
-					.arg(QString::fromUtf8(
-						doc_fsp.filename().u8string().c_str())),
-				false);
-			const std::string api_key =
-				ai_key_edit->text().trimmed().toUtf8().toStdString();
-			const std::string sys_prompt =
-				prompt_str.empty() ? textbox_ai::kDefaultSystemPrompt : prompt_str;
+			set_dock_status(QStringLiteral("AI-Import gestartet: %1")
+						.arg(QString::fromUtf8(doc_fsp.filename().u8string().c_str())),
+					false);
+			const std::string api_key = ai_key_edit->text().trimmed().toUtf8().toStdString();
+			const std::string sys_prompt = prompt_str.empty() ? textbox_ai::kDefaultSystemPrompt
+									  : prompt_str;
 			const std::string python_exe = state_.settings.markitdown_python;
 			const std::string referenz_path = state_.settings.referenz_path;
 
@@ -3145,10 +3075,9 @@ void TextboxDock::on_open_import_dialog()
 			status_lbl->setText(QStringLiteral("Text aus Dokument extrahieren..."));
 
 			// Hintergrund-Thread erfasst nur die Kopie von cancel_ (kein this).
-			std::thread([cancel, self_ptr, dlg_ptr, api_btn, csv_btn, ai_start_btn,
-				     ai_status_lbl, status_lbl, error_lbl, ai_preview_group,
-				     ai_source_lbl, ai_table, pending_ai_res, file_utf8, api_key,
-				     sys_prompt, python_exe, referenz_path]() {
+			std::thread([cancel, self_ptr, dlg_ptr, api_btn, csv_btn, ai_start_btn, ai_status_lbl,
+				     status_lbl, error_lbl, ai_preview_group, ai_source_lbl, ai_table, pending_ai_res,
+				     file_utf8, api_key, sys_prompt, python_exe, referenz_path]() {
 				ActiveJobGuard job_guard;
 				if (*cancel)
 					return;
@@ -3160,8 +3089,7 @@ void TextboxDock::on_open_import_dialog()
 					const QString qmsg = QString::fromUtf8(msg.c_str());
 					QMetaObject::invokeMethod(
 						self_ptr.data(),
-						[cancel, self_ptr, dlg_ptr, ai_status_lbl,
-						 status_lbl, qmsg]() {
+						[cancel, self_ptr, dlg_ptr, ai_status_lbl, status_lbl, qmsg]() {
 							if (*cancel || !self_ptr || !dlg_ptr)
 								return;
 							ai_status_lbl->setText(qmsg);
@@ -3175,47 +3103,40 @@ void TextboxDock::on_open_import_dialog()
 
 				try {
 					std::string ext_err;
-					const std::string text =
-						textbox_ai::extract_document_text(
-							file_utf8, python_exe, ext_err, cancel);
+					const std::string text = textbox_ai::extract_document_text(
+						file_utf8, python_exe, ext_err, cancel);
 					if (*cancel)
 						return;
 					if (text.empty()) {
 						throw std::runtime_error(
-							ext_err.empty()
-								? "Kein Text im Dokument gefunden."
-								: ext_err);
+							ext_err.empty() ? "Kein Text im Dokument gefunden." : ext_err);
 					}
 
 					if (!api_key.empty()) {
 						blog(LOG_INFO, "[textbox] AI-Import: Verwende OpenRouter LLM");
 						try {
-							ai_res = textbox_ai::process_with_llm(
-								api_key, text, sys_prompt,
-								referenz_path, post_progress, cancel);
+							ai_res = textbox_ai::process_with_llm(api_key, text, sys_prompt,
+											      referenz_path,
+											      post_progress, cancel);
 							if (*cancel)
 								return;
 						} catch (const std::exception &llm_ex) {
 							if (*cancel)
 								return;
-							blog(LOG_INFO, "[textbox] AI-Import: Wechsle auf Offline-Fallback-Parser");
+							blog(LOG_INFO,
+							     "[textbox] AI-Import: Wechsle auf Offline-Fallback-Parser");
 							post_progress(
 								"Free-Tier nicht erreichbar – nutze lokalen Offline-Parser...");
-							auto local_items =
-								textbox_ai::parse_textbox_locally(
-									text);
+							auto local_items = textbox_ai::parse_textbox_locally(text);
 							if (local_items.empty())
-								throw std::runtime_error(
-									llm_ex.what());
+								throw std::runtime_error(llm_ex.what());
 							ai_res.items = std::move(local_items);
 							ai_res.model_label = "Offline-Fallback";
 						}
 					} else {
 						blog(LOG_INFO, "[textbox] AI-Import: Verwende lokalen Offline-Parser");
-						post_progress(
-							"Kein API-Key – lokale Offline-Analyse");
-						auto local_items =
-							textbox_ai::parse_textbox_locally(text);
+						post_progress("Kein API-Key – lokale Offline-Analyse");
+						auto local_items = textbox_ai::parse_textbox_locally(text);
 						if (local_items.empty()) {
 							throw std::runtime_error(
 								"Weder API-Key vorhanden noch konnte der lokale Parser Einträge erkennen.");
@@ -3231,13 +3152,11 @@ void TextboxDock::on_open_import_dialog()
 					if (*cancel)
 						return;
 					if (!ref_table.empty()) {
-						textbox_ai::enrich_titles_from_reference(
-							ai_res.items, ref_table);
+						textbox_ai::enrich_titles_from_reference(ai_res.items, ref_table);
 					}
 
 					if (ai_res.items.empty()) {
-						throw std::runtime_error(
-							"Keine Einträge erkannt.");
+						throw std::runtime_error("Keine Einträge erkannt.");
 					}
 				} catch (const std::exception &ex) {
 					fatal_err = ex.what();
@@ -3248,10 +3167,9 @@ void TextboxDock::on_open_import_dialog()
 
 				QMetaObject::invokeMethod(
 					self_ptr.data(),
-					[cancel, self_ptr, dlg_ptr, api_btn, csv_btn, ai_start_btn,
-					 ai_status_lbl, status_lbl, error_lbl, ai_preview_group,
-					 ai_source_lbl, ai_table, pending_ai_res,
-					 ai_res = std::move(ai_res),
+					[cancel, self_ptr, dlg_ptr, api_btn, csv_btn, ai_start_btn, ai_status_lbl,
+					 status_lbl, error_lbl, ai_preview_group, ai_source_lbl, ai_table,
+					 pending_ai_res, ai_res = std::move(ai_res),
 					 fatal_err = std::move(fatal_err)]() mutable {
 						if (*cancel || !self_ptr || !dlg_ptr)
 							return;
@@ -3260,8 +3178,7 @@ void TextboxDock::on_open_import_dialog()
 						ai_start_btn->setEnabled(true);
 
 						if (!fatal_err.empty()) {
-							const QString qerr =
-								QString::fromUtf8(fatal_err.c_str());
+							const QString qerr = QString::fromUtf8(fatal_err.c_str());
 							error_lbl->setText(qerr);
 							error_lbl->setVisible(true);
 							ai_status_lbl->setText(qerr);
@@ -3274,37 +3191,26 @@ void TextboxDock::on_open_import_dialog()
 						const QString src_tag =
 							QStringLiteral("AI-Import (%1)")
 								.arg(QString::fromUtf8(
-									pending_ai_res->model_label
-										.c_str()));
+									pending_ai_res->model_label.c_str()));
 						ai_source_lbl->setText(src_tag);
 
-						ai_table->setRowCount(static_cast<int>(
-							pending_ai_res->items.size()));
-						for (std::size_t r = 0;
-						     r < pending_ai_res->items.size(); ++r) {
+						ai_table->setRowCount(static_cast<int>(pending_ai_res->items.size()));
+						for (std::size_t r = 0; r < pending_ai_res->items.size(); ++r) {
 							const auto &pt = pending_ai_res->items[r];
-							ai_table->setItem(
-								static_cast<int>(r), 0,
-								new QTableWidgetItem(
-									QString::fromUtf8(
-										pt.zeile1.c_str())));
-							ai_table->setItem(
-								static_cast<int>(r), 1,
-								new QTableWidgetItem(
-									QString::fromUtf8(
-										pt.zeile2.c_str())));
-							ai_table->setItem(
-								static_cast<int>(r), 2,
-								new QTableWidgetItem(
-									QString::fromUtf8(
-										pt.zeile3.c_str())));
+							ai_table->setItem(static_cast<int>(r), 0,
+									  new QTableWidgetItem(QString::fromUtf8(
+										  pt.zeile1.c_str())));
+							ai_table->setItem(static_cast<int>(r), 1,
+									  new QTableWidgetItem(QString::fromUtf8(
+										  pt.zeile2.c_str())));
+							ai_table->setItem(static_cast<int>(r), 2,
+									  new QTableWidgetItem(QString::fromUtf8(
+										  pt.zeile3.c_str())));
 						}
 						ai_preview_group->setVisible(true);
-						const QString ok_msg =
-							QStringLiteral(
-								"Vorschau: %1 Einträge (%2)")
-								.arg(pending_ai_res->items.size())
-								.arg(src_tag);
+						const QString ok_msg = QStringLiteral("Vorschau: %1 Einträge (%2)")
+									       .arg(pending_ai_res->items.size())
+									       .arg(src_tag);
 						ai_status_lbl->setText(ok_msg);
 						status_lbl->setText(ok_msg);
 					},
@@ -3312,73 +3218,64 @@ void TextboxDock::on_open_import_dialog()
 			}).detach();
 		});
 
-	connect(ai_apply_btn, &QPushButton::clicked, &dlg,
-		[this, &dlg, pending_ai_res]() {
-			if (pending_ai_res->items.empty())
+	connect(ai_apply_btn, &QPushButton::clicked, &dlg, [this, &dlg, pending_ai_res]() {
+		if (pending_ai_res->items.empty())
+			return;
+
+		capture_undo_snapshot(this, state_);
+
+		const std::size_t total_items = pending_ai_res->items.size();
+		while (state_.cards.size() < total_items) {
+			state_.add_card(); // IMP-T: next_id-vergabene IDs — indexbasierte IDs kollidierten mit bestehenden Karten nach Löschungen
+		}
+		if (static_cast<int>(state_.cards.size()) + 1 > state_.next_id)
+			state_.next_id = static_cast<int>(state_.cards.size()) + 1;
+
+		const std::size_t n = std::min(total_items, state_.cards.size());
+		const std::size_t ignored = (total_items > n) ? (total_items - n) : 0;
+
+		for (std::size_t i = 0; i < n; ++i) {
+			state_.cards[i].zeile1 = pending_ai_res->items[i].zeile1;
+			state_.cards[i].zeile2 = pending_ai_res->items[i].zeile2;
+			state_.cards[i].zeile3 = pending_ai_res->items[i].zeile3;
+			// IMP-R: rows fallen auf die neuen zeile1..3 zurueck.
+			state_.cards[i].rows.clear();
+		}
+		// Überzählige Bestandskarten bereinigen, damit keine alten Einträge stehen bleiben.
+		for (std::size_t i = n; i < state_.cards.size(); ++i) {
+			if (!is_standard_card(state_.cards[i], i))
+				state_.cards[i].zeile1.clear();
+			state_.cards[i].zeile2.clear();
+			state_.cards[i].zeile3.clear();
+			state_.cards[i].rows.clear();
+		}
+
+		save_state();
+		for (std::size_t i = 0; i < state_.cards.size(); ++i) {
+			if (cancel_ && *cancel_)
 				return;
+			textbox_scene::update_everywhere(state_.cards[i], false, state_.settings);
+		}
+		rebuild_rows();
 
-			capture_undo_snapshot(this, state_);
-
-			const std::size_t total_items = pending_ai_res->items.size();
-			while (state_.cards.size() < total_items) {
-				state_.add_card(); // IMP-T: next_id-vergabene IDs — indexbasierte IDs kollidierten mit bestehenden Karten nach Löschungen
-			}
-			if (static_cast<int>(state_.cards.size()) + 1 > state_.next_id)
-				state_.next_id = static_cast<int>(state_.cards.size()) + 1;
-
-			const std::size_t n = std::min(total_items, state_.cards.size());
-			const std::size_t ignored = (total_items > n) ? (total_items - n) : 0;
-
-			for (std::size_t i = 0; i < n; ++i) {
-				state_.cards[i].zeile1 = pending_ai_res->items[i].zeile1;
-				state_.cards[i].zeile2 = pending_ai_res->items[i].zeile2;
-				state_.cards[i].zeile3 = pending_ai_res->items[i].zeile3;
-				// IMP-R: rows fallen auf die neuen zeile1..3 zurueck.
-				state_.cards[i].rows.clear();
-			}
-			// Überzählige Bestandskarten bereinigen, damit keine alten Einträge stehen bleiben.
-			for (std::size_t i = n; i < state_.cards.size(); ++i) {
-				if (!is_standard_card(state_.cards[i], i))
-					state_.cards[i].zeile1.clear();
-				state_.cards[i].zeile2.clear();
-				state_.cards[i].zeile3.clear();
-				state_.cards[i].rows.clear();
-			}
-
-			save_state();
-			for (std::size_t i = 0; i < state_.cards.size(); ++i) {
-				if (cancel_ && *cancel_)
-					return;
-				textbox_scene::update_everywhere(
-					state_.cards[i], false, state_.settings);
-			}
-			rebuild_rows();
-
-			const QString label_q =
-				QString::fromUtf8(pending_ai_res->model_label.c_str());
-			QString dock_msg =
-				QStringLiteral("AI-Import: %1 Einträge (Quelle: %2)")
-					.arg(n)
-					.arg(label_q);
-			if (ignored > 0) {
-				dock_msg += QStringLiteral(" — Übernommen: %1 Einträge (%2 weitere ignoriert)")
-						    .arg(n)
-						    .arg(ignored);
-			}
-			set_dock_status(dock_msg, false);
-			dlg.accept();
-		});
+		const QString label_q = QString::fromUtf8(pending_ai_res->model_label.c_str());
+		QString dock_msg = QStringLiteral("AI-Import: %1 Einträge (Quelle: %2)").arg(n).arg(label_q);
+		if (ignored > 0) {
+			dock_msg +=
+				QStringLiteral(" — Übernommen: %1 Einträge (%2 weitere ignoriert)").arg(n).arg(ignored);
+		}
+		set_dock_status(dock_msg, false);
+		dlg.accept();
+	});
 
 	connect(api_btn, &QPushButton::clicked, &dlg,
-		[this, cancel, dlg_ptr, self_ptr, api_btn, csv_btn, edit_form_id, status_lbl,
-		 error_lbl, handle_success, handle_error]() {
-			const std::string form_id =
-				edit_form_id->text().trimmed().toUtf8().toStdString();
+		[this, cancel, dlg_ptr, self_ptr, api_btn, csv_btn, edit_form_id, status_lbl, error_lbl, handle_success,
+		 handle_error]() {
+			const std::string form_id = edit_form_id->text().trimmed().toUtf8().toStdString();
 			state_.settings.google_form_id = form_id;
 			save_state();
 			if (form_id.empty()) {
-				const QString msg =
-					QStringLiteral("Bitte zuerst eine FORM-ID eintragen");
+				const QString msg = QStringLiteral("Bitte zuerst eine FORM-ID eintragen");
 				status_lbl->setText(msg);
 				error_lbl->setText(msg);
 				error_lbl->setVisible(true);
@@ -3395,34 +3292,31 @@ void TextboxDock::on_open_import_dialog()
 			std::filesystem::path cache_path;
 			if (!state_path_.empty()) {
 				std::error_code ec;
-				cache_path = std::filesystem::u8path(state_path_).parent_path() /
-					     "google_access_token.json";
+				cache_path =
+					std::filesystem::u8path(state_path_).parent_path() / "google_access_token.json";
 			}
 
 			const std::filesystem::path token_path = std::filesystem::u8path(
-				state_.settings.token_path.empty()
-					? textbox_import::default_token_path_str()
-					: state_.settings.token_path);
+				state_.settings.token_path.empty() ? textbox_import::default_token_path_str()
+								   : state_.settings.token_path);
 
 			// Hintergrund-Thread erfasst nur die Kopie von cancel_ (kein this).
-			std::thread([cancel, self_ptr, dlg_ptr, api_btn, csv_btn, cache_path,
-				     token_path, form_id, handle_success, handle_error]() {
+			std::thread([cancel, self_ptr, dlg_ptr, api_btn, csv_btn, cache_path, token_path, form_id,
+				     handle_success, handle_error]() {
 				ActiveJobGuard job_guard;
 				if (*cancel)
 					return;
 
 				std::string err_msg;
-				auto res = textbox_import::import_from_api(
-					&err_msg, cache_path, token_path, form_id);
+				auto res = textbox_import::import_from_api(&err_msg, cache_path, token_path, form_id);
 
 				if (*cancel || !self_ptr)
 					return;
 
 				QMetaObject::invokeMethod(
 					self_ptr.data(),
-					[cancel, self_ptr, dlg_ptr, api_btn, csv_btn,
-					 res = std::move(res), err_msg = std::move(err_msg),
-					 handle_success, handle_error]() {
+					[cancel, self_ptr, dlg_ptr, api_btn, csv_btn, res = std::move(res),
+					 err_msg = std::move(err_msg), handle_success, handle_error]() {
 						if (*cancel || !self_ptr || !dlg_ptr)
 							return;
 						api_btn->setEnabled(true);
@@ -3438,8 +3332,8 @@ void TextboxDock::on_open_import_dialog()
 		});
 
 	connect(csv_btn, &QPushButton::clicked, &dlg,
-		[&dlg, cancel, dlg_ptr, self_ptr, api_btn, csv_btn, status_lbl, error_lbl,
-		 handle_success, handle_error]() {
+		[&dlg, cancel, dlg_ptr, self_ptr, api_btn, csv_btn, status_lbl, error_lbl, handle_success,
+		 handle_error]() {
 			const QString file_name = QFileDialog::getOpenFileName(
 				&dlg, QStringLiteral("Datei importieren"), QString(),
 				QStringLiteral(
@@ -3454,31 +3348,28 @@ void TextboxDock::on_open_import_dialog()
 			error_lbl->setVisible(false);
 			status_lbl->setText(QStringLiteral("Importiere Datei …"));
 
-			const std::filesystem::path path =
-				std::filesystem::u8path(file_name.toUtf8().toStdString());
-			const QString source_basename =
-				QString::fromUtf8(path.filename().u8string().c_str());
+			const std::filesystem::path path = std::filesystem::u8path(file_name.toUtf8().toStdString());
+			const QString source_basename = QString::fromUtf8(path.filename().u8string().c_str());
 
 			// Hintergrund-Thread erfasst nur die Kopie von cancel_ (kein this).
-			std::thread([cancel, self_ptr, dlg_ptr, api_btn, csv_btn, path,
-				     source_basename, handle_success, handle_error]() {
+			std::thread([cancel, self_ptr, dlg_ptr, api_btn, csv_btn, path, source_basename, handle_success,
+				     handle_error]() {
 				ActiveJobGuard job_guard;
 				if (*cancel)
 					return;
 
 				textbox_import::TextboxImportResult res;
 				std::string err_msg;
-				const auto err = textbox_import::parse_answers_file(
-					path, res, nullptr, &err_msg);
+				const auto err = textbox_import::parse_answers_file(path, res, nullptr, &err_msg);
 
 				if (*cancel || !self_ptr)
 					return;
 
 				QMetaObject::invokeMethod(
 					self_ptr.data(),
-					[cancel, self_ptr, dlg_ptr, api_btn, csv_btn, err,
-					 res = std::move(res), err_msg = std::move(err_msg),
-					 source_basename, handle_success, handle_error]() {
+					[cancel, self_ptr, dlg_ptr, api_btn, csv_btn, err, res = std::move(res),
+					 err_msg = std::move(err_msg), source_basename, handle_success,
+					 handle_error]() {
 						if (*cancel || !self_ptr || !dlg_ptr)
 							return;
 						api_btn->setEnabled(true);
@@ -3490,8 +3381,7 @@ void TextboxDock::on_open_import_dialog()
 								source_basename.toUtf8().toStdString();
 							const std::string full_err =
 								(!base_utf8.empty() &&
-								 err_msg.find(base_utf8) ==
-									 std::string::npos)
+								 err_msg.find(base_utf8) == std::string::npos)
 									? (base_utf8 + ": " + err_msg)
 									: err_msg;
 							handle_error(full_err);
@@ -3503,8 +3393,7 @@ void TextboxDock::on_open_import_dialog()
 
 	dlg.exec();
 	if (dlg.result() == QDialog::Accepted) {
-		tb_event_log(tb_event_log_dir_from_state_path(state_path_),
-			     "Datenarchiv geschlossen");
+		tb_event_log(tb_event_log_dir_from_state_path(state_path_), "Datenarchiv geschlossen");
 	} else {
 		set_dock_status(QStringLiteral("Datenarchiv geschlossen"), false);
 	}
@@ -3597,69 +3486,59 @@ void TextboxDock::on_open_quick_profiles_dialog()
 
 	refresh_combo();
 
-	connect(save_btn, &QPushButton::clicked, &dlg,
-		[this, name_edit, status_lbl, refresh_combo, make_default_name]() {
-			const QString qname = name_edit->text().trimmed();
-			const std::string name_utf8 =
-				(qname.isEmpty() ? make_default_name() : qname).toUtf8().toStdString();
-			state_.save_quick_profile(name_utf8);
+	connect(save_btn, &QPushButton::clicked, &dlg, [this, name_edit, status_lbl, refresh_combo, make_default_name]() {
+		const QString qname = name_edit->text().trimmed();
+		const std::string name_utf8 = (qname.isEmpty() ? make_default_name() : qname).toUtf8().toStdString();
+		state_.save_quick_profile(name_utf8);
+		save_state();
+		refresh_combo();
+		name_edit->setText(make_default_name());
+		const QString msg =
+			QStringLiteral("Schnell-Profil gespeichert: %1").arg(QString::fromUtf8(name_utf8.c_str()));
+		status_lbl->setText(msg);
+		set_dock_status(msg, false);
+	});
+
+	connect(apply_btn, &QPushButton::clicked, &dlg, [this, combo, status_lbl]() {
+		const int idx = combo->currentIndex();
+		if (idx < 0 || static_cast<std::size_t>(idx) >= state_.quick_profiles.size())
+			return;
+
+		const std::string prof_name = state_.quick_profiles[static_cast<std::size_t>(idx)].name;
+		apply_quick_profile(prof_name);
+		const QString msg =
+			QStringLiteral("Schnell-Profil übernommen: %1").arg(QString::fromUtf8(prof_name.c_str()));
+		status_lbl->setText(msg);
+	});
+
+	connect(del_btn, &QPushButton::clicked, &dlg, [this, combo, status_lbl, refresh_combo]() {
+		const int idx = combo->currentIndex();
+		if (idx < 0 || static_cast<std::size_t>(idx) >= state_.quick_profiles.size())
+			return;
+
+		const std::string prof_name = state_.quick_profiles[static_cast<std::size_t>(idx)].name;
+		if (state_.remove_quick_profile(static_cast<std::size_t>(idx))) {
 			save_state();
 			refresh_combo();
-			name_edit->setText(make_default_name());
-			const QString msg = QStringLiteral("Schnell-Profil gespeichert: %1")
-						    .arg(QString::fromUtf8(name_utf8.c_str()));
+			refresh_top_row();
+			const QString msg =
+				QStringLiteral("Schnell-Profil gelöscht: %1").arg(QString::fromUtf8(prof_name.c_str()));
 			status_lbl->setText(msg);
 			set_dock_status(msg, false);
-		});
-
-	connect(apply_btn, &QPushButton::clicked, &dlg,
-		[this, combo, status_lbl]() {
-			const int idx = combo->currentIndex();
-			if (idx < 0 || static_cast<std::size_t>(idx) >= state_.quick_profiles.size())
-				return;
-
-			const std::string prof_name =
-				state_.quick_profiles[static_cast<std::size_t>(idx)].name;
-			apply_quick_profile(prof_name);
-			const QString msg =
-				QStringLiteral("Schnell-Profil übernommen: %1")
-					.arg(QString::fromUtf8(prof_name.c_str()));
-			status_lbl->setText(msg);
-		});
-
-	connect(del_btn, &QPushButton::clicked, &dlg,
-		[this, combo, status_lbl, refresh_combo]() {
-			const int idx = combo->currentIndex();
-			if (idx < 0 || static_cast<std::size_t>(idx) >= state_.quick_profiles.size())
-				return;
-
-			const std::string prof_name =
-				state_.quick_profiles[static_cast<std::size_t>(idx)].name;
-			if (state_.remove_quick_profile(static_cast<std::size_t>(idx))) {
-				save_state();
-				refresh_combo();
-				refresh_top_row();
-				const QString msg =
-					QStringLiteral("Schnell-Profil gelöscht: %1")
-						.arg(QString::fromUtf8(prof_name.c_str()));
-				status_lbl->setText(msg);
-				set_dock_status(msg, false);
-			}
-		});
+		}
+	});
 
 	dlg.exec();
-	tb_event_log(tb_event_log_dir_from_state_path(state_path_),
-		     "Schnell-Profile geschlossen");
+	tb_event_log(tb_event_log_dir_from_state_path(state_path_), "Schnell-Profile geschlossen");
 	refresh_top_row();
 }
 
 void TextboxDock::on_backup_state()
 {
-	const QString file_name = QFileDialog::getSaveFileName(
-		this, QStringLiteral("JSON-Backup speichern"),
-		QStringLiteral("textbox-backup.json"),
-		QStringLiteral("JSON-Backup (*.json)"),
-		nullptr, dialog_options());
+	const QString file_name = QFileDialog::getSaveFileName(this, QStringLiteral("JSON-Backup speichern"),
+							       QStringLiteral("textbox-backup.json"),
+							       QStringLiteral("JSON-Backup (*.json)"), nullptr,
+							       dialog_options());
 	if (file_name.isEmpty())
 		return;
 
@@ -3682,14 +3561,12 @@ void TextboxDock::on_backup_state()
 				if (*cancel || !self_ptr)
 					return;
 				if (err.empty()) {
-					self_ptr->set_dock_status(
-						QStringLiteral("Backup nach %1").arg(file_name),
-						false);
+					self_ptr->set_dock_status(QStringLiteral("Backup nach %1").arg(file_name),
+								  false);
 				} else {
-					self_ptr->set_dock_status(
-						QStringLiteral("Backup fehlgeschlagen: %1")
-							.arg(QString::fromUtf8(err.c_str())),
-						true);
+					self_ptr->set_dock_status(QStringLiteral("Backup fehlgeschlagen: %1")
+									  .arg(QString::fromUtf8(err.c_str())),
+								  true);
 				}
 			},
 			Qt::QueuedConnection);
@@ -3698,10 +3575,9 @@ void TextboxDock::on_backup_state()
 
 void TextboxDock::on_restore_state()
 {
-	const QString file_name = QFileDialog::getOpenFileName(
-		this, QStringLiteral("JSON-Backup wiederherstellen"), QString(),
-		QStringLiteral("JSON-Backup (*.json)"),
-		nullptr, dialog_options());
+	const QString file_name = QFileDialog::getOpenFileName(this, QStringLiteral("JSON-Backup wiederherstellen"),
+							       QString(), QStringLiteral("JSON-Backup (*.json)"),
+							       nullptr, dialog_options());
 	if (file_name.isEmpty())
 		return;
 
@@ -3724,10 +3600,9 @@ void TextboxDock::on_restore_state()
 				if (*cancel || !self_ptr)
 					return;
 				if (!err.empty()) {
-					self_ptr->set_dock_status(
-						QStringLiteral("Restore fehlgeschlagen: %1")
-							.arg(QString::fromUtf8(err.c_str())),
-						true);
+					self_ptr->set_dock_status(QStringLiteral("Restore fehlgeschlagen: %1")
+									  .arg(QString::fromUtf8(err.c_str())),
+								  true);
 					return;
 				}
 
@@ -3749,9 +3624,8 @@ void TextboxDock::on_restore_state()
 				if (*cancel)
 					return;
 				self_ptr->rebuild_rows();
-				self_ptr->set_dock_status(
-					QStringLiteral("Restore erfolgreich: %1").arg(file_name),
-					false);
+				self_ptr->set_dock_status(QStringLiteral("Restore erfolgreich: %1").arg(file_name),
+							  false);
 			},
 			Qt::QueuedConnection);
 	}).detach();
@@ -3786,9 +3660,8 @@ void TextboxDock::on_open_settings_dialog()
 
 	auto *lbl_token = new QLabel(QStringLiteral("OAUTH-TOKEN-PFAD"), oauth_group);
 	lbl_token->setObjectName(QStringLiteral("tbFieldLabel"));
-	const std::string cur_token = state_.settings.token_path.empty()
-					      ? textbox_import::default_token_path_str()
-					      : state_.settings.token_path;
+	const std::string cur_token = state_.settings.token_path.empty() ? textbox_import::default_token_path_str()
+									 : state_.settings.token_path;
 	auto *token_row = new QHBoxLayout();
 	token_row->setSpacing(8);
 	auto *edit_token = new QLineEdit(QString::fromUtf8(cur_token.c_str()), oauth_group);
@@ -3814,18 +3687,16 @@ void TextboxDock::on_open_settings_dialog()
 
 	auto *tpl_info = new QLabel(
 		QStringLiteral("Vorlagen sind .html-Dateien im Vorlagen-Ordner des Plugins; "
-				 "jede Karte wählt seine Vorlage im Feld „VORLAGE“ (leer = index.html = Standard)."),
+			       "jede Karte wählt seine Vorlage im Feld „VORLAGE“ (leer = index.html = Standard)."),
 		tpl_group);
 	tpl_info->setWordWrap(true);
 	tpl_info->setObjectName(QStringLiteral("tbFieldLabel"));
 
 	auto *tpl_btn_row = new QHBoxLayout();
 	tpl_btn_row->setSpacing(8);
-	auto *tpl_folder_btn =
-		new QPushButton(QStringLiteral("Vorlagen-Ordner öffnen"), tpl_group);
+	auto *tpl_folder_btn = new QPushButton(QStringLiteral("Vorlagen-Ordner öffnen"), tpl_group);
 	tpl_folder_btn->setObjectName(QStringLiteral("tbBtn"));
-	auto *tpl_copy_btn =
-		new QPushButton(QStringLiteral("Neue Vorlage aus index.html kopieren"), tpl_group);
+	auto *tpl_copy_btn = new QPushButton(QStringLiteral("Neue Vorlage aus index.html kopieren"), tpl_group);
 	tpl_copy_btn->setObjectName(QStringLiteral("tbBtn"));
 	tpl_btn_row->addWidget(tpl_folder_btn);
 	tpl_btn_row->addWidget(tpl_copy_btn);
@@ -3835,10 +3706,8 @@ void TextboxDock::on_open_settings_dialog()
 	tpl_group_layout->addLayout(tpl_btn_row);
 	root->addWidget(tpl_group);
 
-	connect(tpl_folder_btn, &QPushButton::clicked, &dlg,
-		[this]() { on_open_templates_folder(); });
-	connect(tpl_copy_btn, &QPushButton::clicked, &dlg,
-		[this]() { on_copy_template_from_classic(); });
+	connect(tpl_folder_btn, &QPushButton::clicked, &dlg, [this]() { on_open_templates_folder(); });
+	connect(tpl_copy_btn, &QPushButton::clicked, &dlg, [this]() { on_copy_template_from_classic(); });
 
 	// Gruppe 2 (M5): AI-Import & Animationen Pfade
 	auto *m5_group = new QGroupBox(QStringLiteral("AI-Import & Animationen"), &dlg);
@@ -3846,10 +3715,8 @@ void TextboxDock::on_open_settings_dialog()
 	m5_layout->setContentsMargins(12, 16, 12, 12);
 	m5_layout->setSpacing(8);
 
-	auto make_path_row = [m5_group](QVBoxLayout *parent_l, const QString &label_txt,
-					const std::string &cur_val,
-					const std::string &def_val,
-					QPushButton *&out_btn,
+	auto make_path_row = [m5_group](QVBoxLayout *parent_l, const QString &label_txt, const std::string &cur_val,
+					const std::string &def_val, QPushButton *&out_btn,
 					const QString &acc_name) -> QLineEdit * {
 		auto *lbl = new QLabel(label_txt, m5_group);
 		lbl->setObjectName(QStringLiteral("tbFieldLabel"));
@@ -3869,32 +3736,24 @@ void TextboxDock::on_open_settings_dialog()
 	};
 
 	QPushButton *browse_key_btn = nullptr;
-	auto *edit_key_path = make_path_row(
-		m5_layout, QStringLiteral("OPENROUTER-API-KEY-PFAD (api.env)"),
-		state_.settings.openrouter_key_path, def_settings.openrouter_key_path,
-		browse_key_btn,
-		QStringLiteral("OpenRouter-API-Key-Pfad"));
+	auto *edit_key_path = make_path_row(m5_layout, QStringLiteral("OPENROUTER-API-KEY-PFAD (api.env)"),
+					    state_.settings.openrouter_key_path, def_settings.openrouter_key_path,
+					    browse_key_btn, QStringLiteral("OpenRouter-API-Key-Pfad"));
 
 	QPushButton *browse_py_btn = nullptr;
-	auto *edit_py_path = make_path_row(
-		m5_layout, QStringLiteral("MARKITDOWN-PYTHON-PFAD"),
-		state_.settings.markitdown_python, def_settings.markitdown_python,
-		browse_py_btn,
-		QStringLiteral("Markitdown-Python-Pfad"));
+	auto *edit_py_path = make_path_row(m5_layout, QStringLiteral("MARKITDOWN-PYTHON-PFAD"),
+					   state_.settings.markitdown_python, def_settings.markitdown_python,
+					   browse_py_btn, QStringLiteral("Markitdown-Python-Pfad"));
 
 	QPushButton *browse_anim_btn = nullptr;
-	auto *edit_anim_dir = make_path_row(
-		m5_layout, QStringLiteral("ANIMATIONS-ORDNER"),
-		state_.settings.animation_dir, def_settings.animation_dir,
-		browse_anim_btn,
-		QStringLiteral("Animations-Ordner"));
+	auto *edit_anim_dir = make_path_row(m5_layout, QStringLiteral("ANIMATIONS-ORDNER"),
+					    state_.settings.animation_dir, def_settings.animation_dir, browse_anim_btn,
+					    QStringLiteral("Animations-Ordner"));
 
 	QPushButton *browse_referenz_btn = nullptr;
-	auto *edit_referenz_path = make_path_row(
-		m5_layout, QStringLiteral("REFERENZ-INDEX"),
-		state_.settings.referenz_path, def_settings.referenz_path,
-		browse_referenz_btn,
-		QStringLiteral("Referenz-Index"));
+	auto *edit_referenz_path = make_path_row(m5_layout, QStringLiteral("REFERENZ-INDEX"),
+						 state_.settings.referenz_path, def_settings.referenz_path,
+						 browse_referenz_btn, QStringLiteral("Referenz-Index"));
 
 	root->addWidget(m5_group);
 
@@ -3961,13 +3820,12 @@ void TextboxDock::on_open_settings_dialog()
 	auto refresh_profiles_ui = [this, profile_list, del_prof_btn, yaml_combo]() {
 		profile_list->clear();
 		for (const auto &cp : state_.color_profiles) {
-			const QString tc_hex = QString::fromUtf8(
-				(cp.text_color.empty() ? "#000000" : cp.text_color).c_str()).toUpper();
-			const QString bc_hex = QString::fromUtf8(
-				(cp.box_color.empty() ? "#ffffff" : cp.box_color).c_str()).toUpper();
+			const QString tc_hex =
+				QString::fromUtf8((cp.text_color.empty() ? "#000000" : cp.text_color).c_str()).toUpper();
+			const QString bc_hex =
+				QString::fromUtf8((cp.box_color.empty() ? "#ffffff" : cp.box_color).c_str()).toUpper();
 			const QString item_txt = QStringLiteral("%1  —  TEXT %2 · BOX %3")
-							 .arg(QString::fromUtf8(cp.name.c_str()),
-							      tc_hex, bc_hex);
+							 .arg(QString::fromUtf8(cp.name.c_str()), tc_hex, bc_hex);
 			profile_list->addItem(item_txt);
 		}
 		del_prof_btn->setEnabled(profile_list->currentRow() >= 0);
@@ -3988,94 +3846,77 @@ void TextboxDock::on_open_settings_dialog()
 	refresh_profiles_ui();
 
 	connect(profile_list, &QListWidget::currentRowChanged, &dlg,
-		[del_prof_btn](int row) {
-			del_prof_btn->setEnabled(row >= 0);
-		});
+		[del_prof_btn](int row) { del_prof_btn->setEnabled(row >= 0); });
 
-	connect(del_prof_btn, &QPushButton::clicked, &dlg,
-		[this, profile_list, status_lbl, refresh_profiles_ui]() {
-			const int row = profile_list->currentRow();
-			if (row < 0 ||
-			    static_cast<std::size_t>(row) >= state_.color_profiles.size())
-				return;
-			const QString qname = QString::fromUtf8(
-				state_.color_profiles[static_cast<std::size_t>(row)].name.c_str());
-			state_.color_profiles.erase(
-				state_.color_profiles.begin() +
-				static_cast<std::ptrdiff_t>(row));
-			// IMP-N: letztes Profil gelöscht -> Standardprofile nachsaaten,
-			// sonst bleiben Karten ohne wählbares Profil (Combo leer).
-			const bool reseeded = reconcile_profiles_after_delete(state_);
-			save_state();
-			rebuild_rows();
-			refresh_profiles_ui();
-			const QString msg = reseeded
-				? QStringLiteral("Farbprofil \"%1\" gelöscht — Standardprofile nachgesät").arg(qname)
-				: QStringLiteral("Farbprofil \"%1\" gelöscht").arg(qname);
-			status_lbl->setText(msg);
-			set_dock_status(msg, false);
-		});
+	connect(del_prof_btn, &QPushButton::clicked, &dlg, [this, profile_list, status_lbl, refresh_profiles_ui]() {
+		const int row = profile_list->currentRow();
+		if (row < 0 || static_cast<std::size_t>(row) >= state_.color_profiles.size())
+			return;
+		const QString qname =
+			QString::fromUtf8(state_.color_profiles[static_cast<std::size_t>(row)].name.c_str());
+		state_.color_profiles.erase(state_.color_profiles.begin() + static_cast<std::ptrdiff_t>(row));
+		// IMP-N: letztes Profil gelöscht -> Standardprofile nachsaaten,
+		// sonst bleiben Karten ohne wählbares Profil (Combo leer).
+		const bool reseeded = reconcile_profiles_after_delete(state_);
+		save_state();
+		rebuild_rows();
+		refresh_profiles_ui();
+		const QString msg =
+			reseeded ? QStringLiteral("Farbprofil \"%1\" gelöscht — Standardprofile nachgesät").arg(qname)
+				 : QStringLiteral("Farbprofil \"%1\" gelöscht").arg(qname);
+		status_lbl->setText(msg);
+		set_dock_status(msg, false);
+	});
 
-	connect(export_yaml_btn, &QPushButton::clicked, &dlg,
-		[this, &dlg, yaml_combo, status_lbl]() {
-			const std::string active_name =
-				yaml_combo->currentText().toUtf8().toStdString();
-			const TextboxProfile *prof =
-				textbox_profile_lookup(active_name, state_.color_profiles);
-			if (!prof)
-				return;
-			const QString qprof_name = QString::fromUtf8(prof->name.c_str());
-			QString sanitized = qprof_name;
-			sanitized.replace(QRegularExpression(QStringLiteral("[^a-zA-Z0-9_-]")),
-					  QStringLiteral("_"));
-			const QString default_file =
-				QStringLiteral("farbprofil_%1.yaml").arg(sanitized);
-			const QString out_file = QFileDialog::getSaveFileName(
-				&dlg, QStringLiteral("Farbprofil als YAML exportieren"),
-				default_file, QStringLiteral("YAML-Dateien (*.yaml *.yml)"),
-				nullptr, dialog_options());
-			if (out_file.isEmpty())
-				return;
+	connect(export_yaml_btn, &QPushButton::clicked, &dlg, [this, &dlg, yaml_combo, status_lbl]() {
+		const std::string active_name = yaml_combo->currentText().toUtf8().toStdString();
+		const TextboxProfile *prof = textbox_profile_lookup(active_name, state_.color_profiles);
+		if (!prof)
+			return;
+		const QString qprof_name = QString::fromUtf8(prof->name.c_str());
+		QString sanitized = qprof_name;
+		sanitized.replace(QRegularExpression(QStringLiteral("[^a-zA-Z0-9_-]")), QStringLiteral("_"));
+		const QString default_file = QStringLiteral("farbprofil_%1.yaml").arg(sanitized);
+		const QString out_file = QFileDialog::getSaveFileName(
+			&dlg, QStringLiteral("Farbprofil als YAML exportieren"), default_file,
+			QStringLiteral("YAML-Dateien (*.yaml *.yml)"), nullptr, dialog_options());
+		if (out_file.isEmpty())
+			return;
 
-			const std::string yaml_str = textbox_profile_to_yaml(*prof);
-			QFile f(out_file);
-			if (!f.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
-				const QString err_msg = QStringLiteral("Export fehlgeschlagen: %1")
-								.arg(f.errorString());
-				status_lbl->setText(err_msg);
-				set_dock_status(err_msg, true);
-				return;
-			}
-			const qint64 written =
-				f.write(yaml_str.data(), static_cast<qint64>(yaml_str.size()));
-			f.close();
-			if (written != static_cast<qint64>(yaml_str.size())) {
-				const QString err_msg =
-					QStringLiteral("Export fehlgeschlagen: Schreibfehler.");
-				status_lbl->setText(err_msg);
-				set_dock_status(err_msg, true);
-				return;
-			}
+		const std::string yaml_str = textbox_profile_to_yaml(*prof);
+		QFile f(out_file);
+		if (!f.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
+			const QString err_msg = QStringLiteral("Export fehlgeschlagen: %1").arg(f.errorString());
+			status_lbl->setText(err_msg);
+			set_dock_status(err_msg, true);
+			return;
+		}
+		const qint64 written = f.write(yaml_str.data(), static_cast<qint64>(yaml_str.size()));
+		f.close();
+		if (written != static_cast<qint64>(yaml_str.size())) {
+			const QString err_msg = QStringLiteral("Export fehlgeschlagen: Schreibfehler.");
+			status_lbl->setText(err_msg);
+			set_dock_status(err_msg, true);
+			return;
+		}
 
-			const QString msg =
-				QStringLiteral("Profil \"%1\" exportiert").arg(qprof_name);
-			status_lbl->setText(msg);
-			set_dock_status(msg, false);
-		});
+		const QString msg = QStringLiteral("Profil \"%1\" exportiert").arg(qprof_name);
+		status_lbl->setText(msg);
+		set_dock_status(msg, false);
+	});
 
 	connect(import_yaml_btn, &QPushButton::clicked, &dlg,
 		[this, &dlg, yaml_combo, status_lbl, refresh_profiles_ui]() {
 			const QString in_file = QFileDialog::getOpenFileName(
-				&dlg, QStringLiteral("Farbprofil aus YAML importieren"),
-				QString(), QStringLiteral("YAML-Dateien (*.yaml *.yml)"),
-				nullptr, dialog_options());
+				&dlg, QStringLiteral("Farbprofil aus YAML importieren"), QString(),
+				QStringLiteral("YAML-Dateien (*.yaml *.yml)"), nullptr, dialog_options());
 			if (in_file.isEmpty())
 				return;
 
 			QFile f(in_file);
 			if (!f.open(QIODevice::ReadOnly)) {
-				const QString err_msg = QStringLiteral("Import fehlgeschlagen: %1")
-								.arg(f.errorString());
+				const QString err_msg =
+					QStringLiteral("Import fehlgeschlagen: %1").arg(f.errorString());
 				status_lbl->setText(err_msg);
 				set_dock_status(err_msg, true);
 				return;
@@ -4096,11 +3937,9 @@ void TextboxDock::on_open_settings_dialog()
 				imported.name += " (Import)";
 			}
 
-			auto it = std::find_if(
-				state_.color_profiles.begin(), state_.color_profiles.end(),
-				[&imported](const TextboxProfile &p) {
-					return p.name == imported.name;
-				});
+			auto it =
+				std::find_if(state_.color_profiles.begin(), state_.color_profiles.end(),
+					     [&imported](const TextboxProfile &p) { return p.name == imported.name; });
 			if (it != state_.color_profiles.end()) {
 				*it = imported;
 			} else {
@@ -4115,8 +3954,7 @@ void TextboxDock::on_open_settings_dialog()
 			if (imp_idx >= 0)
 				yaml_combo->setCurrentIndex(imp_idx);
 
-			const QString msg =
-				QStringLiteral("Profil \"%1\" importiert").arg(qimp_name);
+			const QString msg = QStringLiteral("Profil \"%1\" importiert").arg(qimp_name);
 			status_lbl->setText(msg);
 			set_dock_status(msg, false);
 		});
@@ -4134,90 +3972,70 @@ void TextboxDock::on_open_settings_dialog()
 
 	connect(browse_btn, &QPushButton::clicked, &dlg, [&dlg, edit_token]() {
 		const QString chosen = QFileDialog::getOpenFileName(
-			&dlg, QStringLiteral("Google-OAuth-Token-Datei wählen"),
-			edit_token->text(), QStringLiteral("JSON-Dateien (*.json);;Alle Dateien (*.*)"),
-			nullptr, dialog_options());
+			&dlg, QStringLiteral("Google-OAuth-Token-Datei wählen"), edit_token->text(),
+			QStringLiteral("JSON-Dateien (*.json);;Alle Dateien (*.*)"), nullptr, dialog_options());
 		if (!chosen.isEmpty())
 			edit_token->setText(chosen);
 	});
 
 	connect(browse_key_btn, &QPushButton::clicked, &dlg, [&dlg, edit_key_path]() {
 		const QString chosen = QFileDialog::getOpenFileName(
-			&dlg, QStringLiteral("OpenRouter-Key-Datei (api.env) wählen"),
-			edit_key_path->text(), QStringLiteral("Env-Dateien (*.env);;Alle Dateien (*.*)"),
-			nullptr, dialog_options());
+			&dlg, QStringLiteral("OpenRouter-Key-Datei (api.env) wählen"), edit_key_path->text(),
+			QStringLiteral("Env-Dateien (*.env);;Alle Dateien (*.*)"), nullptr, dialog_options());
 		if (!chosen.isEmpty())
 			edit_key_path->setText(chosen);
 	});
 
 	connect(browse_py_btn, &QPushButton::clicked, &dlg, [&dlg, edit_py_path]() {
 		const QString chosen = QFileDialog::getOpenFileName(
-			&dlg, QStringLiteral("MarkItDown-Python-Executable wählen"),
-			edit_py_path->text(),
-			QStringLiteral("Ausführbare Dateien (*.exe);;Alle Dateien (*.*)"),
-			nullptr, dialog_options());
+			&dlg, QStringLiteral("MarkItDown-Python-Executable wählen"), edit_py_path->text(),
+			QStringLiteral("Ausführbare Dateien (*.exe);;Alle Dateien (*.*)"), nullptr, dialog_options());
 		if (!chosen.isEmpty())
 			edit_py_path->setText(chosen);
 	});
 
 	connect(browse_anim_btn, &QPushButton::clicked, &dlg, [&dlg, edit_anim_dir]() {
 		const QString chosen = QFileDialog::getExistingDirectory(
-			&dlg, QStringLiteral("Animations-Ordner wählen"),
-			edit_anim_dir->text(), dialog_options());
+			&dlg, QStringLiteral("Animations-Ordner wählen"), edit_anim_dir->text(), dialog_options());
 		if (!chosen.isEmpty())
 			edit_anim_dir->setText(chosen);
 	});
 
 	connect(browse_referenz_btn, &QPushButton::clicked, &dlg, [&dlg, edit_referenz_path]() {
 		const QString chosen = QFileDialog::getOpenFileName(
-			&dlg, QStringLiteral("Referenz-Index-Datei wählen"),
-			edit_referenz_path->text(),
+			&dlg, QStringLiteral("Referenz-Index-Datei wählen"), edit_referenz_path->text(),
 			QStringLiteral("Markdown-Dateien (*.md);;Alle Dateien (*.*)"));
 		if (!chosen.isEmpty())
 			edit_referenz_path->setText(chosen);
 	});
 
 	connect(reset_btn, &QPushButton::clicked, &dlg,
-		[edit_form, edit_token, edit_key_path, edit_py_path, edit_anim_dir,
-		 edit_referenz_path, def_settings]() {
+		[edit_form, edit_token, edit_key_path, edit_py_path, edit_anim_dir, edit_referenz_path,
+		 def_settings]() {
 			edit_form->setText(QString());
 			edit_token->setText(QString::fromUtf8(textbox_import::default_token_path_str()));
-			edit_key_path->setText(
-				QString::fromUtf8(def_settings.openrouter_key_path.c_str()));
-			edit_py_path->setText(
-				QString::fromUtf8(def_settings.markitdown_python.c_str()));
-			edit_anim_dir->setText(
-				QString::fromUtf8(def_settings.animation_dir.c_str()));
-			edit_referenz_path->setText(
-				QString::fromUtf8(def_settings.referenz_path.c_str()));
+			edit_key_path->setText(QString::fromUtf8(def_settings.openrouter_key_path.c_str()));
+			edit_py_path->setText(QString::fromUtf8(def_settings.markitdown_python.c_str()));
+			edit_anim_dir->setText(QString::fromUtf8(def_settings.animation_dir.c_str()));
+			edit_referenz_path->setText(QString::fromUtf8(def_settings.referenz_path.c_str()));
 		});
 
 	connect(save_btn, &QPushButton::clicked, &dlg,
-		[this, &dlg, edit_form, edit_token, edit_key_path, edit_py_path, edit_anim_dir,
-		 edit_referenz_path, def_settings]() {
+		[this, &dlg, edit_form, edit_token, edit_key_path, edit_py_path, edit_anim_dir, edit_referenz_path,
+		 def_settings]() {
 			const std::string fid = edit_form->text().trimmed().toUtf8().toStdString();
-			const std::string tpath =
-				edit_token->text().trimmed().toUtf8().toStdString();
-			const std::string kpath =
-				edit_key_path->text().trimmed().toUtf8().toStdString();
-			const std::string pypath =
-				edit_py_path->text().trimmed().toUtf8().toStdString();
-			const std::string adir =
-				edit_anim_dir->text().trimmed().toUtf8().toStdString();
-			const std::string lpath =
-				edit_referenz_path->text().trimmed().toUtf8().toStdString();
+			const std::string tpath = edit_token->text().trimmed().toUtf8().toStdString();
+			const std::string kpath = edit_key_path->text().trimmed().toUtf8().toStdString();
+			const std::string pypath = edit_py_path->text().trimmed().toUtf8().toStdString();
+			const std::string adir = edit_anim_dir->text().trimmed().toUtf8().toStdString();
+			const std::string lpath = edit_referenz_path->text().trimmed().toUtf8().toStdString();
 
 			state_.settings.google_form_id = fid;
-			state_.settings.token_path =
-				tpath.empty() ? textbox_import::default_token_path_str() : tpath;
-			state_.settings.openrouter_key_path =
-				kpath.empty() ? def_settings.openrouter_key_path : kpath;
-			state_.settings.markitdown_python =
-				pypath.empty() ? def_settings.markitdown_python : pypath;
-			state_.settings.animation_dir =
-				adir.empty() ? def_settings.animation_dir : adir;
-			state_.settings.referenz_path =
-				lpath.empty() ? def_settings.referenz_path : lpath;
+			state_.settings.token_path = tpath.empty() ? textbox_import::default_token_path_str() : tpath;
+			state_.settings.openrouter_key_path = kpath.empty() ? def_settings.openrouter_key_path : kpath;
+			state_.settings.markitdown_python = pypath.empty() ? def_settings.markitdown_python : pypath;
+			state_.settings.animation_dir = adir.empty() ? def_settings.animation_dir : adir;
+			state_.settings.referenz_path = lpath.empty() ? def_settings.referenz_path : lpath;
 
 			save_state();
 			set_dock_status(QStringLiteral("Einstellungen gespeichert."), false);
@@ -4225,8 +4043,7 @@ void TextboxDock::on_open_settings_dialog()
 		});
 
 	dlg.exec();
-	tb_event_log(tb_event_log_dir_from_state_path(state_path_),
-		     "Einstellungen geschlossen");
+	tb_event_log(tb_event_log_dir_from_state_path(state_path_), "Einstellungen geschlossen");
 }
 
 void TextboxDock::save_state()
