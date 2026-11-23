@@ -686,33 +686,6 @@ QGroupBox::indicator:checked {
 /* ---- Tabellen ---- */
 
 QTableWidget,
-QListWidget#tbCardList {
-	background-color: transparent;
-	border: none;
-	color: %2;
-	selection-background-color: transparent;
-	selection-color: %2;
-	outline: none;
-}
-
-QListWidget#tbCardList::item {
-	padding: 0px;
-	border: none;
-	background: transparent;
-}
-
-QListWidget#tbCardList::drop-indicator {
-	border: none;
-	border-top: 2px solid %7;
-	height: 2px;
-	background: transparent;
-}
-
-QListWidget#tbCardList::item:selected {
-	background: transparent;
-	color: %2;
-}
-
 QListWidget,
 QListWidget#tbProfileList {
 	background-color: %4;
@@ -722,6 +695,13 @@ QListWidget#tbProfileList {
 	color: %2;
 	selection-background-color: %6;
 	selection-color: %2;
+}
+
+QListWidget#tbCardList::drop-indicator {
+	border: none;
+	border-top: 2px solid %7;
+	height: 2px;
+	background: transparent;
 }
 
 QHeaderView::section {
