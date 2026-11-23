@@ -874,6 +874,7 @@ QIcon TextboxDock::theme_icon(const char *name) const
 void TextboxDock::create_row_widget(const TextboxCard &card)
 {
 	const int btn_sz = style()->pixelMetric(QStyle::PM_ButtonIconSize, nullptr, this);
+	const int fh = fontMetrics().height() + 8; // Zeilen-Höhe für Textfelder
 	auto *row_widget = new QFrame(this);
 	row_widget->setObjectName(QStringLiteral("tbCardOuter"));
 	row_widget->setAttribute(Qt::WA_StyledBackground, true);
@@ -955,10 +956,10 @@ void TextboxDock::create_row_widget(const TextboxCard &card)
 		mark_card_dirty_and_schedule(this, card_id);
 	};
 
-	auto *rows_frame = new QFrame(card_inner);
+	auto *rows_frame = new QGroupBox(QStringLiteral("▼ SPEZIFISCHE CSS-REGELN"), card_inner);
 	rows_frame->setAttribute(Qt::WA_StyledBackground, true);
 	auto *rows_layout = new QVBoxLayout(rows_frame);
-	rows_layout->setContentsMargins(0, 0, 0, 0);
+	rows_layout->setContentsMargins(4, 2, 4, 4);
 	rows_layout->setSpacing(4);
 
 	auto *rows_bar = new QHBoxLayout();
@@ -1000,10 +1001,13 @@ void TextboxDock::create_row_widget(const TextboxCard &card)
 	auto move_row = std::make_shared<std::function<void(QLineEdit *, int)>>();
 
 	connect(lbl_rows, &QToolButton::clicked, rows_frame,
-	        [rows_collapsed, label_edits, value_edits, move_btns, lbl_rows]() {
+	        [rows_collapsed, label_edits, value_edits, move_btns, lbl_rows, rows_frame]() {
 		        *rows_collapsed = !*rows_collapsed;
-		        lbl_rows->setText(*rows_collapsed ? QStringLiteral("▶ SPEZIFISCHE CSS-REGELN")
-		                                          : QStringLiteral("▼ SPEZIFISCHE CSS-REGELN"));
+		        const QString title = *rows_collapsed
+			        ? QStringLiteral("▶ SPEZIFISCHE CSS-REGELN")
+			        : QStringLiteral("▼ SPEZIFISCHE CSS-REGELN");
+		        lbl_rows->setText(title);
+		        rows_frame->setTitle(title);
 		        for (auto *e : *label_edits)
 			        e->setVisible(!*rows_collapsed);
 		        for (auto *e : *value_edits)
@@ -1012,7 +1016,7 @@ void TextboxDock::create_row_widget(const TextboxCard &card)
 			        b->setVisible(!*rows_collapsed);
 	        });
 
-	auto add_row_edit = [this, card_inner, rows_layout, rows_collapsed, move_row, move_btns, btn_sz](const QString &label, const QString &value) {
+	auto add_row_edit = [this, card_inner, rows_layout, rows_collapsed, move_row, move_btns, fh, btn_sz](const QString &label, const QString &value) {
 		auto *row = new QHBoxLayout();
 		row->setContentsMargins(0, 0, 0, 0);
 		row->setSpacing(6);
@@ -1021,10 +1025,10 @@ void TextboxDock::create_row_widget(const TextboxCard &card)
 		ledit->setToolTip(QStringLiteral(
 			"CSS-Variablenname dieser Zeile (mit -- Präfix). Im gerenderten HTML als var(--…) referenzierbar; leer/ohne -- => --zeile-N."));
 		ledit->setFixedWidth(fontMetrics().averageCharWidth() * 10);
-		ledit->setFixedHeight(btn_sz);
+		ledit->setFixedHeight(fh);
 		auto *vedit = new QLineEdit(value, card_inner);
 		vedit->setPlaceholderText(QStringLiteral("Text dieser Zeile"));
-		vedit->setFixedHeight(btn_sz);
+		vedit->setFixedHeight(fh);
 		auto *up_btn = new QToolButton(card_inner);
 		up_btn->setObjectName(QStringLiteral("tbRowUp"));
 		up_btn->setFixedSize(btn_sz, btn_sz);
@@ -1198,21 +1202,13 @@ void TextboxDock::create_row_widget(const TextboxCard &card)
 	style_layout->setContentsMargins(0, 0, 0, 0);
 	style_layout->setSpacing(8);
 
-	auto *prof_layout = new QVBoxLayout();
-	prof_layout->setContentsMargins(0, 0, 0, 0);
-	prof_layout->setSpacing(4);
-
-	// Einheitlicher Left-Margin für alle Abschnittsüberschriften
-	auto make_section_label = [](const QString &text, QWidget *parent) -> QLabel * {
-		auto *lbl = new QLabel(text, parent);
-		lbl->setObjectName(QStringLiteral("tbFieldLabel"));
-		lbl->setContentsMargins(0, 0, 0, 0);
-		return lbl;
-	};
-
-	auto *lbl_prof = make_section_label(QStringLiteral("PROFIL"), style_section);
-	lbl_prof->setToolTip(
+	auto *prof_grp = new QGroupBox(QStringLiteral("PROFIL"), style_section);
+	prof_grp->setToolTip(
 		QStringLiteral("Karten-Farbprofil (Text/Box/Ecken/Deckkraft)"));
+	prof_grp->setAttribute(Qt::WA_StyledBackground, true);
+	auto *prof_grp_layout = new QVBoxLayout(prof_grp);
+	prof_grp_layout->setContentsMargins(4, 0, 4, 4);
+	prof_grp_layout->setSpacing(4);
 
 	auto *prof_row = new QHBoxLayout();
 	prof_row->setContentsMargins(0, 0, 0, 0);
@@ -1225,7 +1221,9 @@ void TextboxDock::create_row_widget(const TextboxCard &card)
 	 * box_color) werden NICHT automatisch zurückgesetzt.
 	 */
 	auto *profile_combo = new QComboBox(style_section);
-	profile_combo->setFixedHeight(btn_sz);
+	profile_combo->setFixedHeight(fh);
+	profile_combo->setMinimumWidth(fontMetrics().averageCharWidth() * 16);
+	profile_combo->setSizeAdjustPolicy(QComboBox::AdjustToContentsOnFirstShow);
 	profile_combo->setToolTip(
 		QStringLiteral("Karten-Farbprofil (Text/Box/Ecken/Deckkraft)"));
 	profile_combo->setAccessibleName(
@@ -1242,7 +1240,7 @@ void TextboxDock::create_row_widget(const TextboxCard &card)
 
 	auto *new_prof_btn = new QPushButton(QStringLiteral("Profil +"), style_section);
 	new_prof_btn->setObjectName(QStringLiteral("tbBtnNewProfile"));
-	new_prof_btn->setFixedHeight(btn_sz);
+	new_prof_btn->setFixedHeight(fh);
 	new_prof_btn->setToolTip(
 		QStringLiteral("Aktuelles Karten-Farbprofil (Text/Box/Ecken/Deckkraft) speichern"));
 
@@ -1268,16 +1266,15 @@ void TextboxDock::create_row_widget(const TextboxCard &card)
 	prof_row->addWidget(prof_rename_btn);
 	prof_row->addWidget(prof_del_btn);
 
-	prof_layout->addWidget(lbl_prof);
-	prof_layout->addLayout(prof_row);
-	style_layout->addLayout(prof_layout);
+	prof_grp_layout->addLayout(prof_row);
+	style_layout->addWidget(prof_grp);
 
 	// IMP-G: generelle CSS-Regeln (--variable = wert), einklappbar im Styling-Block.
-	auto *css_frame = new QFrame(style_section);
+	auto *css_frame = new QGroupBox(QStringLiteral("▶ GENERELLE CSS-REGELN"), style_section);
 	css_frame->setObjectName(QStringLiteral("tbCssRules"));
 	css_frame->setAttribute(Qt::WA_StyledBackground, true);
 	auto *css_layout = new QVBoxLayout(css_frame);
-	css_layout->setContentsMargins(0, 4, 0, 0);
+	css_layout->setContentsMargins(4, 2, 4, 4);
 	css_layout->setSpacing(4);
 	auto *css_bar = new QHBoxLayout();
 	css_bar->setContentsMargins(0, 0, 0, 0);
@@ -1346,10 +1343,13 @@ void TextboxDock::create_row_widget(const TextboxCard &card)
 
 // Einklappen/ausklappen der CSS-Regelzeilen.
 	QObject::connect(lbl_css, &QToolButton::clicked, this,
-		[this, lbl_css, css_collapsed, css_rows]() {
+		[this, lbl_css, css_collapsed, css_rows, css_frame]() {
 			*css_collapsed = !*css_collapsed;
-			lbl_css->setText(*css_collapsed ? QStringLiteral("▶ GENERELLE CSS-REGELN")
-			                                : QStringLiteral("▼ GENERELLE CSS-REGELN"));
+			const QString title = *css_collapsed
+				? QStringLiteral("▶ GENERELLE CSS-REGELN")
+				: QStringLiteral("▼ GENERELLE CSS-REGELN");
+			lbl_css->setText(title);
+			css_frame->setTitle(title);
 			for (auto &r : *css_rows) {
 				r.name_edit->setVisible(!*css_collapsed);
 				r.type_combo->setVisible(!*css_collapsed);
@@ -1378,7 +1378,6 @@ void TextboxDock::create_row_widget(const TextboxCard &card)
 		return true;
 	};
 
-	const int fh = fontMetrics().height() + 8; // Zeilen-Höhe aus Schrift
 	auto build_value_widget =
 		[css_frame, paint_color_swatch, this, fh](const QString &type, const QString &value,
 		                                const std::function<void()> &on_change)
@@ -1672,21 +1671,22 @@ void TextboxDock::create_row_widget(const TextboxCard &card)
 	// klassischer Weg (template_id leer); einfacher Name = Vorlagen-Ordner;
 	// voller Pfad = direkte .html-Datei anywhere. Wechsel -> write_card neu +
 	// Browser-Source-Reload (spec: Document-Neuerstellung), gequetscht per Timer.
-	auto *tpl_layout = new QVBoxLayout();
-	tpl_layout->setContentsMargins(0, 0, 0, 0);
-	tpl_layout->setSpacing(4);
-	auto *lbl_tpl = make_section_label(QStringLiteral("VORLAGE"), style_section);
-	lbl_tpl->setToolTip(QStringLiteral(
+	auto *tpl_grp = new QGroupBox(QStringLiteral("VORLAGE"), style_section);
+	tpl_grp->setToolTip(QStringLiteral(
 		"Pfad zur Vorlagen-HTML. Leer = index.html (classic). Einfacher Name (z.B. minimal) = "
 		"Vorlagen-Ordner; voller Pfad = direkte Datei. Ordner-Icon wählt eine .html."));
+	tpl_grp->setAttribute(Qt::WA_StyledBackground, true);
+	auto *tpl_grp_layout = new QVBoxLayout(tpl_grp);
+	tpl_grp_layout->setContentsMargins(4, 0, 4, 4);
+	tpl_grp_layout->setSpacing(4);
 	auto *tpl_row = new QHBoxLayout();
 	tpl_row->setContentsMargins(0, 0, 0, 0);
 	tpl_row->setSpacing(6);
 	auto *tpl_edit = new QLineEdit(style_section);
 	tpl_edit->setObjectName(QStringLiteral("tbTemplatePath"));
 	tpl_edit->setPlaceholderText(QStringLiteral("index.html (leer = classic) oder Pfad zur Vorlage"));
-	tpl_edit->setToolTip(lbl_tpl->toolTip());
-	tpl_edit->setFixedHeight(btn_sz);
+	tpl_edit->setToolTip(tpl_grp->toolTip());
+	tpl_edit->setFixedHeight(fh);
 	tpl_edit->setText(QString::fromUtf8(card.template_id.c_str()));
 	tpl_edit->setAccessibleName(
 		QStringLiteral("Vorlagenpfad der Karte %1").arg(QString::fromUtf8(card.id.c_str())));
@@ -1700,9 +1700,8 @@ void TextboxDock::create_row_widget(const TextboxCard &card)
 	tpl_pick->setProperty("class", "iconbtn");
 	tpl_row->addWidget(tpl_edit, 1);
 	tpl_row->addWidget(tpl_pick);
-	tpl_layout->addWidget(lbl_tpl);
-	tpl_layout->addLayout(tpl_row);
-	style_layout->addLayout(tpl_layout);
+	tpl_grp_layout->addLayout(tpl_row);
+	style_layout->addWidget(tpl_grp);
 	// Für refresh_templates_ui() (State-Änderung von außen) am Row erreichbar.
 	row_widget->setProperty("tbHasTemplate", true);
 
@@ -1756,13 +1755,13 @@ void TextboxDock::create_row_widget(const TextboxCard &card)
 
 	auto *to_scene_btn = new QPushButton(QStringLiteral("Zu Szene"), card_inner);
 	to_scene_btn->setObjectName(QStringLiteral("tbBtnGreen"));
-	to_scene_btn->setFixedHeight(btn_sz);
+	to_scene_btn->setFixedHeight(fh);
 	to_scene_btn->setToolTip(
 		QStringLiteral("Karte als Text-Quelle in die aktuelle Szene legen oder aktualisieren"));
 
 	auto *clear_src_btn = new QPushButton(QStringLiteral("Leeren"), card_inner);
 	clear_src_btn->setObjectName(QStringLiteral("tbBtnRed"));
-	clear_src_btn->setFixedHeight(btn_sz);
+	clear_src_btn->setFixedHeight(fh);
 	clear_src_btn->setToolTip(
 		QStringLiteral("Text der Quelle auf leer setzen — die Quelle bleibt in der Szene"));
 	clear_src_btn->setProperty("tbDanger", true);
