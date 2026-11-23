@@ -605,7 +605,7 @@ TextboxDock::TextboxDock(const std::string &state_path, QWidget *parent) : OBSDo
 	// Kompakter Button für einstufiges Rückgängig (Undo)
 	auto *tool_undo = new QPushButton(QStringLiteral("↶ Rückgängig"), this);
 	tool_undo->setObjectName(QStringLiteral("tbToolUndo"));
-	tool_undo->setFixedHeight(btn_icon_sz);
+	tool_undo->setFixedHeight(tool_undo->fontMetrics().height() + 8);
 	tool_undo->setToolTip(QStringLiteral("Letzte destruktive Aktion rückgängig machen (Strg+Z)"));
 	tool_undo->setEnabled(state_.undo_available_);
 	g_dock_schedulers[this].undo_btn = tool_undo;
