@@ -36,8 +36,10 @@
 #include <algorithm>
 #include <atomic>
 #include <cctype>
+#include <cmath>
 #include <filesystem>
 #include <fstream>
+#include <iomanip>
 #include <map>
 #include <mutex>
 #include <sstream>
@@ -227,6 +229,23 @@ std::string format_rgba(const std::string &hex, uint32_t fallback_rgb, int opaci
 	}
 	oss << ")";
 	return oss.str();
+}
+
+// Zahlen-Token fuer CSS/HTML: ganze Werte ohne Nachkomma ("6" statt "6.000000"),
+// Bruchwerte mit bis zu 3 Nachkommastellen und ohne trailing Nullen ("2.5").
+// Noetig seit anim_scale/box_scale double sind (Commit e5a7821): std::to_string
+// lieferte "6.000000" und brach damit die exakte Token-Substitution.
+std::string format_num(double v)
+{
+	if (v == std::floor(v) && std::abs(v) < 1e15)
+		return std::to_string(static_cast<long long>(v));
+	std::ostringstream oss;
+	oss.imbue(std::locale::classic());
+	oss << std::fixed << std::setprecision(3) << v;
+	std::string s = oss.str();
+	while (s.find('.') != std::string::npos && s.back() == '0')
+		s.pop_back();
+	return s;
 }
 
 // Prüft, ob mindestens eine Zeile der Karte Text enthält (für box_opacity-Steuerung: 1 wenn sichtbar).
@@ -868,12 +887,12 @@ std::string substitute_tokens(const TextboxCard &card, const std::string &templa
 			? normalize_anim_src(card.anim_file, settings, copy_dir)
 			: std::string();
 	const std::string show_anim = card.show_anim ? "1" : "0";
-	const std::string anim_scale = std::to_string(card.anim_scale);
-	const std::string anim_x = std::to_string(card.anim_x);
-	const std::string anim_y = std::to_string(card.anim_y);
-	const std::string box_x = std::to_string(card.box_x);
-	const std::string box_y = std::to_string(card.box_y);
-	const std::string box_scale = std::to_string(card.box_scale);
+	const std::string anim_scale = format_num(card.anim_scale);
+	const std::string anim_x = format_num(card.anim_x);
+	const std::string anim_y = format_num(card.anim_y);
+	const std::string box_x = format_num(card.box_x);
+	const std::string box_y = format_num(card.box_y);
+	const std::string box_scale = format_num(card.box_scale);
 	const std::string clear_str = clear ? "1" : "0";
 
 	const std::pair<const char *, std::string> tokens[] = {
@@ -1195,23 +1214,23 @@ std::string card_html(const TextboxCard &card)
 		"\t--show-anim: " +
 		std::to_string(show_anim) +
 		";\n"
-		"\t--anim-scale: " +
-		std::to_string(card.anim_scale) +
+		"	--anim-scale: " +
+		format_num(card.anim_scale) +
 		";\n"
-		"\t--anim-x: " +
-		std::to_string(card.anim_x) +
+		"	--anim-x: " +
+		format_num(card.anim_x) +
 		"px;\n"
-		"\t--anim-y: " +
-		std::to_string(card.anim_y) +
+		"	--anim-y: " +
+		format_num(card.anim_y) +
 		"px;\n"
-		"\t--box-x: " +
-		std::to_string(card.box_x) +
+		"	--box-x: " +
+		format_num(card.box_x) +
 		"px;\n"
-		"\t--box-y: " +
-		std::to_string(card.box_y) +
+		"	--box-y: " +
+		format_num(card.box_y) +
 		"px;\n"
-		"\t--box-scale: " +
-		std::to_string(card.box_scale) +
+		"	--box-scale: " +
+		format_num(card.box_scale) +
 		";\n"
 		"}\n"
 		"html, body {\n"

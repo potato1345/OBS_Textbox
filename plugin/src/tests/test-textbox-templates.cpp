@@ -128,6 +128,27 @@ int main()
 		      out_clear);
 	}
 
+	// 1c. Double-Werte (anim_scale/box_scale seit e5a7821): ganze Zahlen ohne
+	// Nachkomma, Bruchwerte sauber ("2.5", nicht "2.500000").
+	{
+		TextboxCard c;
+		c.id = "box9";
+		c.anim_scale = 2.5;
+		c.anim_x = -40;
+		c.anim_y = 75;
+		const std::string tpl = "asc={{anim_scale}}|ax={{anim_x}}|ay={{anim_y}}|bs={{box_scale}}";
+		c.box_scale = 1;
+		const std::string out_frac = textbox_html::substitute_tokens(c, tpl, false);
+		check(out_frac == "asc=2.5|ax=-40|ay=75|bs=1",
+		      "1c. Double-Tokens: Bruchwerte sauber, ganze Werte ohne Nachkomma",
+		      out_frac);
+		c.box_scale = 0.75;
+		const std::string out_frac2 = textbox_html::substitute_tokens(c, tpl, false);
+		check(out_frac2 == "asc=2.5|ax=-40|ay=75|bs=0.75",
+		      "1d. Double-Tokens: box_scale Bruchwert 0.75",
+		      out_frac2);
+	}
+
 	// 2. Unbekannte Tokens bleiben wörtlich erhalten (No-op)
 	{
 		TextboxCard c;
