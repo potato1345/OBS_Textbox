@@ -27,6 +27,7 @@
 #endif
 
 #include <QAction>
+#include <QApplication>
 #include <QCheckBox>
 #include <QColor>
 #include <QColorDialog>
@@ -111,7 +112,9 @@ QString normalize_template_id(const QString &raw)
 #include <QtGlobal>
 
 #include <QDesktopServices>
+#include <QDrag>
 #include <QEvent>
+#include <QMimeData>
 
 #include <algorithm>
 #include <functional>
@@ -318,6 +321,66 @@ bool reconcile_profiles_after_delete(TextboxState &state)
 
 } // namespace
 
+// ── CardListWidget method implementations ──────────────────────────────────
+
+void CardListWidget::mousePressEvent(QMouseEvent *event)
+{
+	if (event->button() == Qt::LeftButton) {
+		drag_row_ = indexAt(event->pos()).row();
+		press_pos_ = event->pos();
+	}
+	QListWidget::mousePressEvent(event); // native selection beibehalten
+}
+
+void CardListWidget::mouseReleaseEvent(QMouseEvent *event)
+{
+	drag_row_ = -1;
+	QListWidget::mouseReleaseEvent(event);
+}
+
+void CardListWidget::mouseMoveEvent(QMouseEvent *event)
+{
+	if (drag_row_ >= 0 && (event->buttons() & Qt::LeftButton) &&
+	    (event->pos() - press_pos_).manhattanLength() >= QApplication::startDragDistance()) {
+		QListWidgetItem *item = this->item(drag_row_);
+		if (!item) {
+			drag_row_ = -1;
+			return;
+		}
+		auto *mime = new QMimeData();
+		mime->setData(QStringLiteral("application/x-textbox-card"),
+			      item->data(Qt::UserRole).toString().toUtf8());
+		auto *drag = new QDrag(this);
+		drag->setMimeData(mime);
+		QWidget *w = itemWidget(item);
+		if (w) {
+			QPixmap pm(w->width(), 26);
+			w->render(&pm, QPoint(0, 0), QRect(0, 0, w->width(), 26));
+			drag->setPixmap(pm);
+			drag->setHotSpot(QPoint(10, 13));
+		}
+		drag->exec(Qt::MoveAction);
+		drag_row_ = -1;
+		return;
+	}
+	QListWidget::mouseMoveEvent(event);
+}
+
+void CardListWidget::dropEvent(QDropEvent *event)
+{
+	if (event->mimeData()->hasFormat(QStringLiteral("application/x-textbox-card")) && reorder_cb) {
+		const std::string id =
+			event->mimeData()->data(QStringLiteral("application/x-textbox-card")).toStdString();
+		int target = indexAt(event->position().toPoint()).row();
+		if (target < 0)
+			target = count();
+		reorder_cb(id, target);
+		event->accept();
+		return;
+	}
+	QListWidget::dropEvent(event);
+}
+
 #ifdef ENABLE_FRONTEND_API
 // Frontend-Event: heilt fehlende Karten-Sources nach dem Laden der
 // Szenensammlung und nach Szenenwechsel (die Quelle gehört pro Szene).
@@ -479,11 +542,10 @@ TextboxDock::TextboxDock(const std::string &state_path, QWidget *parent) : OBSDo
 	// tbTopRow als erstes Kind in root_layout.
 	root_layout->addWidget(tbTopRow);
 
-	tbCardList_ = new QListWidget(this);
+	tbCardList_ = new CardListWidget(this);
 	tbCardList_->setAttribute(Qt::WA_StyledBackground, true);
 	tbCardList_->setFrameShape(QFrame::NoFrame);
-	tbCardList_->setDragDropMode(QAbstractItemView::InternalMove);
-	tbCardList_->setDefaultDropAction(Qt::MoveAction);
+	tbCardList_->setDragDropMode(QAbstractItemView::NoDragDrop);
 	tbCardList_->setSelectionMode(QAbstractItemView::SingleSelection);
 	tbCardList_->setFocusPolicy(Qt::StrongFocus);
 	tbCardList_->setUniformItemSizes(false);
@@ -491,27 +553,32 @@ TextboxDock::TextboxDock(const std::string &state_path, QWidget *parent) : OBSDo
 	tbCardList_->setContentsMargins(0, 0, 0, 0);
 	tbCardList_->setObjectName(QStringLiteral("tbCardList"));
 
-	connect(tbCardList_->model(), &QAbstractItemModel::rowsMoved, this, [this]() {
-		// Nach einem Drag-Reorder die state_.cards Reihenfolge aktualisieren
-		std::vector<TextboxCard> reordered;
-		reordered.reserve(tbCardList_->count());
-		for (int i = 0; i < tbCardList_->count(); ++i) {
-			QListWidgetItem *item = tbCardList_->item(i);
-			if (!item)
-				continue;
-			const std::string id = item->data(Qt::UserRole).toString().toUtf8().toStdString();
-			for (auto &c : state_.cards) {
-				if (c.id == id) {
-					reordered.push_back(std::move(c));
-					break;
-				}
+	tbCardList_->reorder_cb = [this](const std::string &id, int target_row) {
+		// Karte mit id von ihrem aktuellen Index nach target_row verschieben
+		const int sz = static_cast<int>(state_.cards.size());
+		if (sz < 2)
+			return;
+		target_row = std::clamp(target_row, 0, sz - 1);
+		int src = -1;
+		for (int i = 0; i < sz; ++i) {
+			if (state_.cards[i].id == id) {
+				src = i;
+				break;
 			}
 		}
-		if (reordered.size() == state_.cards.size()) {
-			state_.cards = std::move(reordered);
-			save_state();
-		}
-	});
+		if (src < 0)
+			return;
+		if (src == target_row)
+			return;
+		TextboxCard card = std::move(state_.cards[src]);
+		state_.cards.erase(state_.cards.begin() + src);
+		// Nach dem Löschen verschiebt sich target_row um 1, falls nötig
+		if (target_row > src)
+			--target_row;
+		state_.cards.insert(state_.cards.begin() + target_row, std::move(card));
+		save_state();
+		rebuild_rows();
+	};
 
 	root_layout->addWidget(tbCardList_, 1);
 

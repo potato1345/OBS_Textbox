@@ -16,9 +16,12 @@
 #include <QIcon>
 #include <QWidget>
 #include <atomic>
+#include <functional>
 #include <memory>
 #include <string>
 #include <vector>
+
+#include <QListWidget>
 
 // Globaler Zähler aktiver Hintergrund-Jobs zur Synchronisation beim Entladen des Plugins.
 extern std::atomic<int> g_active_jobs;
@@ -37,11 +40,37 @@ AiResult process_with_llm(const std::string &api_key, const std::string &documen
 
 class QComboBox;
 class QLabel;
-class QListWidget;
 class QListWidgetItem;
 class QMenu;
 class QTimer;
 class QToolButton;
+
+/**
+ * CardListWidget — sicherer Drag-Reorder ohne Qt InternalMove.
+ *
+ * Qt's InternalMove mit setItemWidget ist unsicher und verursacht
+ * Zugriffsverletzungen. Diese Subklasse implementiert einen eigenen
+ * Drag-Reorder via mousePressEvent / mouseMoveEvent / mouseReleaseEvent
+ * und einem benutzerdefinierten MIME-Typ. Interaktive Kinder (Buttons,
+ * Textfelder) akzeptieren ihre Events selbst, sodass der Drag nur auf
+ * leeren Karten-/GroupBox-Flächen startet — das ist beabsichtigt.
+ */
+class CardListWidget : public QListWidget {
+	Q_OBJECT
+public:
+	explicit CardListWidget(QWidget *parent = nullptr) : QListWidget(parent) {}
+	std::function<void(const std::string &card_id, int target_row)> reorder_cb;
+
+protected:
+	void mousePressEvent(QMouseEvent *event) override;
+	void mouseMoveEvent(QMouseEvent *event) override;
+	void mouseReleaseEvent(QMouseEvent *event) override;
+	void dropEvent(QDropEvent *event) override;
+
+private:
+	int drag_row_ = -1;
+	QPoint press_pos_;
+};
 
 /**
  * Triviale Zwischenklasse — Theme-QSS matcht per MetaObject-Klassename OBSDock
@@ -116,7 +145,7 @@ private:
 	QComboBox *profil_select_ = nullptr;
 	QToolButton *profil_del_btn_ = nullptr;
 	QComboBox *card_search_ = nullptr;
-	QListWidget *tbCardList_ = nullptr;
+	CardListWidget *tbCardList_ = nullptr;
 	QLabel *dock_status_lbl_ = nullptr;
 	QToolButton *dock_status_close_ = nullptr; // c1: Fehlermeldung per Hand schließen
 	QTimer *dock_status_timer_ = nullptr;      // c1: Auto-dismiss der Statusmeldung
