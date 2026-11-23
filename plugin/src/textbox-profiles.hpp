@@ -230,6 +230,36 @@ inline void apply_style_rules(CardT &card)
 		}
 		return neg ? -n : n;
 	};
+	// Double-Parse für Scale-Regeln ("2.5", "0.75", "6px"): Ziffern, optional
+	// Dezimalpunkt + Bruchziffern; Stop am ersten nicht-Ziffer-Zeichen.
+	// anim_scale/box_scale sind seit e5a7821 double -> Bruchwerte muessen
+	// erhalt bleiben (parse_int würde 0.75 zu 0 truncieren).
+	auto parse_double = [](const std::string &v) -> double {
+		size_t i = 0;
+		bool neg = false;
+		if (i < v.size() && v[i] == '-') { neg = true; ++i; }
+		double whole = 0.0;
+		for (; i < v.size(); ++i) {
+			char ch = v[i];
+			if (ch >= '0' && ch <= '9')
+				whole = whole * 10.0 + (ch - '0');
+			else
+				break;
+		}
+		double frac = 0.0, scale = 1.0;
+		if (i < v.size() && v[i] == '.') {
+			++i;
+			for (; i < v.size(); ++i) {
+				char ch = v[i];
+				if (ch < '0' || ch > '9')
+					break;
+				scale *= 10.0;
+				frac += (ch - '0') / scale;
+			}
+		}
+		const double val = whole + frac;
+		return neg ? -val : val;
+	};
 	for (const auto &rule : card.style) {
 	if (rule.name == "--tb-color-text")
 		card.text_color = rule.value;
@@ -254,8 +284,8 @@ inline void apply_style_rules(CardT &card)
 		else if (rule.name == "--anim-file")
 			card.anim_file = rule.value;
 		else if (rule.name == "--anim-scale") {
-			const int s = parse_int(rule.value);
-			if (s > 0)
+			const double s = parse_double(rule.value);
+			if (s > 0.0)
 				card.anim_scale = s;
 		} else if (rule.name == "--anim-x") {
 			const int v = parse_int(rule.value);
@@ -270,8 +300,8 @@ inline void apply_style_rules(CardT &card)
 			const int v = parse_int(rule.value);
 			card.box_y = v < -1200 ? -1200 : (v > 1200 ? 1200 : v);
 		} else if (rule.name == "--box-scale") {
-			const int s = parse_int(rule.value);
-			if (s > 0)
+			const double s = parse_double(rule.value);
+			if (s > 0.0)
 				card.box_scale = s;
 		}
 	}

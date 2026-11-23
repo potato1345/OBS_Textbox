@@ -707,6 +707,16 @@ colors:
 		check(ac.show_anim && ac.anim_file == "spin.gif" && ac.anim_scale == 4 &&
 		      ac.anim_x == -120 && ac.anim_y == 40,
 		      "22g. IMP-H6 Anim-Regeln (--anim-show/file/scale/x/y) mappen auf Felder");
+
+		// 22h: Bruch-Scales via parse_double (--anim-scale 2.5, --box-scale 0.75);
+		// parse_int truncierte 0.75 zu 0 und ließ box_scale damit auf default 1.
+		TextboxCard bc;
+		bc.style = {{"--anim-scale", "2.5", "enum"}, {"--box-scale", "0.75", "enum"},
+			{"--box-x", "10px", "px"}, {"--box-y", "-20px", "px"}};
+		apply_style_rules(bc);
+		check(bc.anim_scale == 2.5 && bc.box_scale == 0.75 &&
+		      bc.box_x == 10 && bc.box_y == -20,
+		      "22h. Bruch-Scale-Regeln (--anim-scale 2.5, --box-scale 0.75) + box-x/y");
 	}
 
 	// 23. (M6-B2 #6) State-Seriale: 2 Custom-Profile -> save -> load -> identisch; JSON ohne Key -> leer; reset() -> leer

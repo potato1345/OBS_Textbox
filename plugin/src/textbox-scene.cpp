@@ -333,8 +333,9 @@ void remove_all_sources()
 	const std::vector<obs_scene_t *> scenes = collect_all_scenes();
 	for (obs_scene_t *scene : scenes) {
 		// Alle Scene-Items durchgehen; jeder "Textbox <name>" = Karten-Source.
-		auto *item = obs_scene_find_source(scene, "Textbox ");
 		// Es gibt keinen wildcard-Enum, also per obs_scene_enum_items.
+		// (KEIN obs_scene_find_source-Fallback hier: ungenutzter Zeiger ->
+		//  -Wall-Warnung -> -Werror-Buildfehler auf Linux/macOS-CI.)
 		auto enum_cb = [](obs_scene_t *, obs_sceneitem_t *item, void *param) {
 			auto *removed = static_cast<std::vector<std::string> *>(param);
 			obs_source_t *src = obs_sceneitem_get_source(item);
