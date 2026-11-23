@@ -34,7 +34,9 @@
 #include <QCompleter>
 #include <QDate>
 #include <QDialog>
+#include <QDir>
 #include <QFile>
+#include <QFileInfo>
 #include <QGuiApplication>
 #include <QScreen>
 #include <QFileDialog>
@@ -67,6 +69,30 @@ public:
 	explicit CappedScrollArea(QWidget *parent = nullptr) : QScrollArea(parent) { setMinimumSize(0, 0); }
 	QSize minimumSizeHint() const override { return QSize(0, 0); }
 };
+
+// Normalisiert eine template_id: liegt ein absoluter Pfad innerhalb des
+// Vorlagen-Ordners (plugin_config/textbox-studio/templates), wird auf den
+// einfachen Dateinamen ohne .html-Extension verkürzt.
+// Pfade außerhalb bleiben unverändert.
+QString normalize_template_id(const QString &raw)
+{
+	if (raw.isEmpty())
+		return raw;
+	const std::string tpl_dir = textbox_html::templates_dir();
+	if (tpl_dir.empty())
+		return raw;
+	const QDir tpl_qdir(QString::fromStdString(tpl_dir));
+	const QFileInfo fi(raw);
+	// Nur absolute Pfade normalisieren; relative (einfache Namen) belassen.
+	if (!fi.isAbsolute())
+		return raw;
+	// Prüfen, ob der Pfad innerhalb des Vorlagen-Ordners liegt.
+	if (!fi.absoluteFilePath().startsWith(tpl_qdir.absolutePath() + '/', Qt::CaseInsensitive))
+		return raw;
+	// Im Vorlagen-Ordner: nur Basisname ohne Extension zurückgeben.
+	// Der vollständige Pfad bleibt für den ToolTip erhalten.
+	return fi.completeBaseName();
+}
 
 // Hover-Propagation: findet den nächsten tbCardOuter-Vorfahren eines Widgets.
 QWidget *find_tb_card_outer(QWidget *w)
@@ -1687,7 +1713,11 @@ void TextboxDock::create_row_widget(const TextboxCard &card)
 	tpl_edit->setPlaceholderText(QStringLiteral("index.html (leer = classic) oder Pfad zur Vorlage"));
 	tpl_edit->setToolTip(tpl_grp->toolTip());
 	tpl_edit->setFixedHeight(fh);
-	tpl_edit->setText(QString::fromUtf8(card.template_id.c_str()));
+	// Beim Laden: absoluten Pfad im Vorlagen-Ordner auf einfachen Namen normalisieren
+	tpl_edit->setText(normalize_template_id(QString::fromUtf8(card.template_id.c_str())));
+	tpl_edit->setCursorPosition(0);
+	// ToolTip zeigt immer den vollen Pfad (unabhängig von der Anzeige)
+	tpl_edit->setToolTip(QString::fromUtf8(card.template_id.c_str()));
 	tpl_edit->setAccessibleName(
 		QStringLiteral("Vorlagenpfad der Karte %1").arg(QString::fromUtf8(card.id.c_str())));
 	auto *tpl_pick = new QPushButton(style_section);
@@ -1800,10 +1830,12 @@ void TextboxDock::create_row_widget(const TextboxCard &card)
 			if (!tpl_guard)
 				return;
 			const QString t = tpl_guard->text().trimmed();
+		// Beim Speichern: absoluten Pfad im Vorlagen-Ordner auf einfachen Namen normalisieren
+		const QString normalized = normalize_template_id(t);
 		TextboxCard *c = find_card_mut(card_id);
-		if (!c || c->template_id == t.toUtf8().toStdString())
+		if (!c || c->template_id == normalized.toUtf8().toStdString())
 			return;
-		apply_template_id(card_id, t.toUtf8().toStdString());
+		apply_template_id(card_id, normalized.toUtf8().toStdString());
 	});
 	connect(tpl_pick, &QPushButton::clicked, this, [this, card_id, tpl_edit]() {
 		const QString start = QString::fromUtf8(textbox_html::templates_dir().c_str());
@@ -1812,8 +1844,11 @@ void TextboxDock::create_row_widget(const TextboxCard &card)
 			QStringLiteral("Vorlagen (*.html);;Alle Dateien (*.*)"),
 			nullptr, dialog_options());
 		if (!chosen.isEmpty()) {
-			tpl_edit->setText(chosen);
-			apply_template_id(card_id, chosen.toUtf8().toStdString());
+			// Picker: absoluten Pfad im Vorlagen-Ordner auf einfachen Namen normalisieren
+			const QString normalized = normalize_template_id(chosen);
+			tpl_edit->setText(normalized);
+			tpl_edit->setCursorPosition(0);
+			apply_template_id(card_id, normalized.toUtf8().toStdString());
 		}
 	});
 
@@ -2125,8 +2160,13 @@ void TextboxDock::refresh_templates_ui()
 		const TextboxCard *card = find_card_mut(card_id);
 		const QString cur = card ? QString::fromUtf8(card->template_id.c_str()) : QString();
 		const QSignalBlocker blocker(edit);
-		if (edit->text() != cur)
-			edit->setText(cur);
+		const QString display = normalize_template_id(cur);
+		if (edit->text() != display) {
+			edit->setText(display);
+			edit->setCursorPosition(0);
+		}
+		// ToolTip immer mit vollem Pfad aktualisieren
+		edit->setToolTip(cur);
 	}
 }
 
