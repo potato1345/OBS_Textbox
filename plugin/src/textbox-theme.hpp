@@ -311,7 +311,7 @@ QPushButton {
 	background-color: %3;
 	border: 1px solid %3;
 	border-radius: 2px;
-	padding: 6px 12px;
+	padding: 2px 12px;
 	color: %2;
 	min-height: 24px;
 }
