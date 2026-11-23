@@ -94,95 +94,7 @@ QString normalize_template_id(const QString &raw)
 	return fi.completeBaseName();
 }
 
-// Hover-Propagation: findet den nächsten tbCardOuter-Vorfahren eines Widgets.
-QWidget *find_tb_card_outer(QWidget *w)
-{
-	while (w) {
-		if (w->objectName() == QStringLiteral("tbCardOuter"))
-			return w;
-		w = w->parentWidget();
-	}
-	return nullptr;
-}
 
-// Findet rekursiv das tiefste sichtbare Widget unter pos im viewport-Baum.
-QWidget *deepest_child_at(QWidget *parent, QPoint pos)
-{
-	if (!parent)
-		return nullptr;
-	QWidget *direct = parent->childAt(pos);
-	if (!direct)
-		return nullptr;
-	QPoint local = direct->mapFromParent(pos);
-	QWidget *deeper = deepest_child_at(direct, local);
-	return deeper ? deeper : direct;
-}
-
-// Event-Filter für den ScrollArea-Viewport: tracked MouseMove/Leave und setzt
-// tbHover-Property auf dem tbCardOuter-Ancestor. Nur EINE Karte gleichzeitig aktiv.
-class CardHoverFilter : public QObject {
-	QWidget *hovered_ = nullptr;
-
-public:
-	explicit CardHoverFilter(QObject *parent = nullptr) : QObject(parent) {}
-
-protected:
-	bool eventFilter(QObject *obj, QEvent *ev) override
-	{
-		auto *viewport = qobject_cast<QWidget *>(obj);
-		if (!viewport)
-			return QObject::eventFilter(obj, ev);
-		switch (ev->type()) {
-		case QEvent::MouseMove: {
-			QWidget *outer = nullptr;
-			if (auto *me = static_cast<QMouseEvent *>(ev)) {
-				QPoint local = viewport->mapFromGlobal(me->globalPosition().toPoint());
-				if (viewport->rect().contains(local)) {
-					if (QWidget *child = deepest_child_at(viewport, local))
-						outer = find_tb_card_outer(child);
-				}
-			}
-			if (outer == hovered_)
-				break;
-			// Alte Karte clearen.
-			if (hovered_) {
-				hovered_->setProperty("tbHover", QVariant());
-				if (QStyle *st = hovered_->style()) {
-					st->unpolish(hovered_);
-					st->polish(hovered_);
-				}
-				hovered_->update();
-			}
-			hovered_ = outer;
-			// Neue Karte markieren.
-			if (hovered_) {
-				hovered_->setProperty("tbHover", QStringLiteral("1"));
-				if (QStyle *st = hovered_->style()) {
-					st->unpolish(hovered_);
-					st->polish(hovered_);
-				}
-				hovered_->update();
-			}
-			break;
-		}
-		case QEvent::Leave: {
-			if (hovered_) {
-				hovered_->setProperty("tbHover", QVariant());
-				if (QStyle *st = hovered_->style()) {
-					st->unpolish(hovered_);
-					st->polish(hovered_);
-				}
-				hovered_->update();
-				hovered_ = nullptr;
-			}
-			break;
-		}
-		default:
-			break;
-		}
-		return QObject::eventFilter(obj, ev);
-	}
-};
 } // namespace
 #include <QShortcut>
 #include <QSignalBlocker>
@@ -567,27 +479,41 @@ TextboxDock::TextboxDock(const std::string &state_path, QWidget *parent) : OBSDo
 	// tbTopRow als erstes Kind in root_layout.
 	root_layout->addWidget(tbTopRow);
 
-	scroll_area_ = new QScrollArea(this);
-	scroll_area_->setAttribute(Qt::WA_StyledBackground, true);
-	scroll_area_->setWidgetResizable(true);
-	scroll_area_->setFrameShape(QFrame::NoFrame);
+	tbCardList_ = new QListWidget(this);
+	tbCardList_->setAttribute(Qt::WA_StyledBackground, true);
+	tbCardList_->setFrameShape(QFrame::NoFrame);
+	tbCardList_->setDragDropMode(QAbstractItemView::InternalMove);
+	tbCardList_->setDefaultDropAction(Qt::MoveAction);
+	tbCardList_->setSelectionMode(QAbstractItemView::SingleSelection);
+	tbCardList_->setFocusPolicy(Qt::StrongFocus);
+	tbCardList_->setUniformItemSizes(false);
+	tbCardList_->setSpacing(4);
+	tbCardList_->setContentsMargins(0, 0, 0, 0);
+	tbCardList_->setObjectName(QStringLiteral("tbCardList"));
 
-	// Karten-Hover-Propagation: tbCardOuter :hover auch bei Maus ??ber Kindern.
-	auto *hover_filter = new CardHoverFilter(scroll_area_);
-	scroll_area_->viewport()->setMouseTracking(true);
-	scroll_area_->viewport()->installEventFilter(hover_filter);
+	connect(tbCardList_->model(), &QAbstractItemModel::rowsMoved, this, [this]() {
+		// Nach einem Drag-Reorder die state_.cards Reihenfolge aktualisieren
+		std::vector<TextboxCard> reordered;
+		reordered.reserve(tbCardList_->count());
+		for (int i = 0; i < tbCardList_->count(); ++i) {
+			QListWidgetItem *item = tbCardList_->item(i);
+			if (!item)
+				continue;
+			const std::string id = item->data(Qt::UserRole).toString().toUtf8().toStdString();
+			for (auto &c : state_.cards) {
+				if (c.id == id) {
+					reordered.push_back(std::move(c));
+					break;
+				}
+			}
+		}
+		if (reordered.size() == state_.cards.size()) {
+			state_.cards = std::move(reordered);
+			save_state();
+		}
+	});
 
-	auto *cards_container = new QWidget(scroll_area_);
-	cards_container->setObjectName(QStringLiteral("tbCardsContainer"));
-	cards_container->setAttribute(Qt::WA_StyledBackground, true);
-
-	cards_layout_ = new QVBoxLayout(cards_container);
-	cards_layout_->setContentsMargins(4, 4, 16, 4); // rechter Rand 16px f??r Scrollbar-Abstand
-	cards_layout_->setSpacing(8);
-	cards_layout_->addStretch(1);
-
-	scroll_area_->setWidget(cards_container);
-	root_layout->addWidget(scroll_area_, 1);
+	root_layout->addWidget(tbCardList_, 1);
 
 	auto *bottom_toolbar = new QHBoxLayout();
 	bottom_toolbar->setContentsMargins(4, 4, 4, 4);
@@ -898,31 +824,19 @@ QIcon TextboxDock::theme_icon(const char *name) const
 	return QIcon(icon_dir_ + QLatin1Char('/') + QLatin1String(name));
 }
 
-void TextboxDock::create_row_widget(const TextboxCard &card)
+QListWidgetItem *TextboxDock::create_row_item(const TextboxCard &card)
 {
 	const int btn_sz = style()->pixelMetric(QStyle::PM_ButtonIconSize, nullptr, this);
 	const int fh = fontMetrics().height() + 8; // Zeilen-Höhe für Textfelder
-	auto *row_widget = new QFrame(this);
-	row_widget->setObjectName(QStringLiteral("tbCardOuter"));
-	row_widget->setAttribute(Qt::WA_StyledBackground, true);
-	row_widget->setProperty("tbCardId", QString::fromUtf8(card.id.c_str()));
-	row_widget->setMinimumWidth(fontMetrics().averageCharWidth() * 28);
-	row_widget->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+	auto *card_widget = new QWidget(this);
+	card_widget->setProperty("tbCardId", QString::fromUtf8(card.id.c_str()));
+	card_widget->setMinimumWidth(fontMetrics().averageCharWidth() * 28);
 
-	auto *outer_layout = new QVBoxLayout(row_widget);
-	outer_layout->setContentsMargins(3, 3, 3, 3);
-	outer_layout->setSpacing(0);
-
-	auto *card_inner = new QFrame(row_widget);
-	card_inner->setObjectName(QStringLiteral("tbCardInner"));
-	card_inner->setAttribute(Qt::WA_StyledBackground, true);
-	outer_layout->addWidget(card_inner);
-
-	auto *inner_layout = new QVBoxLayout(card_inner);
+	auto *inner_layout = new QVBoxLayout(card_widget);
 	inner_layout->setContentsMargins(10, 10, 10, 10);
 	inner_layout->setSpacing(8);
 
-	auto *id_bar = new QFrame(card_inner);
+	auto *id_bar = new QFrame(card_widget);
 	id_bar->setObjectName(QStringLiteral("tbIdBar"));
 	id_bar->setAttribute(Qt::WA_StyledBackground, true);
 	auto *id_layout = new QHBoxLayout(id_bar);
@@ -983,7 +897,7 @@ void TextboxDock::create_row_widget(const TextboxCard &card)
 		mark_card_dirty_and_schedule(this, card_id);
 	};
 
-	auto *rows_frame = new QGroupBox(QStringLiteral("▼ SPEZIFISCHE CSS-REGELN"), card_inner);
+	auto *rows_frame = new QGroupBox(QStringLiteral("▼ SPEZIFISCHE CSS-REGELN"), card_widget);
 	rows_frame->setAttribute(Qt::WA_StyledBackground, true);
 	auto *rows_layout = new QVBoxLayout(rows_frame);
 	rows_layout->setContentsMargins(4, 2, 4, 4);
@@ -1042,21 +956,21 @@ void TextboxDock::create_row_widget(const TextboxCard &card)
 				b->setVisible(!*rows_collapsed);
 		});
 
-	auto add_row_edit = [this, card_inner, rows_layout, rows_collapsed, move_row, move_btns, fh,
+	auto add_row_edit = [this, card_widget, rows_layout, rows_collapsed, move_row, move_btns, fh,
 			     btn_sz](const QString &label, const QString &value) {
 		auto *row = new QHBoxLayout();
 		row->setContentsMargins(0, 0, 0, 0);
 		row->setSpacing(6);
-		auto *ledit = new QLineEdit(label, card_inner);
+		auto *ledit = new QLineEdit(label, card_widget);
 		ledit->setPlaceholderText(QStringLiteral("--zeile-N"));
 		ledit->setToolTip(QStringLiteral(
 			"CSS-Variablenname dieser Zeile (mit -- Präfix). Im gerenderten HTML als var(--…) referenzierbar; leer/ohne -- => --zeile-N."));
 		ledit->setFixedWidth(fontMetrics().averageCharWidth() * 10);
 		ledit->setFixedHeight(fh);
-		auto *vedit = new QLineEdit(value, card_inner);
+		auto *vedit = new QLineEdit(value, card_widget);
 		vedit->setPlaceholderText(QStringLiteral("Text dieser Zeile"));
 		vedit->setFixedHeight(fh);
-		auto *up_btn = new QToolButton(card_inner);
+		auto *up_btn = new QToolButton(card_widget);
 		up_btn->setObjectName(QStringLiteral("tbRowUp"));
 		up_btn->setFixedSize(btn_sz, btn_sz);
 		up_btn->setAutoRaise(true);
@@ -1064,7 +978,7 @@ void TextboxDock::create_row_widget(const TextboxCard &card)
 		up_btn->setToolTip(QStringLiteral("Zeile nach oben verschieben"));
 		up_btn->setAccessibleName(QStringLiteral("Zeile nach oben verschieben"));
 		up_btn->setProperty("class", "iconbtn");
-		auto *down_btn = new QToolButton(card_inner);
+		auto *down_btn = new QToolButton(card_widget);
 		down_btn->setObjectName(QStringLiteral("tbRowDown"));
 		down_btn->setFixedSize(btn_sz, btn_sz);
 		down_btn->setAutoRaise(true);
@@ -1072,9 +986,9 @@ void TextboxDock::create_row_widget(const TextboxCard &card)
 		down_btn->setToolTip(QStringLiteral("Zeile nach unten verschieben"));
 		down_btn->setAccessibleName(QStringLiteral("Zeile nach unten verschieben"));
 		down_btn->setProperty("class", "iconbtn");
-		QObject::connect(up_btn, &QToolButton::clicked, card_inner,
+		QObject::connect(up_btn, &QToolButton::clicked, card_widget,
 				 [move_row, ledit]() { (*move_row)(ledit, -1); });
-		QObject::connect(down_btn, &QToolButton::clicked, card_inner,
+		QObject::connect(down_btn, &QToolButton::clicked, card_widget,
 				 [move_row, ledit]() { (*move_row)(ledit, +1); });
 		if (*rows_collapsed) {
 			ledit->setVisible(false);
@@ -1227,7 +1141,7 @@ void TextboxDock::create_row_widget(const TextboxCard &card)
 			schedule_save();
 	};
 
-	auto *style_section = new QFrame(card_inner);
+	auto *style_section = new QFrame(card_widget);
 	style_section->setObjectName(QStringLiteral("tbStyleSection"));
 	style_section->setAttribute(Qt::WA_StyledBackground, true);
 	auto *style_layout = new QVBoxLayout(style_section);
@@ -1758,7 +1672,7 @@ void TextboxDock::create_row_widget(const TextboxCard &card)
 	tpl_grp_layout->addLayout(tpl_row);
 	style_layout->addWidget(tpl_grp);
 	// Für refresh_templates_ui() (State-Änderung von außen) am Row erreichbar.
-	row_widget->setProperty("tbHasTemplate", true);
+	card_widget->setProperty("tbHasTemplate", true);
 
 	// QCompleter listing all .html files in templates_dir() for quick pick.
 	{
@@ -1803,13 +1717,13 @@ void TextboxDock::create_row_widget(const TextboxCard &card)
 	actions_layout->setContentsMargins(0, 4, 0, 0);
 	actions_layout->setSpacing(8);
 
-	auto *to_scene_btn = new QPushButton(QStringLiteral("Zu Szene"), card_inner);
+	auto *to_scene_btn = new QPushButton(QStringLiteral("Zu Szene"), card_widget);
 	to_scene_btn->setObjectName(QStringLiteral("tbBtnGreen"));
 	to_scene_btn->setFixedHeight(fh);
 	to_scene_btn->setToolTip(
 		QStringLiteral("Karte als Text-Quelle in die aktuelle Szene legen oder aktualisieren"));
 
-	auto *clear_src_btn = new QPushButton(QStringLiteral("Leeren"), card_inner);
+	auto *clear_src_btn = new QPushButton(QStringLiteral("Leeren"), card_widget);
 	clear_src_btn->setObjectName(QStringLiteral("tbBtnRed"));
 	clear_src_btn->setFixedHeight(fh);
 	clear_src_btn->setToolTip(QStringLiteral("Text der Quelle auf leer setzen — die Quelle bleibt in der Szene"));
@@ -2004,7 +1918,7 @@ void TextboxDock::create_row_widget(const TextboxCard &card)
 		}
 	});
 
-	connect(del_btn, &QPushButton::clicked, this, [this, card_id, row_widget]() {
+	connect(del_btn, &QPushButton::clicked, this, [this, card_id]() {
 		capture_undo_snapshot(this, state_);
 		if (state_.remove_card(card_id)) {
 			save_state();
@@ -2015,11 +1929,7 @@ void TextboxDock::create_row_widget(const TextboxCard &card)
 								textbox_html::sanitize_card_id(card_id) + ".html"),
 					ec);
 		textbox_scene::remove_everywhere(card_id);
-		cards_layout_->removeWidget(row_widget);
-		row_widgets_.erase(std::remove(row_widgets_.begin(), row_widgets_.end(), row_widget),
-				   row_widgets_.end());
-		row_widget->deleteLater();
-		refresh_top_row();
+		rebuild_rows();
 	});
 
 	connect(dup_btn, &QToolButton::clicked, this, [this, card_id]() {
@@ -2032,7 +1942,7 @@ void TextboxDock::create_row_widget(const TextboxCard &card)
 		const std::string new_id = nc.id;
 		nc = copy;
 		nc.id = new_id;
-		create_row_widget(nc);
+		create_row_item(nc);
 		refresh_top_row();
 		save_state();
 		bool any_text = !nc.zeile1.empty() || !nc.zeile2.empty() || !nc.zeile3.empty();
@@ -2046,7 +1956,7 @@ void TextboxDock::create_row_widget(const TextboxCard &card)
 	});
 
 	// ID-Umbenennung: validate, alte HTML-Datei + Sources entfernen, Widget neu bauen.
-	connect(id_edit, &QLineEdit::editingFinished, this, [this, card_id, id_edit, row_widget, schedule_save]() {
+	connect(id_edit, &QLineEdit::editingFinished, this, [this, card_id, id_edit, schedule_save]() {
 		const QString t = id_edit->text().trimmed();
 		static const QRegularExpression re(QStringLiteral("^[A-Za-z0-9_-]{1,32}$"));
 		const std::string new_id = t.toStdString();
@@ -2080,31 +1990,26 @@ void TextboxDock::create_row_widget(const TextboxCard &card)
 		else
 			textbox_scene::reload_everywhere(*c, state_.settings);
 		// Widget mit neuer ID neu aufbauen (alte Handler capturen die alte ID).
-		cards_layout_->removeWidget(row_widget);
-		row_widgets_.erase(std::remove(row_widgets_.begin(), row_widgets_.end(), row_widget),
-				   row_widgets_.end());
-		row_widget->deleteLater();
-		create_row_widget(*c);
-		refresh_top_row();
+		rebuild_rows();
 		// IMP-R: Dirty-Eintrag mit der NEUEN ID (die alte ID existiert nicht mehr).
 		mark_card_dirty_and_schedule(this, new_id);
 	});
 
-	const int insert_idx = std::max(0, cards_layout_->count() - 1);
-	cards_layout_->insertWidget(insert_idx, row_widget);
-	row_widgets_.push_back(row_widget);
+	// Als QListWidgetItem in die Liste einfügen
+	auto *item = new QListWidgetItem();
+	item->setData(Qt::UserRole, QString::fromUtf8(card.id.c_str()));
+	item->setSizeHint(card_widget->sizeHint());
+	tbCardList_->addItem(item);
+	tbCardList_->setItemWidget(item, card_widget);
+	return item;
 }
 
 void TextboxDock::rebuild_rows()
 {
-	for (QWidget *w : row_widgets_) {
-		cards_layout_->removeWidget(w);
-		w->deleteLater();
-	}
-	row_widgets_.clear();
+	tbCardList_->clear();
 
 	for (const auto &card : state_.cards) {
-		create_row_widget(card);
+		create_row_item(card);
 	}
 	refresh_top_row();
 }
@@ -2155,7 +2060,11 @@ void TextboxDock::refresh_templates_ui()
 {
 	// IMP-H7: Vorlagen sind Pfad-Eingaben — spiegle nur den State-Wert in die
 	// Felder (keine Ordner-Discovery mehr; der Pfad ist die Wahrheit).
-	for (QWidget *w : row_widgets_) {
+	for (int i = 0; i < tbCardList_->count(); ++i) {
+		QListWidgetItem *item = tbCardList_->item(i);
+		if (!item)
+			continue;
+		QWidget *w = tbCardList_->itemWidget(item);
 		if (!w || !w->property("tbHasTemplate").toBool())
 			continue;
 		QLineEdit *edit = w->findChild<QLineEdit *>(QStringLiteral("tbTemplatePath"));
@@ -2317,14 +2226,17 @@ void TextboxDock::apply_quick_profile(const std::string &name)
 
 void TextboxDock::flash_row(const std::string &card_id)
 {
-	if (card_id.empty())
+	if (card_id.empty() || !tbCardList_)
 		return;
 	const QString target_id = QString::fromUtf8(card_id.c_str());
-	for (QWidget *w : row_widgets_) {
+	for (int i = 0; i < tbCardList_->count(); ++i) {
+		QListWidgetItem *item = tbCardList_->item(i);
+		if (!item)
+			continue;
+		QWidget *w = tbCardList_->itemWidget(item);
 		if (!w || w->property("tbCardId").toString() != target_id)
 			continue;
-		if (scroll_area_)
-			scroll_area_->ensureWidgetVisible(w);
+		tbCardList_->scrollToItem(item, QAbstractItemView::PositionAtCenter);
 		w->setProperty("tbFlash", QStringLiteral("true"));
 		if (QStyle *st = w->style()) {
 			st->unpolish(w);
@@ -2349,7 +2261,7 @@ void TextboxDock::flash_row(const std::string &card_id)
 void TextboxDock::on_add_card()
 {
 	const TextboxCard &card = state_.add_card();
-	create_row_widget(card);
+	create_row_item(card);
 	refresh_top_row();
 	save_state();
 }

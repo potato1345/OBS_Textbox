@@ -118,7 +118,6 @@ inline QString base_qss()
 	const auto c = resolve_colors();
 
 	return QStringLiteral(R"QSS(
-QWidget#tbCardsContainer,
 QDialog#tbImportDialog,
 QDialog#tbQuickProfilesDialog,
 QDialog#tbSettingsDialog {
@@ -173,27 +172,7 @@ QMenu::separator {
 	margin: 2px 6px;
 }
 
-/* ---- Karten ---- */
-
-QFrame#tbCardOuter {
-	background-color: transparent;
-	border: 1px solid %3;
-	border-radius: 2px;
-}
-
-QFrame#tbCardOuter:hover {
-	border: 1px solid %6;
-}
-
-QFrame#tbCardOuter[tbHover="1"] {
-	border: 1px solid %6;
-}
-
-QFrame#tbCardInner {
-	background-color: %4;
-	border: none;
-	border-radius: 2px;
-}
+/* ---- Karten-ID-Bar ---- */
 
 QFrame#tbIdBar {
 	background-color: %3;
@@ -707,6 +686,33 @@ QGroupBox::indicator:checked {
 /* ---- Tabellen ---- */
 
 QTableWidget,
+QListWidget#tbCardList {
+	background-color: transparent;
+	border: none;
+	color: %2;
+	selection-background-color: transparent;
+	selection-color: %2;
+	outline: none;
+}
+
+QListWidget#tbCardList::item {
+	padding: 0px;
+	border: none;
+	background: transparent;
+}
+
+QListWidget#tbCardList::drop-indicator {
+	border: none;
+	border-top: 2px solid %7;
+	height: 2px;
+	background: transparent;
+}
+
+QListWidget#tbCardList::item:selected {
+	background: transparent;
+	color: %2;
+}
+
 QListWidget,
 QListWidget#tbProfileList {
 	background-color: %4;
@@ -773,11 +779,7 @@ QDockWidget::float-button:pressed {
 	background: %1;
 }
 
-/* ---- Footer-Toolbar / Flash / Stil-Sektion ---- */
-
-QFrame#tbCardOuter[tbFlash="true"] {
-	border: 1px solid %7;
-}
+/* ---- Footer-Toolbar / Stil-Sektion ---- */
 
 QFrame#tbStyleSection {
 	background: transparent;

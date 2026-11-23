@@ -37,11 +37,11 @@ AiResult process_with_llm(const std::string &api_key, const std::string &documen
 
 class QComboBox;
 class QLabel;
+class QListWidget;
+class QListWidgetItem;
 class QMenu;
-class QScrollArea;
 class QTimer;
 class QToolButton;
-class QVBoxLayout;
 
 /**
  * Triviale Zwischenklasse — Theme-QSS matcht per MetaObject-Klassename OBSDock
@@ -71,8 +71,9 @@ public:
 private:
 	// Durchsucht state_.cards nach der ID; nullptr bei Nichtfund (mutable access).
 	TextboxCard *find_card_mut(const std::string &id);
-	// Baut die komplette Qt-Widget-Zeile für eine Karte (ID-Bar, Zeilen, CSS-Regeln, Profil, Aktionen).
-	void create_row_widget(const TextboxCard &card);
+	// Baut die komplette Qt-Widget-Zeile für eine Karte (ID-Bar, Zeilen, CSS-Regeln, Profil, Aktionen)
+	// und fügt sie als QListWidgetItem in tbCardList_ ein. Gibt das Item zurück.
+	QListWidgetItem *create_row_item(const TextboxCard &card);
 	// Entfernt alle Zeilen-Widgets und baut sie aus state_.cards neu auf.
 	void rebuild_rows();
 	// Aktualisiert die beiden Top-Combos (Schnellprofile + Kartensuche).
@@ -115,12 +116,10 @@ private:
 	QComboBox *profil_select_ = nullptr;
 	QToolButton *profil_del_btn_ = nullptr;
 	QComboBox *card_search_ = nullptr;
-	QScrollArea *scroll_area_ = nullptr;
-	QVBoxLayout *cards_layout_ = nullptr;
+	QListWidget *tbCardList_ = nullptr;
 	QLabel *dock_status_lbl_ = nullptr;
 	QToolButton *dock_status_close_ = nullptr; // c1: Fehlermeldung per Hand schließen
 	QTimer *dock_status_timer_ = nullptr;      // c1: Auto-dismiss der Statusmeldung
-	std::vector<QWidget *> row_widgets_;
 	// Kooperatives Abbruch-Flag für laufende Hintergrund-Threads beim Schließen des Docks.
 	std::shared_ptr<std::atomic<bool>> cancel_ = std::make_shared<std::atomic<bool>>(false);
 };
