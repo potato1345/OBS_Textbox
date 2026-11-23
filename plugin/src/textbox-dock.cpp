@@ -2313,38 +2313,6 @@ void TextboxDock::on_add_card()
 	save_state();
 }
 
-void TextboxDock::on_clear_all()
-{
-	const auto reply = QMessageBox::question(
-		this, QStringLiteral("Alle löschen"),
-		QStringLiteral("Sollen wirklich alle Karten gelöscht werden?"),
-		QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
-	if (reply != QMessageBox::Yes)
-		return;
-
-	capture_undo_snapshot(this, state_);
-
-	std::vector<std::string> ids;
-	ids.reserve(state_.cards.size());
-	for (const auto &c : state_.cards) {
-		ids.push_back(c.id);
-	}
-
-	state_.cards.clear();
-	rebuild_rows();
-	save_state();
-
-	for (const auto &id : ids) {
-		if (cancel_ && *cancel_)
-			return;
-		std::error_code ec;
-		std::filesystem::remove(
-		    std::filesystem::u8path(textbox_html::cards_dir() + "/" + textbox_html::sanitize_card_id(id) + ".html"), ec);
-		textbox_scene::remove_everywhere(id);
-	}
-	set_dock_status(QStringLiteral("Alle Karten gelöscht"), false);
-}
-
 void TextboxDock::sync_all_cards_live(const std::vector<std::string> &previous_ids)
 {
 	for (const auto &old_id : previous_ids) {

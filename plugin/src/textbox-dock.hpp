@@ -73,9 +73,9 @@ private:
 	void apply_quick_profile(const std::string &name);
 	// Hebt eine Kartenzeile kurz farblich hervor (scrollt zu ihr).
 	void flash_row(const std::string &card_id);
-	// Karte hinzufügen, alle leeren, Import-/Einstellungs-/Profil-Dialoge öffnen.
+	// Karte hinzufügen, Import-/Einstellungs-/Profil-Dialoge öffnen.
 	void on_add_card();
-	void on_clear_all();
+
 	void on_open_import_dialog();
 	void on_open_quick_profiles_dialog();
 	void on_backup_state();
