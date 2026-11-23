@@ -876,6 +876,7 @@ void TextboxDock::create_row_widget(const TextboxCard &card)
 	const int btn_sz = style()->pixelMetric(QStyle::PM_ButtonIconSize, nullptr, this);
 	auto *row_widget = new QFrame(this);
 	row_widget->setObjectName(QStringLiteral("tbCardOuter"));
+	row_widget->setAttribute(Qt::WA_StyledBackground, true);
 	row_widget->setProperty("tbCardId", QString::fromUtf8(card.id.c_str()));
 	row_widget->setMinimumWidth(fontMetrics().averageCharWidth() * 28);
 	row_widget->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
@@ -886,6 +887,7 @@ void TextboxDock::create_row_widget(const TextboxCard &card)
 
 	auto *card_inner = new QFrame(row_widget);
 	card_inner->setObjectName(QStringLiteral("tbCardInner"));
+	card_inner->setAttribute(Qt::WA_StyledBackground, true);
 	outer_layout->addWidget(card_inner);
 
 	auto *inner_layout = new QVBoxLayout(card_inner);
@@ -894,6 +896,7 @@ void TextboxDock::create_row_widget(const TextboxCard &card)
 
 	auto *id_bar = new QFrame(card_inner);
 	id_bar->setObjectName(QStringLiteral("tbIdBar"));
+	id_bar->setAttribute(Qt::WA_StyledBackground, true);
 	auto *id_layout = new QHBoxLayout(id_bar);
 	id_layout->setContentsMargins(8, 4, 8, 4);
 	id_layout->setSpacing(8);
@@ -953,6 +956,7 @@ void TextboxDock::create_row_widget(const TextboxCard &card)
 	};
 
 	auto *rows_frame = new QFrame(card_inner);
+	rows_frame->setAttribute(Qt::WA_StyledBackground, true);
 	auto *rows_layout = new QVBoxLayout(rows_frame);
 	rows_layout->setContentsMargins(0, 0, 0, 0);
 	rows_layout->setSpacing(4);
@@ -1189,6 +1193,7 @@ void TextboxDock::create_row_widget(const TextboxCard &card)
 
 	auto *style_section = new QFrame(card_inner);
 	style_section->setObjectName(QStringLiteral("tbStyleSection"));
+	style_section->setAttribute(Qt::WA_StyledBackground, true);
 	auto *style_layout = new QVBoxLayout(style_section);
 	style_layout->setContentsMargins(0, 0, 0, 0);
 	style_layout->setSpacing(8);
@@ -1270,6 +1275,7 @@ void TextboxDock::create_row_widget(const TextboxCard &card)
 	// IMP-G: generelle CSS-Regeln (--variable = wert), einklappbar im Styling-Block.
 	auto *css_frame = new QFrame(style_section);
 	css_frame->setObjectName(QStringLiteral("tbCssRules"));
+	css_frame->setAttribute(Qt::WA_StyledBackground, true);
 	auto *css_layout = new QVBoxLayout(css_frame);
 	css_layout->setContentsMargins(0, 4, 0, 0);
 	css_layout->setSpacing(4);
