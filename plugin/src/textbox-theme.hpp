@@ -118,7 +118,6 @@ inline QString base_qss()
 	const auto c = resolve_colors();
 
 	return QStringLiteral(R"QSS(
-QWidget#textboxDock,
 QWidget#tbCardsContainer,
 QDialog#tbImportDialog,
 QDialog#tbQuickProfilesDialog,
@@ -127,12 +126,6 @@ QDialog#tbSettingsDialog {
 	color: %2;
 	font-family: 'Open Sans', 'Segoe UI', sans-serif;
 	font-size: 11pt;
-}
-
-QWidget#textboxDock {
-	background-color: %1;
-	border: none;
-	border-radius: 0px;
 }
 
 QScrollArea {

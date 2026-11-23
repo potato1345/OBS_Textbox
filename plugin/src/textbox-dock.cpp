@@ -439,7 +439,7 @@ TextboxDock::TextboxDock(const std::string &state_path, QWidget *parent)
 	: QWidget(parent),
 	  state_path_(state_path)
 {
-	setObjectName(QStringLiteral("textboxDock"));
+	setObjectName(QStringLiteral("OBSDock"));
 	setAttribute(Qt::WA_StyledBackground, true);
 
 	auto *save_timer = new QTimer(this);
@@ -475,6 +475,7 @@ TextboxDock::TextboxDock(const std::string &state_path, QWidget *parent)
 	top_row->setSpacing(8);
 
 	profil_select_ = new QComboBox(this);
+	profil_select_->setAttribute(Qt::WA_StyledBackground, true);
 	profil_select_->setEditable(true);
 	profil_select_->setInsertPolicy(QComboBox::NoInsert);
 	profil_select_->setMinimumWidth(fontMetrics().averageCharWidth() * 14);
@@ -494,6 +495,7 @@ TextboxDock::TextboxDock(const std::string &state_path, QWidget *parent)
 	}
 
 	card_search_ = new QComboBox(this);
+	card_search_->setAttribute(Qt::WA_StyledBackground, true);
 	card_search_->setEditable(true);
 	card_search_->setInsertPolicy(QComboBox::NoInsert);
 	card_search_->setMinimumWidth(fontMetrics().averageCharWidth() * 12);
@@ -509,6 +511,7 @@ TextboxDock::TextboxDock(const std::string &state_path, QWidget *parent)
 
 	top_row->addWidget(profil_select_, 1);
 	profil_del_btn_ = new QToolButton(this);
+	profil_del_btn_->setAttribute(Qt::WA_StyledBackground, true);
 	profil_del_btn_->setObjectName(QStringLiteral("tbProfilDelBtn"));
 	const int btn_icon_sz = style()->pixelMetric(QStyle::PM_ButtonIconSize, nullptr, this);
 	profil_del_btn_->setFixedSize(btn_icon_sz, btn_icon_sz);
@@ -525,6 +528,7 @@ TextboxDock::TextboxDock(const std::string &state_path, QWidget *parent)
 	root_layout->addLayout(top_row);
 
 	scroll_area_ = new QScrollArea(this);
+	scroll_area_->setAttribute(Qt::WA_StyledBackground, true);
 	scroll_area_->setWidgetResizable(true);
 	scroll_area_->setFrameShape(QFrame::NoFrame);
 
@@ -546,11 +550,13 @@ TextboxDock::TextboxDock(const std::string &state_path, QWidget *parent)
 	root_layout->addWidget(scroll_area_, 1);
 
 	dock_status_lbl_ = new QLabel(this);
+	dock_status_lbl_->setAttribute(Qt::WA_StyledBackground, true);
 	dock_status_lbl_->setObjectName(QStringLiteral("tbDockStatus"));
 	dock_status_lbl_->setContentsMargins(4, 0, 4, 0);
 	dock_status_lbl_->setWordWrap(true);
 	dock_status_lbl_->setVisible(false);
 	dock_status_close_ = new QToolButton(this); // c1: Schließen-Button für die Statusmeldung
+	dock_status_close_->setAttribute(Qt::WA_StyledBackground, true);
 	dock_status_close_->setObjectName(QStringLiteral("tbDockStatusClose"));
 	dock_status_close_->setAutoRaise(true);
 	dock_status_close_->setIcon(theme_icon("close.svg"));
