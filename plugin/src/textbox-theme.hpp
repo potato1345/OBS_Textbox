@@ -686,7 +686,6 @@ QGroupBox::indicator:checked {
 /* ---- Tabellen ---- */
 
 QTableWidget,
-QListWidget,
 QListWidget#tbProfileList {
 	background-color: %4;
 	border: 1px solid %3;
@@ -695,6 +694,24 @@ QListWidget#tbProfileList {
 	color: %2;
 	selection-background-color: %6;
 	selection-color: %2;
+}
+
+/* Kartenliste transparent -> Dock-Panelhintergrund des Themes sichtbar, Hover/Selection wie native OBS-Liste */
+QListWidget#tbCardList {
+	background: transparent;
+	border: none;
+}
+QListWidget#tbCardList::item {
+	background: transparent;
+	border: none;
+	border-radius: 4px;
+}
+QListWidget#tbCardList::item:hover {
+	background: %11;
+}
+QListWidget#tbCardList::item:selected {
+	background: %6;
+	color: %2;
 }
 
 QListWidget#tbCardList::drop-indicator {
