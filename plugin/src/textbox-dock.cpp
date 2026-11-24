@@ -351,6 +351,8 @@ void CardListWidget::mouseMoveEvent(QMouseEvent *event)
 
 void CardListWidget::start_drag(int row, QPoint /*viewport_pos*/)
 {
+	if (QCoreApplication::closingDown())
+		return;
 	QListWidgetItem *item = this->item(row);
 	if (!item)
 		return;
@@ -377,7 +379,7 @@ bool CardListWidget::eventFilter(QObject *obj, QEvent *event)
 
 	if (event->type() == QEvent::MouseButtonPress) {
 		auto *me = static_cast<QMouseEvent *>(event);
-		if (me->button() == Qt::LeftButton) {
+		if (me->buttons() & Qt::LeftButton) {
 			QPoint vp_pos = w->mapTo(viewport(), me->pos());
 			const int row = indexAt(vp_pos).row();
 			if (row >= 0)
