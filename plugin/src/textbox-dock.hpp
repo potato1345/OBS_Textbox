@@ -60,6 +60,7 @@ class CardListWidget : public QListWidget {
 public:
 	explicit CardListWidget(QWidget *parent = nullptr) : QListWidget(parent) {}
 	std::function<void(const std::string &card_id, int target_row)> reorder_cb;
+	bool eventFilter(QObject *obj, QEvent *event) override;
 
 protected:
 	void mousePressEvent(QMouseEvent *event) override;
@@ -68,6 +69,7 @@ protected:
 	void dropEvent(QDropEvent *event) override;
 
 private:
+	void start_drag(int row, QPoint viewport_pos);
 	int drag_row_ = -1;
 	QPoint press_pos_;
 };
@@ -149,6 +151,8 @@ private:
 	QLabel *dock_status_lbl_ = nullptr;
 	QToolButton *dock_status_close_ = nullptr; // c1: Fehlermeldung per Hand schließen
 	QTimer *dock_status_timer_ = nullptr;      // c1: Auto-dismiss der Statusmeldung
+	QToolButton *tool_up_ = nullptr;
+	QToolButton *tool_down_ = nullptr;
 	// Kooperatives Abbruch-Flag für laufende Hintergrund-Threads beim Schließen des Docks.
 	std::shared_ptr<std::atomic<bool>> cancel_ = std::make_shared<std::atomic<bool>>(false);
 };
