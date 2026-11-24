@@ -987,6 +987,7 @@ QListWidgetItem *TextboxDock::create_row_item(const TextboxCard &card)
 	auto *card_widget = new QWidget(this);
 	card_widget->setProperty("tbCardId", QString::fromUtf8(card.id.c_str()));
 	card_widget->setMinimumWidth(fontMetrics().averageCharWidth() * 28);
+	card_widget->setAttribute(Qt::WA_TransparentForMouseEvents);
 
 	auto *inner_layout = new QVBoxLayout(card_widget);
 	inner_layout->setContentsMargins(10, 10, 10, 10);
@@ -1062,6 +1063,7 @@ QListWidgetItem *TextboxDock::create_row_item(const TextboxCard &card)
 
 	auto *rows_frame = new QGroupBox(QStringLiteral("▼ SPEZIFISCHE CSS-REGELN"), card_widget);
 	rows_frame->setAttribute(Qt::WA_StyledBackground, true);
+	rows_frame->setAttribute(Qt::WA_TransparentForMouseEvents);
 	auto *rows_layout = new QVBoxLayout(rows_frame);
 	rows_layout->setContentsMargins(4, 2, 4, 4);
 	rows_layout->setSpacing(4);
@@ -1379,6 +1381,7 @@ QListWidgetItem *TextboxDock::create_row_item(const TextboxCard &card)
 	auto *css_frame = new QGroupBox(QStringLiteral("▶ GENERELLE CSS-REGELN"), style_section);
 	css_frame->setObjectName(QStringLiteral("tbCssRules"));
 	css_frame->setAttribute(Qt::WA_StyledBackground, true);
+	css_frame->setAttribute(Qt::WA_TransparentForMouseEvents);
 	auto *css_layout = new QVBoxLayout(css_frame);
 	css_layout->setContentsMargins(4, 2, 4, 4);
 	css_layout->setSpacing(4);
