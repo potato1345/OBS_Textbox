@@ -66,12 +66,10 @@ protected:
 	void mousePressEvent(QMouseEvent *event) override;
 	void mouseMoveEvent(QMouseEvent *event) override;
 	void mouseReleaseEvent(QMouseEvent *event) override;
-	void dropEvent(QDropEvent *event) override;
 
 private:
-	void start_drag(int row, QPoint viewport_pos);
 	int drag_row_ = -1;
-	QPoint press_pos_;
+	QPoint drag_press_pos;
 };
 
 /**

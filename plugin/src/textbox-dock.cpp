@@ -112,9 +112,7 @@ QString normalize_template_id(const QString &raw)
 #include <QtGlobal>
 
 #include <QDesktopServices>
-#include <QDrag>
 #include <QEvent>
-#include <QMimeData>
 
 #include <algorithm>
 #include <functional>
@@ -326,8 +324,11 @@ bool reconcile_profiles_after_delete(TextboxState &state)
 void CardListWidget::mousePressEvent(QMouseEvent *event)
 {
 	if (event->button() == Qt::LeftButton) {
-		drag_row_ = indexAt(event->pos()).row();
-		press_pos_ = event->pos();
+		const int row = indexAt(event->pos()).row();
+		if (row >= 0) {
+			drag_row_ = row;
+			drag_press_pos = event->pos();
+		}
 	}
 	QListWidget::mousePressEvent(event); // native selection beibehalten
 }
@@ -340,35 +341,21 @@ void CardListWidget::mouseReleaseEvent(QMouseEvent *event)
 
 void CardListWidget::mouseMoveEvent(QMouseEvent *event)
 {
-	if (drag_row_ >= 0 && (event->buttons() & Qt::LeftButton) &&
-	    (event->pos() - press_pos_).manhattanLength() >= QApplication::startDragDistance()) {
-		start_drag(drag_row_, event->pos());
-		drag_row_ = -1;
+	if (drag_row_ >= 0 && (event->buttons() & Qt::LeftButton)) {
+		int target = indexAt(event->pos()).row();
+		if (target < 0)
+			target = (event->pos().y() < 0) ? 0 : count() - 1;
+		if (target != drag_row_) {
+			QListWidgetItem *it = takeItem(drag_row_);
+			insertItem(target, it);
+			drag_row_ = target;
+			const std::string id = it->data(Qt::UserRole).toString().toStdString();
+			if (reorder_cb)
+				reorder_cb(id, target);
+		}
 		return;
 	}
 	QListWidget::mouseMoveEvent(event);
-}
-
-void CardListWidget::start_drag(int row, QPoint /*viewport_pos*/)
-{
-	if (QCoreApplication::closingDown())
-		return;
-	QListWidgetItem *item = this->item(row);
-	if (!item)
-		return;
-	auto *mime = new QMimeData();
-	mime->setData(QStringLiteral("application/x-textbox-card"),
-		      item->data(Qt::UserRole).toString().toUtf8());
-	auto *drag = new QDrag(this);
-	drag->setMimeData(mime);
-	QWidget *w = itemWidget(item);
-	if (w) {
-		QPixmap pm(w->width(), 26);
-		w->render(&pm, QPoint(0, 0), QRect(0, 0, w->width(), 26));
-		drag->setPixmap(pm);
-		drag->setHotSpot(QPoint(10, 13));
-	}
-	drag->exec(Qt::MoveAction);
 }
 
 bool CardListWidget::eventFilter(QObject *obj, QEvent *event)
@@ -380,29 +367,19 @@ bool CardListWidget::eventFilter(QObject *obj, QEvent *event)
 	if (event->type() == QEvent::MouseButtonPress) {
 		auto *me = static_cast<QMouseEvent *>(event);
 		if (me->buttons() & Qt::LeftButton) {
-			QPoint vp_pos = w->mapTo(viewport(), me->pos());
-			const int row = indexAt(vp_pos).row();
-			if (row >= 0)
-				start_drag(row, vp_pos);
+			// Walk parent chain to the top-level row widget inside the viewport
+			QWidget *parent = w;
+			while (parent && parent->parentWidget() != viewport())
+				parent = parent->parentWidget();
+			if (parent) {
+				const QPoint vp_origin = parent->mapTo(viewport(), QPoint(0, 0));
+				drag_row_ = indexAt(vp_origin).row();
+				drag_press_pos = viewport()->mapFromGlobal(me->globalPosition()).toPoint();
+			}
 		}
-		return true; // fully handled
+		return false; // let event propagate to mousePressEvent etc.
 	}
 	return QListWidget::eventFilter(obj, event);
-}
-
-void CardListWidget::dropEvent(QDropEvent *event)
-{
-	if (event->mimeData()->hasFormat(QStringLiteral("application/x-textbox-card")) && reorder_cb) {
-		const std::string id =
-			event->mimeData()->data(QStringLiteral("application/x-textbox-card")).toStdString();
-		int target = indexAt(event->position().toPoint()).row();
-		if (target < 0)
-			target = count();
-		reorder_cb(id, target);
-		event->accept();
-		return;
-	}
-	QListWidget::dropEvent(event);
 }
 
 #ifdef ENABLE_FRONTEND_API
@@ -570,7 +547,7 @@ TextboxDock::TextboxDock(const std::string &state_path, QWidget *parent) : OBSDo
 	tbCardList_ = new CardListWidget(this);
 	tbCardList_->setAttribute(Qt::WA_StyledBackground, true);
 	tbCardList_->setFrameShape(QFrame::NoFrame);
-	tbCardList_->setDragDropMode(QAbstractItemView::DropOnly);
+	tbCardList_->setDragDropMode(QAbstractItemView::NoDragDrop);
 	tbCardList_->setSelectionMode(QAbstractItemView::SingleSelection);
 	tbCardList_->setFocusPolicy(Qt::StrongFocus);
 	tbCardList_->setUniformItemSizes(false);
