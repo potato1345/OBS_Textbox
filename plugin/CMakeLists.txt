@@ -57,6 +57,7 @@ if(ENABLE_QT)
     PRIVATE
       src/textbox-dock.hpp
       src/textbox-dock.cpp
+      src/square-tool-button.hpp
       src/textbox-render.hpp
       src/textbox-render.cpp
   )

@@ -1,8 +1,10 @@
 /*
- * textbox-dock.hpp — Haupt-Bedienpanel (Qt QDockWidget) für Textbox in OBS Studio (v3).
+ * textbox-dock.hpp — Haupt-Bedienpanel (Qt QFrame) für Textbox in OBS Studio (v3).
  *
  * Zweck:
- *   - Definiert die TextboxDock-Klasse als Qt-Widget für das OBS-Frontend.
+ *   - Definiert die TextboxDock-Klasse als QFrame (derives from QFrame like
+ *     PTZControls in obs-ptz; no OBSDock intermediate class).
+ *   - Object name "OBSDock" set for theme matching.
  *   - Ermöglicht das Bearbeiten, Senden, Leeren und Löschen von Textbox-Karten.
  *   - Integriert Import-Dialoge (Google Forms, Datei, AI), Profilverwaltung und Einstellungen.
  */
@@ -13,8 +15,10 @@
 #include "textbox-import.hpp"
 #include "textbox-state.hpp"
 
+#include <QFrame>
 #include <QIcon>
 #include <QWidget>
+#include <QTimer>
 #include <atomic>
 #include <functional>
 #include <memory>
@@ -42,7 +46,6 @@ class QComboBox;
 class QLabel;
 class QListWidgetItem;
 class QMenu;
-class QTimer;
 class QToolButton;
 
 /**
@@ -73,20 +76,11 @@ private:
 };
 
 /**
- * Triviale Zwischenklasse — Theme-QSS matcht per MetaObject-Klassename OBSDock
- * (wie OBS-eigene Docks), sodass der Yami-Theme-Rand (bg_base, border, radius)
- * auf das a??ere Dock-Widget gemalt wird.
+ * Haupt-UI-Panel des Plugins, eingebettet als QFrame in OBS Studio.
+ * Derives directly from QFrame (like PTZControls in obs-ptz).
+ * setObjectName("OBSDock") so the OBS theme matches and paints it.
  */
-class OBSDock : public QWidget {
-	Q_OBJECT
-public:
-	explicit OBSDock(QWidget *parent = nullptr) : QWidget(parent) {}
-};
-
-/**
- * Haupt-UI-Panel des Plugins, eingebettet als QDockWidget in OBS Studio.
- */
-class TextboxDock : public OBSDock {
+class TextboxDock : public QFrame {
 	Q_OBJECT
 
 public:
@@ -96,6 +90,10 @@ public:
 	// Self-healing: Karten mit Inhalt garantiert eine Browser-Quelle in der
 	// aktuellen Szene haben (läuft, sobald das Frontend geladen ist).
 	void ensure_card_sources();
+
+public slots:
+	/* Refresh icon variants on theme change (no color painting). */
+	void refreshTheme();
 
 private:
 	// Durchsucht state_.cards nach der ID; nullptr bei Nichtfund (mutable access).

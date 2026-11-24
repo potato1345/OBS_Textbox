@@ -5,8 +5,7 @@
  *   - Registriert das OBS-Modul (OBS_DECLARE_MODULE, obs_module_load, obs_module_unload).
  *   - Registriert die native Kartenquelle.
  *   - Erzeugt und bindet das benutzerdefinierte QDockWidget (TextboxDock) über die
- *     OBS-Frontend-API ein.
- *   - Floating-Docks werden als native OS-Fenster belassen (kein FramelessWindowHint).
+ *     OBS-Frontend-API ein. The dock inherits the OBS theme natively (PTZ-style).
  */
 
 #include <obs-module.h>
@@ -39,52 +38,32 @@ OBS_DECLARE_MODULE()
 #ifdef ENABLE_FRONTEND_API
 #ifdef ENABLE_QT
 #include "textbox-dock.hpp"
-#include <QDockWidget>
 #include <QPointer>
-#include <QGuiApplication>
-#include <QRect>
-#include <QScreen>
-#include <QTimer>
 #include <string>
 
-/*
-Eigener QDockWidget statt obs_frontend_add_dock_by_id:
-add_dock_by_id legt den Dock versteckt + floating an (setVisible(false))
-und er wird nur ueber das Docks-Menue sichtbar. M0 soll den Test-Dock
-unmittelbar in der OBS-Oberflaeche zeigen (rechts, neben "controls").
-*/
 /* QPointer: wird automatisch null, wenn OBS das Main-Window (Eltern des Docks)
  * zerstört. OBSApp::~OBSApp zerstört das Fenster VOR obs_shutdown ->
  * obs_module_unload; ein rohes delete wäre dann ein Double-Free (AV in
  * qt6widgets, Crash beim Fenster-Schließen). */
-static QPointer<QDockWidget> g_dock;
+static QPointer<TextboxDock> g_textbox_dock;
 
-/* Shutdown-Callback: raeumt NUR Plugin-eigene Timer/Callbacks auf.
- * Browser-Sources (Typ browser_source) sind eingebaut und koennen ohne
- * Plugin weiterlaufen — sie beim Shutdown zu loeschen ware Data-Loss
+/* Shutdown-Callback: räumt NUR Plugin-eigene Timer/Callbacks auf.
+ * Browser-Sources (Typ browser_source) sind eingebaut und können ohne
+ * Plugin weiterlaufen — sie beim Shutdown zu löschen wäre Data-Loss
  * (User-Szene-Quellen gingen bei jedem OBS-Beenden verloren). */
 static void textbox_frontend_event(obs_frontend_event event, void *)
 {
-	if (event != OBS_FRONTEND_EVENT_SCRIPTING_SHUTDOWN)
-		return;
-	blog(LOG_INFO, "[textbox] Shutdown-Event empfangen — Timer/Callbacks werden beendet");
-}
-
-/*
-IMP-L2: schwebende Docks koennen hoeher als der Bildschirm werden; dann liegt
-die untere Werkzeugleiste (Gear/Undo/Export) unterhalb des Viewports und ist
-unerreichbar. Auf die sichtbare Screen-Hoehe beschneiden. Wird beim Load und
-im Spaet-Timer gebraucht (war vorher zweimal kopiert).
-*/
-static void clamp_dock_to_screen(QDockWidget *d)
-{
-	if (!d->isFloating())
-		return;
-	const QRect avail = QGuiApplication::primaryScreen()->availableGeometry();
-	QRect geom = d->geometry();
-	if (geom.bottom() > avail.bottom()) {
-		geom.setBottom(avail.bottom());
-		d->setGeometry(geom);
+	switch (event) {
+	case OBS_FRONTEND_EVENT_SCRIPTING_SHUTDOWN:
+		blog(LOG_INFO, "[textbox] Shutdown-Event empfangen — Timer/Callbacks werden beendet");
+		break;
+	case OBS_FRONTEND_EVENT_THEME_CHANGED:
+		/* Defer to let layout changes settle, like obs-ptz does */
+		if (g_textbox_dock)
+			QTimer::singleShot(0, g_textbox_dock, &TextboxDock::refreshTheme);
+		break;
+	default:
+		break;
 	}
 }
 
@@ -118,68 +97,26 @@ bool obs_module_load(void)
 	}
 #ifdef ENABLE_FRONTEND_API
 #ifdef ENABLE_QT
-	if (obs_frontend_get_main_window() && !g_dock) {
+	if (obs_frontend_get_main_window() && !g_textbox_dock) {
 		char *cfg_path = obs_module_config_path("textbox-state.json");
 		std::string state_path = cfg_path ? cfg_path : "";
 		bfree(cfg_path);
 
-		/* Parent = Main-Window: Widget gehoert zur OBS-Windows-Hierarchie */
+		/* Parent = Main-Window: Widget gehört zur OBS-Windows-Hierarchie.
+		 * Like obs-ptz ptz-controls.cpp line 60: use obs_frontend_add_dock_by_id
+		 * so OBS wraps the widget in its theme-styled DockWidget (gives the
+		 * #272A33 background and rounded bottom corners). */
 		QWidget *mw = static_cast<QWidget *>(obs_frontend_get_main_window());
-		g_dock = new QDockWidget(mw);
-		g_dock->setObjectName(QStringLiteral("textbox"));
-		g_dock->setWindowTitle(QStringLiteral("Textbox Studio"));
-		g_dock->setWidget(new TextboxDock(state_path, g_dock));
-		bool ok = obs_frontend_add_custom_qdock("textbox", g_dock);
-		if (!ok) {
-			/* Registrierung fehlgeschlagen: Widget nicht hängen lassen */
-			delete g_dock.data();
-			g_dock = nullptr;
-		} else {
-			/* IMP-H8: OBS 32 versteckt Custom-QDockWidget per Default und
-			 * legt keinen Docks-Menueeintrag an. Floating-Zustand wieder
-			 * herstellen (Dock ist als schwebendes Fenster registriert). */
-			g_dock->setFloating(true);
-			/* IMP-L: geschlossene Docks brauchen einen Wiederoeffnungs-
-			 * weg; OBS legt fuer custom-Docks keinen Menueeintrag an. */
-			obs_frontend_add_tools_menu_item(
-				"Textbox-Dock anzeigen",
-				[](void *param) {
-					auto *d = static_cast<QDockWidget *>(param);
-					d->show();
-					d->raise();
-					d->activateWindow();
-				},
-				g_dock);
-			g_dock->show();
-			g_dock->raise();
-			/* IMP-L2: schwebende Docks koennen hoeher als der Bildschirm
-			 * werden; dann liegt die untere Werkzeugleiste (Gear/Undo/
-			 * Export) unterhalb des Viewports und ist unerreichbar.
-			 * Auf die sichtbare Screen-Hoehe beschneiden. */
-			clamp_dock_to_screen(g_dock);
-			/* OBS versteckt Custom-Docks evtl. verzoegert nach dem Load;
-			 * Show erneut nach 1s und 3s erzwingen. QPointer statt Roh-Pointer:
-			 * nach obs_plugin_unload ist g_dock geloescht, die Timer duerfen
-			 * dann nicht mehr dereferenziert werden. */
-			const QPointer<QDockWidget> show_dock = g_dock;
-			QTimer::singleShot(1000, g_dock, [show_dock] {
-				if (show_dock) {
-					show_dock->show();
-					show_dock->raise();
-				}
-			});
-			QTimer::singleShot(3000, g_dock, [show_dock] {
-				QDockWidget *d = show_dock.data();
-				if (!d)
-					return;
-				d->show();
-				d->raise();
-				clamp_dock_to_screen(d);
-			});
-		}
-		blog(LOG_INFO, "[textbox] Textbox-Dock registriert (Erfolg=%s)", ok ? "ja" : "nein");
+		auto *dock_widget = new TextboxDock(state_path, mw);
+
+		if (!obs_frontend_add_dock_by_id("textbox-studio-dock", "Textbox Studio", dock_widget))
+			blog(LOG_ERROR, "[textbox] failed to add dock via obs_frontend_add_dock_by_id");
+		else
+			g_textbox_dock = dock_widget;
+
+		blog(LOG_INFO, "[textbox] Textbox-Dock registriert");
 	}
-	// Shutdown-Event-Callback für saubere Browser-Source-Bereinigung
+	// Theme-change + shutdown-Event-Callback
 	obs_frontend_add_event_callback(textbox_frontend_event, nullptr);
 #endif
 #endif
@@ -197,18 +134,7 @@ void obs_module_unload(void)
 	 * in der Szene erhalten (Data-Loss-Fix — Quellen durften beim Entladen
 	 * nicht verschwinden). */
 #ifdef ENABLE_QT
-	if (g_dock) {
-		/*
-		obs_frontend_remove_dock loest den Custom-Dock aus dem
-		QMainWindow-Layout. Das QDockWidget wird nur hier selbst geloescht,
-		wenn es noch lebt (QPointer != null). Ist OBSs Main-Window bereits
-		zerstört (normaler Shutdown-Pfad), hat Qt das Dock schon geloescht;
-		ein weiteres delete waere ein Double-Free und crasht beim Schliessen.
-		*/
-		obs_frontend_remove_dock("textbox");
-		delete g_dock.data();
-		g_dock = nullptr;
-	}
+	g_textbox_dock = nullptr; /* QPointer — OBS-owned, no manual delete */
 #endif
 #endif
 	// Bis zu 5 Sekunden (in 100-ms-Schritten) warten, bis alle aktiven Hintergrund-Jobs beendet sind.

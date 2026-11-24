@@ -18,6 +18,7 @@
 #include "textbox-profiles.hpp"
 #include "textbox-scene.hpp"
 #include "textbox-theme-icons.hpp"
+#include "square-tool-button.hpp"
 #include "textbox-log.hpp"
 
 #include <obs.h>
@@ -395,8 +396,6 @@ void textbox_self_heal_event(obs_frontend_event event, void *data)
 }
 #endif
 
-// changeEvent entfernt — natives OBS-Styling via aktiver Style
-
 void TextboxDock::ensure_card_sources()
 {
 	for (const auto &card : state_.cards) {
@@ -411,10 +410,9 @@ void TextboxDock::ensure_card_sources()
 	}
 }
 
-TextboxDock::TextboxDock(const std::string &state_path, QWidget *parent) : OBSDock(parent), state_path_(state_path)
+TextboxDock::TextboxDock(const std::string &state_path, QWidget *parent) : QFrame(parent), state_path_(state_path)
 {
 	setObjectName(QStringLiteral("OBSDock"));
-	setAttribute(Qt::WA_StyledBackground, true);
 
 	auto *save_timer = new QTimer(this);
 	save_timer->setObjectName(QStringLiteral("tbSaveTimer"));
@@ -439,6 +437,8 @@ TextboxDock::TextboxDock(const std::string &state_path, QWidget *parent) : OBSDo
 	auto *root_layout = new QVBoxLayout(this);
 	root_layout->setContentsMargins(4, 4, 4, 4);
 	root_layout->setSpacing(4);
+	/* No custom QSS paints — the OBS theme renders QFrame#OBSDock,
+	 * QPushButton, QComboBox, QLineEdit, QListWidget, QGroupBox natively. */
 
 	// Container f??r die Toolbar-Zeile + Statuszeile (unterbindet Theme-Einzel-Border
 	// f??r direkte Kind-QWidgets des Dock-Widgets — stattdessen kriegt nur tbTopRow
@@ -589,13 +589,12 @@ TextboxDock::TextboxDock(const std::string &state_path, QWidget *parent) : OBSDo
 	bottom_toolbar->setSpacing(6);
 
 	auto make_tool_btn = [this, btn_icon_sz](const QString &obj_name, const char *icon_name,
-						 const QString &tooltip) -> QToolButton * {
-		auto *btn = new QToolButton(this);
+						 const QString &tooltip) -> SquareToolButton * {
+		auto *btn = new SquareToolButton(this);
 		btn->setObjectName(obj_name);
 		btn->setFixedSize(btn_icon_sz, btn_icon_sz);
 		btn->setAutoRaise(true);
 		btn->setIcon(theme_icon(icon_name));
-		btn->setIconSize(QSize(16, 16));
 		btn->setToolTip(tooltip);
 		btn->setAccessibleName(tooltip);
 		btn->setProperty("class", "iconbtn");
@@ -629,8 +628,8 @@ TextboxDock::TextboxDock(const std::string &state_path, QWidget *parent) : OBSDo
 	tool_settings->setMenu(settings_menu);
 
 	auto make_text_tool_btn = [this, btn_icon_sz](const QString &obj_name, const QString &text,
-						     const QString &tooltip) -> QToolButton * {
-		auto *btn = new QToolButton(this);
+						     const QString &tooltip) -> SquareToolButton * {
+		auto *btn = new SquareToolButton(this);
 		btn->setObjectName(obj_name);
 		btn->setFixedSize(btn_icon_sz, btn_icon_sz);
 		btn->setAutoRaise(true);
@@ -921,6 +920,25 @@ TextboxDock::TextboxDock(const std::string &state_path, QWidget *parent) : OBSDo
 #endif
 
 	setMinimumSize(360, 240);
+}
+
+void TextboxDock::refreshTheme()
+{
+	/* The OBS theme paints QFrame#OBSDock (background #272A33,
+	 * rounded bottom corners). We only pick dark/light icon variants
+	 * here; no color QSS is applied. */
+	bool dark = qApp && qApp->palette().color(QPalette::Window).red()
+		          + qApp->palette().color(QPalette::Window).green()
+		          + qApp->palette().color(QPalette::Window).blue()
+		    < 384;
+	/* Re-write icons for the current palette if needed */
+	if (!state_path_.empty() && !icon_dir_.isEmpty()) {
+		std::string icon_err;
+		textbox_theme_icons::write_icons(std::filesystem::u8path(icon_dir_.toStdString()), false, &icon_err);
+	}
+	/* Rebuild row items to refresh icons on buttons */
+	rebuild_rows();
+	blog(LOG_INFO, "[textbox] Theme refresh%ls", dark ? " (dark)" : " (light)");
 }
 
 TextboxDock::~TextboxDock()
