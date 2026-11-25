@@ -938,7 +938,7 @@ void TextboxDock::refreshTheme()
 	}
 	/* Rebuild row items to refresh icons on buttons */
 	rebuild_rows();
-	blog(LOG_INFO, "[textbox] Theme refresh%ls", dark ? " (dark)" : " (light)");
+	blog(LOG_INFO, "[textbox] Theme refresh%s", dark ? " (dark)" : " (light)");
 }
 
 TextboxDock::~TextboxDock()
