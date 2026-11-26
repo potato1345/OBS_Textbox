@@ -18,7 +18,7 @@
 #include "textbox-profiles.hpp"
 #include "textbox-scene.hpp"
 #include "textbox-theme-icons.hpp"
-#include "square-tool-button.hpp"
+#include "textbox-state.hpp"
 #include "textbox-log.hpp"
 
 #include <obs.h>
@@ -490,7 +490,7 @@ TextboxDock::TextboxDock(const std::string &state_path, QWidget *parent) : QFram
 	}
 
 	top_row->addWidget(profil_select_, 1);
-	profil_del_btn_ = new QToolButton(tbTopRow);
+	profil_del_btn_ = new QPushButton(tbTopRow);
 	profil_del_btn_->setAttribute(Qt::WA_StyledBackground, true);
 	profil_del_btn_->setObjectName(QStringLiteral("tbProfilDelBtn"));
 	const int btn_icon_sz = qMax(28, fontMetrics().height() + 12);
@@ -588,11 +588,12 @@ TextboxDock::TextboxDock(const std::string &state_path, QWidget *parent) : QFram
 	bottom_toolbar->setSpacing(6);
 
 	auto make_tool_btn = [this, btn_icon_sz](const QString &obj_name, const char *icon_name,
-						 const QString &tooltip) -> SquareToolButton * {
-		auto *btn = new SquareToolButton(this);
+						 const QString &tooltip) -> QPushButton * {
+		auto *btn = new QPushButton(this);
 		btn->setObjectName(obj_name);
 		btn->setFixedSize(btn_icon_sz, btn_icon_sz);
 		btn->setIcon(theme_icon(icon_name));
+		btn->setIconSize(QSize(22, 22));
 		btn->setToolTip(tooltip);
 		btn->setAccessibleName(tooltip);
 		btn->setProperty("class", "iconbtn");
@@ -611,7 +612,6 @@ TextboxDock::TextboxDock(const std::string &state_path, QWidget *parent) : QFram
 					  QStringLiteral("AI-Import / Datei-Import (CSV, XLSX, ZIP, Google)"));
 	auto *tool_settings = make_tool_btn(QStringLiteral("tbToolSettings"), "cogs.svg",
 					    QStringLiteral("Schnell-Profile / Einstellungen / Backup / Restore"));
-	tool_settings->setPopupMode(QToolButton::InstantPopup);
 
 	auto *settings_menu = new QMenu(tool_settings);
 	QAction *act_quick = settings_menu->addAction(QStringLiteral("Schnell-Profile…"));
@@ -626,8 +626,8 @@ TextboxDock::TextboxDock(const std::string &state_path, QWidget *parent) : QFram
 	tool_settings->setMenu(settings_menu);
 
 	auto make_text_tool_btn = [this, btn_icon_sz](const QString &obj_name, const QString &text,
-						     const QString &tooltip) -> SquareToolButton * {
-		auto *btn = new SquareToolButton(this);
+						     const QString &tooltip) -> QPushButton * {
+		auto *btn = new QPushButton(this);
 		btn->setObjectName(obj_name);
 		btn->setFixedSize(btn_icon_sz, btn_icon_sz);
 		btn->setText(text);
@@ -671,8 +671,8 @@ TextboxDock::TextboxDock(const std::string &state_path, QWidget *parent) : QFram
 		}
 	};
 
-	connect(tool_up_, &QToolButton::clicked, this, [move_selected]() { move_selected(-1); });
-	connect(tool_down_, &QToolButton::clicked, this, [move_selected]() { move_selected(1); });
+	connect(tool_up_, &QPushButton::clicked, this, [move_selected]() { move_selected(-1); });
+	connect(tool_down_, &QPushButton::clicked, this, [move_selected]() { move_selected(1); });
 
 	// Enable/disable up/down based on current selection
 	connect(tbCardList_->selectionModel(), &QItemSelectionModel::selectionChanged, this,
@@ -743,8 +743,8 @@ TextboxDock::TextboxDock(const std::string &state_path, QWidget *parent) : QFram
 	connect(tool_undo, &QPushButton::clicked, this, perform_undo);
 	connect(undo_shortcut, &QShortcut::activated, this, perform_undo);
 
-	connect(tool_add, &QToolButton::clicked, this, &TextboxDock::on_add_card);
-	connect(tool_import, &QToolButton::clicked, this, &TextboxDock::on_open_import_dialog);
+	connect(tool_add, &QPushButton::clicked, this, &TextboxDock::on_add_card);
+	connect(tool_import, &QPushButton::clicked, this, &TextboxDock::on_open_import_dialog);
 	connect(act_quick, &QAction::triggered, this, &TextboxDock::on_open_quick_profiles_dialog);
 	connect(act_settings, &QAction::triggered, this, &TextboxDock::on_open_settings_dialog);
 	connect(act_tpl_folder, &QAction::triggered, this, &TextboxDock::on_open_templates_folder);
@@ -776,7 +776,7 @@ TextboxDock::TextboxDock(const std::string &state_path, QWidget *parent) : QFram
 	sync_profil_del_state();
 	connect(profil_select_, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
 		[this](int) { sync_profil_del_state(); });
-	connect(profil_del_btn_, &QToolButton::clicked, this, [this]() {
+	connect(profil_del_btn_, &QPushButton::clicked, this, [this]() {
 		const int idx = profil_select_->currentIndex();
 		if (idx <= 0 || idx >= profil_select_->count())
 			return;
@@ -1003,7 +1003,7 @@ QListWidgetItem *TextboxDock::create_row_item(const TextboxCard &card)
 	id_edit->setAccessibleName(QStringLiteral("Karten-ID"));
 	id_edit->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
 
-	auto *style_toggle_btn = new QToolButton(id_bar);
+	auto *style_toggle_btn = new QPushButton(id_bar);
 	style_toggle_btn->setObjectName(QStringLiteral("tbStyleToggle"));
 	style_toggle_btn->setFixedSize(btn_sz, btn_sz);
 	style_toggle_btn->setIcon(theme_icon("chevron_down.svg"));
@@ -1012,7 +1012,7 @@ QListWidgetItem *TextboxDock::create_row_item(const TextboxCard &card)
 	style_toggle_btn->setAccessibleName(QStringLiteral("Stil-Optionen einklappen"));
 	style_toggle_btn->setProperty("class", "iconbtn");
 
-	auto *dup_btn = new QToolButton(id_bar);
+	auto *dup_btn = new QPushButton(id_bar);
 	dup_btn->setObjectName(QStringLiteral("tbDupBtn"));
 	dup_btn->setFixedSize(btn_sz, btn_sz);
 	dup_btn->setText(QStringLiteral("⧉"));
@@ -1066,7 +1066,7 @@ QListWidgetItem *TextboxDock::create_row_item(const TextboxCard &card)
 	auto rows_collapsed = std::make_shared<bool>(false);
 	auto *lbl_rows = make_section_toolbtn(QStringLiteral("▼ SPEZIFISCHE CSS-REGELN"), rows_frame);
 	lbl_rows->setToolTip(QStringLiteral("Spezifische CSS-Regeln ein-/ausklappen"));
-	auto *row_add_btn = new QToolButton(rows_frame);
+	auto *row_add_btn = new QPushButton(rows_frame);
 	row_add_btn->setObjectName(QStringLiteral("tbRowAdd"));
 	row_add_btn->setFixedSize(btn_sz, btn_sz);
 	row_add_btn->setIcon(theme_icon("plus.svg"));
@@ -1074,7 +1074,7 @@ QListWidgetItem *TextboxDock::create_row_item(const TextboxCard &card)
 	row_add_btn->setToolTip(QStringLiteral("Zeile hinzufügen (max 8)"));
 	row_add_btn->setAccessibleName(QStringLiteral("Zeile hinzufügen (max 8)"));
 	row_add_btn->setProperty("class", "iconbtn");
-	auto *row_del_btn = new QToolButton(rows_frame);
+	auto *row_del_btn = new QPushButton(rows_frame);
 	row_del_btn->setObjectName(QStringLiteral("tbRowDel"));
 	row_del_btn->setFixedSize(btn_sz, btn_sz);
 	row_del_btn->setIcon(theme_icon("trash.svg"));
@@ -1093,7 +1093,7 @@ QListWidgetItem *TextboxDock::create_row_item(const TextboxCard &card)
 	// shared_ptr: die connect-Lambdas leben nach Funktionsende weiter.
 	auto label_edits = std::make_shared<std::vector<QLineEdit *>>();
 	auto value_edits = std::make_shared<std::vector<QLineEdit *>>();
-	auto move_btns = std::make_shared<std::vector<QToolButton *>>();
+	auto move_btns = std::make_shared<std::vector<QPushButton *>>();
 	auto move_row = std::make_shared<std::function<void(QLineEdit *, int)>>();
 
 	connect(lbl_rows, &QToolButton::clicked, rows_frame,
@@ -1125,23 +1125,23 @@ QListWidgetItem *TextboxDock::create_row_item(const TextboxCard &card)
 		auto *vedit = new QLineEdit(value, card_widget);
 		vedit->setPlaceholderText(QStringLiteral("Text dieser Zeile"));
 		vedit->setFixedHeight(fh);
-		auto *up_btn = new QToolButton(card_widget);
+		auto *up_btn = new QPushButton(card_widget);
 		up_btn->setObjectName(QStringLiteral("tbRowUp"));
 		up_btn->setFixedSize(btn_sz, btn_sz);
 		up_btn->setText(QStringLiteral("▲"));
 		up_btn->setToolTip(QStringLiteral("Zeile nach oben verschieben"));
 		up_btn->setAccessibleName(QStringLiteral("Zeile nach oben verschieben"));
 		up_btn->setProperty("class", "iconbtn");
-		auto *down_btn = new QToolButton(card_widget);
+		auto *down_btn = new QPushButton(card_widget);
 		down_btn->setObjectName(QStringLiteral("tbRowDown"));
 		down_btn->setFixedSize(btn_sz, btn_sz);
 		down_btn->setText(QStringLiteral("▼"));
 		down_btn->setToolTip(QStringLiteral("Zeile nach unten verschieben"));
 		down_btn->setAccessibleName(QStringLiteral("Zeile nach unten verschieben"));
 		down_btn->setProperty("class", "iconbtn");
-		QObject::connect(up_btn, &QToolButton::clicked, card_widget,
+		QObject::connect(up_btn, &QPushButton::clicked, card_widget,
 				 [move_row, ledit]() { (*move_row)(ledit, -1); });
-		QObject::connect(down_btn, &QToolButton::clicked, card_widget,
+		QObject::connect(down_btn, &QPushButton::clicked, card_widget,
 				 [move_row, ledit]() { (*move_row)(ledit, +1); });
 		if (*rows_collapsed) {
 			ledit->setVisible(false);
@@ -1220,7 +1220,7 @@ QListWidgetItem *TextboxDock::create_row_item(const TextboxCard &card)
 		wire_row_edits(pr.first, pr.second);
 	}
 
-	connect(row_add_btn, &QToolButton::clicked, this,
+	connect(row_add_btn, &QPushButton::clicked, this,
 		[this, label_edits, value_edits, add_row_edit, wire_row_edits, collect_rows, schedule_save]() {
 			if (label_edits->size() >= kMaxCardRows)
 				return;
@@ -1234,7 +1234,7 @@ QListWidgetItem *TextboxDock::create_row_item(const TextboxCard &card)
 				schedule_save();
 		});
 
-	connect(row_del_btn, &QToolButton::clicked, this,
+	connect(row_del_btn, &QPushButton::clicked, this,
 		[label_edits, value_edits, move_btns, rows_layout, collect_rows, schedule_save]() {
 			if (label_edits->size() <= 1)
 				return;
@@ -1379,7 +1379,7 @@ QListWidgetItem *TextboxDock::create_row_item(const TextboxCard &card)
 	auto css_collapsed = std::make_shared<bool>(true);
 	auto *lbl_css = make_section_toolbtn(QStringLiteral("▶ GENERELLE CSS-REGELN"), css_frame);
 	lbl_css->setToolTip(QStringLiteral("CSS-Regeln ein-/ausklappen"));
-	auto *css_add_btn = new QToolButton(css_frame);
+	auto *css_add_btn = new QPushButton(css_frame);
 	css_add_btn->setObjectName(QStringLiteral("tbCssAdd"));
 	css_add_btn->setFixedSize(btn_sz, btn_sz);
 	css_add_btn->setIcon(theme_icon("plus.svg"));
@@ -1387,7 +1387,7 @@ QListWidgetItem *TextboxDock::create_row_item(const TextboxCard &card)
 	css_add_btn->setToolTip(QStringLiteral("CSS-Regel hinzufügen (--variable = wert)"));
 	css_add_btn->setAccessibleName(QStringLiteral("CSS-Regel hinzufügen (--variable = wert)"));
 	css_add_btn->setProperty("class", "iconbtn");
-	auto *css_del_btn = new QToolButton(css_frame);
+	auto *css_del_btn = new QPushButton(css_frame);
 	css_del_btn->setObjectName(QStringLiteral("tbCssDel"));
 	css_del_btn->setFixedSize(btn_sz, btn_sz);
 	css_del_btn->setIcon(theme_icon("trash.svg"));
@@ -1765,13 +1765,13 @@ QListWidgetItem *TextboxDock::create_row_item(const TextboxCard &card)
 
 	rebuild_css_rows();
 
-	connect(css_add_btn, &QToolButton::clicked, this, [make_rule_row, collect_css, schedule_save]() {
+	connect(css_add_btn, &QPushButton::clicked, this, [make_rule_row, collect_css, schedule_save]() {
 		make_rule_row(QStringLiteral("--"), QStringLiteral("text"), QString());
 		if (collect_css())
 			schedule_save();
 	});
 
-	connect(css_del_btn, &QToolButton::clicked, this,
+	connect(css_del_btn, &QPushButton::clicked, this,
 		[this, card_id, css_layout, css_frame, css_rows, collect_css, schedule_save]() {
 			if (css_rows->empty())
 				return;
@@ -1854,7 +1854,7 @@ QListWidgetItem *TextboxDock::create_row_item(const TextboxCard &card)
 	style_section->setVisible(true);
 	inner_layout->addWidget(style_section);
 
-	connect(style_toggle_btn, &QToolButton::clicked, this, [this, style_section, style_toggle_btn]() {
+	connect(style_toggle_btn, &QPushButton::clicked, this, [this, style_section, style_toggle_btn]() {
 		// M7-2: isHidden() statt isVisible() — isVisible() ist auch bei
 		// verstecktem Dock-Parent false und flippt das Chevron-Icon vor dem
 		// echten State-Change.
@@ -2084,7 +2084,7 @@ QListWidgetItem *TextboxDock::create_row_item(const TextboxCard &card)
 		rebuild_rows();
 	});
 
-	connect(dup_btn, &QToolButton::clicked, this, [this, card_id]() {
+	connect(dup_btn, &QPushButton::clicked, this, [this, card_id]() {
 		capture_undo_snapshot(this, state_);
 		const TextboxCard *src = find_card_mut(card_id);
 		if (!src)

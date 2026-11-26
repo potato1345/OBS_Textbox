@@ -16,6 +16,7 @@
 #include "textbox-state.hpp"
 
 #include <QFrame>
+#include <QPushButton>
 #include <QIcon>
 #include <QWidget>
 #include <QTimer>
@@ -141,14 +142,14 @@ private:
 	QString icon_dir_;
 	TextboxState state_;
 	QComboBox *profil_select_ = nullptr;
-	QToolButton *profil_del_btn_ = nullptr;
+	QPushButton *profil_del_btn_ = nullptr;
 	QComboBox *card_search_ = nullptr;
 	CardListWidget *tbCardList_ = nullptr;
 	QLabel *dock_status_lbl_ = nullptr;
 	QToolButton *dock_status_close_ = nullptr; // c1: Fehlermeldung per Hand schließen
 	QTimer *dock_status_timer_ = nullptr;      // c1: Auto-dismiss der Statusmeldung
-	QToolButton *tool_up_ = nullptr;
-	QToolButton *tool_down_ = nullptr;
+	QPushButton *tool_up_ = nullptr;
+	QPushButton *tool_down_ = nullptr;
 	// Kooperatives Abbruch-Flag für laufende Hintergrund-Threads beim Schließen des Docks.
 	std::shared_ptr<std::atomic<bool>> cancel_ = std::make_shared<std::atomic<bool>>(false);
 };
