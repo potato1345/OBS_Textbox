@@ -113,6 +113,10 @@ bool obs_module_load(void)
 			blog(LOG_ERROR, "[textbox] failed to add dock via obs_frontend_add_dock_by_id");
 		else
 			g_textbox_dock = dock_widget;
+			/* Initial theme pass: refreshTheme normally runs on
+			 * OBS_FRONTEND_EVENT_THEME_CHANGED only, so the scoped
+			 * button/field stylesheet would never be applied at startup. */
+			QTimer::singleShot(0, dock_widget, &TextboxDock::refreshTheme);
 
 		blog(LOG_INFO, "[textbox] Textbox-Dock registriert");
 	}

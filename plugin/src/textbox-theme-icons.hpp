@@ -19,7 +19,7 @@
 
 namespace textbox_theme_icons {
 
-static const int kVersion = 4; // v4: toaste Icons (refresh/save/revert/dots/popout/collapse) entfernt
+static const int kVersion = 6; // v6: arrow/copy Icons + *_disabled.svg Varianten
 
 inline const std::vector<std::pair<std::string, std::string>> &icons();
 
@@ -157,6 +157,12 @@ inline const std::vector<std::pair<std::string, std::string>> &icons()
 </svg> )SVGICON"},
 		{"chevron_right.svg", R"SVGICON(<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width="16" height="16"><path fill="#fefefe" d="M5.5 2.75L4.25 4 8 8l-3.75 4 1.25 1.25L10.5 8Z"/></svg> )SVGICON"},
 		{"chevron_down.svg", R"SVGICON(<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width="16" height="16"><path fill="#fefefe" d="M2.75 5.5L4 4.25 8 8l4-3.75L13.25 5.5 8 10.75Z"/></svg> )SVGICON"},
+		{"copy.svg", R"SVGICON(<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width="16" height="16"><path fill="#fefefe" d="M6 2.5h7.5v8.5H6V2.5zM7.2 3.7v6.1h5.1V3.7z"/><path fill="#fefefe" d="M2.5 5.5H6V11h6v2.5H2.5V5.5zM3.7 6.7v4.6h3.6V11H8.5V6.7z"/></svg> )SVGICON"},
+		{"arrow_up.svg", R"SVGICON(<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width="16" height="16"><path fill="#fefefe" d="M8 2.5L13.5 9 11.2 11 8 7.2 4.8 11 2.5 9Z"/></svg> )SVGICON"},
+		{"arrow_down.svg", R"SVGICON(<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width="16" height="16"><path fill="#fefefe" d="M8 13.5L2.5 7 4.8 5 8 8.8 11.2 5 13.5 7Z"/></svg> )SVGICON"},
+		{"trash_disabled.svg", R"SVGICON(<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width="16" height="16"><path fill="#969696" d="M6 2h4l1 1h2v1H3V3h2l1-1zM4 5h8v8.5l-1 1.5H5l-1-1.5V5z"/></svg> )SVGICON"},
+		{"arrow_up_disabled.svg", R"SVGICON(<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width="16" height="16"><path fill="#969696" d="M8 2.5L13.5 9 11.2 11 8 7.2 4.8 11 2.5 9Z"/></svg> )SVGICON"},
+		{"arrow_down_disabled.svg", R"SVGICON(<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width="16" height="16"><path fill="#969696" d="M8 13.5L2.5 7 4.8 5 8 8.8 11.2 5 13.5 7Z"/></svg> )SVGICON"},
 	};
 	return items;
 }

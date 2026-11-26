@@ -639,10 +639,16 @@ TextboxDock::TextboxDock(const std::string &state_path, QWidget *parent) : QFram
 
 	tool_up_ = make_text_tool_btn(QStringLiteral("tbToolUp"), QStringLiteral("↑"),
 				      QStringLiteral("Karte nach oben verschieben"));
+	tool_up_->setText(QString());
+	tool_up_->setIcon(theme_icon("arrow_up.svg"));
+	tool_up_->setIconSize(QSize(22, 22));
 	tool_up_->setEnabled(false);
 
 	tool_down_ = make_text_tool_btn(QStringLiteral("tbToolDown"), QStringLiteral("↓"),
-					QStringLiteral("Karte nach unten verschieben"));
+				      QStringLiteral("Karte nach unten verschieben"));
+	tool_down_->setText(QString());
+	tool_down_->setIcon(theme_icon("arrow_down.svg"));
+	tool_down_->setIconSize(QSize(22, 22));
 	tool_down_->setEnabled(false);
 
 	auto move_selected = [this](int direction) {
@@ -928,6 +934,32 @@ void TextboxDock::refreshTheme()
 		          + qApp->palette().color(QPalette::Window).green()
 		          + qApp->palette().color(QPalette::Window).blue()
 		    < 384;
+	/* Theme-inherited painting does not reach controls inside tbCardList:
+	 * the OBS theme only styles them globally via palette, so buttons inside
+	 * card rows render without fill and QListWidget QLineEdits get the theme's
+	 * white rename border. Apply a scoped stylesheet mirroring the Yami dark
+	 * tokens (grey4 button, grey1 border, grey6/grey7 inputs, grey5 disabled). */
+	if (dark) {
+		setStyleSheet(QStringLiteral(
+			"QPushButton { background-color: #3C404D; color: #FFFFFF;"
+			" border: 1px solid #3C404D; border-radius: 4px; }"
+			"QPushButton:hover { background-color: #464B59; border-color: #5B6273; }"
+			"QPushButton:pressed { background-color: #1D1F26; }"
+			"QPushButton:disabled { background-color: #323540; color: #969696;"
+			" border-color: #323540; }"
+			"QComboBox { background-color: #3C404D; color: #FFFFFF;"
+			" border: 1px solid #3C404D; border-radius: 4px; }"
+			"QComboBox:hover { border-color: #5B6273; }"
+			"QComboBox::drop-down { border: none; width: 22px; }"
+			"QLineEdit { background-color: #1D1F26; color: #FFFFFF;"
+			" border: 1px solid #5B6273; border-radius: 4px; }"
+			"QLineEdit:focus { border-color: #5B6273; }"
+			"QListWidget { background-color: transparent; border: none; }"
+			"QListWidget QLineEdit { background-color: #1D1F26;"
+			" border: 1px solid #5B6273; }"));
+	} else {
+		setStyleSheet(QString());
+	}
 	/* Re-write icons for the current palette if needed */
 	if (!state_path_.empty() && !icon_dir_.isEmpty()) {
 		std::string icon_err;
@@ -971,7 +1003,17 @@ QIcon TextboxDock::theme_icon(const char *name) const
 {
 	if (icon_dir_.isEmpty())
 		return QIcon();
-	return QIcon(icon_dir_ + QLatin1Char('/') + QLatin1String(name));
+	QIcon icon(icon_dir_ + QLatin1Char('/') + QLatin1String(name));
+	/* Deaktivierte Buttons: Qt dimmt SVG-Icons nicht zuverlässig; explizite
+	 *_disabled.svg-Variante (grau #969696) als Disabled-Mode hinterlegen. */
+	const QString base = QLatin1String(name);
+	if (base.endsWith(QLatin1String(".svg"))) {
+		const QString dpath = icon_dir_ + '/' + base.left(base.size() - 4) +
+				   QLatin1String("_disabled.svg");
+		if (QFile::exists(dpath))
+			icon.addFile(dpath, QSize(), QIcon::Disabled);
+	}
+	return icon;
 }
 
 QListWidgetItem *TextboxDock::create_row_item(const TextboxCard &card)
@@ -1015,7 +1057,8 @@ QListWidgetItem *TextboxDock::create_row_item(const TextboxCard &card)
 	auto *dup_btn = new QPushButton(id_bar);
 	dup_btn->setObjectName(QStringLiteral("tbDupBtn"));
 	dup_btn->setFixedSize(btn_sz, btn_sz);
-	dup_btn->setText(QStringLiteral("⧉"));
+	dup_btn->setIcon(theme_icon("copy.svg"));
+	dup_btn->setIconSize(QSize(22, 22));
 	dup_btn->setToolTip(QStringLiteral("Karte duplizieren (neue ID, gleicher Inhalt + Stil)"));
 	dup_btn->setAccessibleName(QStringLiteral("Karte duplizieren (neue ID, gleicher Inhalt + Stil)"));
 	dup_btn->setProperty("class", "iconbtn");
@@ -1128,14 +1171,16 @@ QListWidgetItem *TextboxDock::create_row_item(const TextboxCard &card)
 		auto *up_btn = new QPushButton(card_widget);
 		up_btn->setObjectName(QStringLiteral("tbRowUp"));
 		up_btn->setFixedSize(btn_sz, btn_sz);
-		up_btn->setText(QStringLiteral("▲"));
+		up_btn->setIcon(theme_icon("arrow_up.svg"));
+		up_btn->setIconSize(QSize(22, 22));
 		up_btn->setToolTip(QStringLiteral("Zeile nach oben verschieben"));
 		up_btn->setAccessibleName(QStringLiteral("Zeile nach oben verschieben"));
 		up_btn->setProperty("class", "iconbtn");
 		auto *down_btn = new QPushButton(card_widget);
 		down_btn->setObjectName(QStringLiteral("tbRowDown"));
 		down_btn->setFixedSize(btn_sz, btn_sz);
-		down_btn->setText(QStringLiteral("▼"));
+		down_btn->setIcon(theme_icon("arrow_down.svg"));
+		down_btn->setIconSize(QSize(22, 22));
 		down_btn->setToolTip(QStringLiteral("Zeile nach unten verschieben"));
 		down_btn->setAccessibleName(QStringLiteral("Zeile nach unten verschieben"));
 		down_btn->setProperty("class", "iconbtn");
@@ -1349,9 +1394,11 @@ QListWidgetItem *TextboxDock::create_row_item(const TextboxCard &card)
 	prof_rename_btn->setIconSize(QSize(22, 22));
 	prof_rename_btn->setProperty("class", "iconbtn");
 
-	auto *prof_del_btn = new QPushButton(QStringLiteral("−"), style_section);
+	auto *prof_del_btn = new QPushButton(style_section);
 	prof_del_btn->setObjectName(QStringLiteral("tbBtnDeleteProfile"));
 	prof_del_btn->setFixedSize(btn_sz, btn_sz);
+	prof_del_btn->setIcon(theme_icon("trash.svg"));
+	prof_del_btn->setIconSize(QSize(22, 22));
 	prof_del_btn->setToolTip(QStringLiteral("Aktuelles Profil löschen"));
 	prof_del_btn->setAccessibleName(QStringLiteral("Aktuelles Profil löschen"));
 	prof_del_btn->setProperty("class", "iconbtn");
