@@ -493,11 +493,10 @@ TextboxDock::TextboxDock(const std::string &state_path, QWidget *parent) : QFram
 	profil_del_btn_ = new QToolButton(tbTopRow);
 	profil_del_btn_->setAttribute(Qt::WA_StyledBackground, true);
 	profil_del_btn_->setObjectName(QStringLiteral("tbProfilDelBtn"));
-	const int btn_icon_sz = style()->pixelMetric(QStyle::PM_ButtonIconSize, nullptr, this);
+	const int btn_icon_sz = qMax(28, fontMetrics().height() + 12);
 	profil_del_btn_->setFixedSize(btn_icon_sz, btn_icon_sz);
-	profil_del_btn_->setAutoRaise(true);
 	profil_del_btn_->setIcon(theme_icon("trash.svg"));
-	profil_del_btn_->setIconSize(QSize(16, 16));
+	profil_del_btn_->setIconSize(QSize(22, 22));
 	profil_del_btn_->setToolTip(QStringLiteral("Gewähltes Schnell-Profil löschen"));
 	profil_del_btn_->setAccessibleName(QStringLiteral("Gewähltes Schnell-Profil löschen"));
 	profil_del_btn_->setEnabled(false);
@@ -593,7 +592,6 @@ TextboxDock::TextboxDock(const std::string &state_path, QWidget *parent) : QFram
 		auto *btn = new SquareToolButton(this);
 		btn->setObjectName(obj_name);
 		btn->setFixedSize(btn_icon_sz, btn_icon_sz);
-		btn->setAutoRaise(true);
 		btn->setIcon(theme_icon(icon_name));
 		btn->setToolTip(tooltip);
 		btn->setAccessibleName(tooltip);
@@ -632,7 +630,6 @@ TextboxDock::TextboxDock(const std::string &state_path, QWidget *parent) : QFram
 		auto *btn = new SquareToolButton(this);
 		btn->setObjectName(obj_name);
 		btn->setFixedSize(btn_icon_sz, btn_icon_sz);
-		btn->setAutoRaise(true);
 		btn->setText(text);
 		btn->setToolTip(tooltip);
 		btn->setAccessibleName(tooltip);
@@ -979,8 +976,8 @@ QIcon TextboxDock::theme_icon(const char *name) const
 
 QListWidgetItem *TextboxDock::create_row_item(const TextboxCard &card)
 {
-	const int btn_sz = style()->pixelMetric(QStyle::PM_ButtonIconSize, nullptr, this);
-	const int fh = fontMetrics().height() + 8; // Zeilen-Höhe für Textfelder
+	const int btn_sz = qMax(28, fontMetrics().height() + 12);
+	const int fh = fontMetrics().height() + 10; // Zeilen-Höhe für Textfelder
 	auto *card_widget = new QWidget(this);
 	card_widget->setProperty("tbCardId", QString::fromUtf8(card.id.c_str()));
 	card_widget->setMinimumWidth(fontMetrics().averageCharWidth() * 28);
@@ -1009,9 +1006,8 @@ QListWidgetItem *TextboxDock::create_row_item(const TextboxCard &card)
 	auto *style_toggle_btn = new QToolButton(id_bar);
 	style_toggle_btn->setObjectName(QStringLiteral("tbStyleToggle"));
 	style_toggle_btn->setFixedSize(btn_sz, btn_sz);
-	style_toggle_btn->setAutoRaise(true);
 	style_toggle_btn->setIcon(theme_icon("chevron_down.svg"));
-	style_toggle_btn->setIconSize(QSize(16, 16));
+	style_toggle_btn->setIconSize(QSize(22, 22));
 	style_toggle_btn->setToolTip(QStringLiteral("Stil-Optionen einklappen"));
 	style_toggle_btn->setAccessibleName(QStringLiteral("Stil-Optionen einklappen"));
 	style_toggle_btn->setProperty("class", "iconbtn");
@@ -1019,7 +1015,6 @@ QListWidgetItem *TextboxDock::create_row_item(const TextboxCard &card)
 	auto *dup_btn = new QToolButton(id_bar);
 	dup_btn->setObjectName(QStringLiteral("tbDupBtn"));
 	dup_btn->setFixedSize(btn_sz, btn_sz);
-	dup_btn->setAutoRaise(true);
 	dup_btn->setText(QStringLiteral("⧉"));
 	dup_btn->setToolTip(QStringLiteral("Karte duplizieren (neue ID, gleicher Inhalt + Stil)"));
 	dup_btn->setAccessibleName(QStringLiteral("Karte duplizieren (neue ID, gleicher Inhalt + Stil)"));
@@ -1029,7 +1024,7 @@ QListWidgetItem *TextboxDock::create_row_item(const TextboxCard &card)
 	del_btn->setObjectName(QStringLiteral("tbDelBtn"));
 	del_btn->setFixedSize(btn_sz, btn_sz);
 	del_btn->setIcon(theme_icon("trash.svg"));
-	del_btn->setIconSize(QSize(16, 16));
+	del_btn->setIconSize(QSize(22, 22));
 	del_btn->setToolTip(QStringLiteral("Karte löschen"));
 	del_btn->setAccessibleName(QStringLiteral("Karte löschen"));
 	del_btn->setProperty("tbDanger", true);
@@ -1074,18 +1069,16 @@ QListWidgetItem *TextboxDock::create_row_item(const TextboxCard &card)
 	auto *row_add_btn = new QToolButton(rows_frame);
 	row_add_btn->setObjectName(QStringLiteral("tbRowAdd"));
 	row_add_btn->setFixedSize(btn_sz, btn_sz);
-	row_add_btn->setAutoRaise(true);
 	row_add_btn->setIcon(theme_icon("plus.svg"));
-	row_add_btn->setIconSize(QSize(16, 16));
+	row_add_btn->setIconSize(QSize(22, 22));
 	row_add_btn->setToolTip(QStringLiteral("Zeile hinzufügen (max 8)"));
 	row_add_btn->setAccessibleName(QStringLiteral("Zeile hinzufügen (max 8)"));
 	row_add_btn->setProperty("class", "iconbtn");
 	auto *row_del_btn = new QToolButton(rows_frame);
 	row_del_btn->setObjectName(QStringLiteral("tbRowDel"));
 	row_del_btn->setFixedSize(btn_sz, btn_sz);
-	row_del_btn->setAutoRaise(true);
 	row_del_btn->setIcon(theme_icon("trash.svg"));
-	row_del_btn->setIconSize(QSize(16, 16));
+	row_del_btn->setIconSize(QSize(22, 22));
 	row_del_btn->setToolTip(QStringLiteral("Letzte Zeile entfernen (min 1)"));
 	row_del_btn->setAccessibleName(QStringLiteral("Letzte Zeile entfernen (min 1)"));
 	row_del_btn->setProperty("class", "iconbtn");
@@ -1135,7 +1128,6 @@ QListWidgetItem *TextboxDock::create_row_item(const TextboxCard &card)
 		auto *up_btn = new QToolButton(card_widget);
 		up_btn->setObjectName(QStringLiteral("tbRowUp"));
 		up_btn->setFixedSize(btn_sz, btn_sz);
-		up_btn->setAutoRaise(true);
 		up_btn->setText(QStringLiteral("▲"));
 		up_btn->setToolTip(QStringLiteral("Zeile nach oben verschieben"));
 		up_btn->setAccessibleName(QStringLiteral("Zeile nach oben verschieben"));
@@ -1143,7 +1135,6 @@ QListWidgetItem *TextboxDock::create_row_item(const TextboxCard &card)
 		auto *down_btn = new QToolButton(card_widget);
 		down_btn->setObjectName(QStringLiteral("tbRowDown"));
 		down_btn->setFixedSize(btn_sz, btn_sz);
-		down_btn->setAutoRaise(true);
 		down_btn->setText(QStringLiteral("▼"));
 		down_btn->setToolTip(QStringLiteral("Zeile nach unten verschieben"));
 		down_btn->setAccessibleName(QStringLiteral("Zeile nach unten verschieben"));
@@ -1355,7 +1346,7 @@ QListWidgetItem *TextboxDock::create_row_item(const TextboxCard &card)
 	prof_rename_btn->setToolTip(QStringLiteral("Aktuelles Profil umbenennen"));
 	prof_rename_btn->setAccessibleName(QStringLiteral("Aktuelles Profil umbenennen"));
 	prof_rename_btn->setIcon(theme_icon("rename.svg"));
-	prof_rename_btn->setIconSize(QSize(16, 16));
+	prof_rename_btn->setIconSize(QSize(22, 22));
 	prof_rename_btn->setProperty("class", "iconbtn");
 
 	auto *prof_del_btn = new QPushButton(QStringLiteral("−"), style_section);
@@ -1391,18 +1382,16 @@ QListWidgetItem *TextboxDock::create_row_item(const TextboxCard &card)
 	auto *css_add_btn = new QToolButton(css_frame);
 	css_add_btn->setObjectName(QStringLiteral("tbCssAdd"));
 	css_add_btn->setFixedSize(btn_sz, btn_sz);
-	css_add_btn->setAutoRaise(true);
 	css_add_btn->setIcon(theme_icon("plus.svg"));
-	css_add_btn->setIconSize(QSize(16, 16));
+	css_add_btn->setIconSize(QSize(22, 22));
 	css_add_btn->setToolTip(QStringLiteral("CSS-Regel hinzufügen (--variable = wert)"));
 	css_add_btn->setAccessibleName(QStringLiteral("CSS-Regel hinzufügen (--variable = wert)"));
 	css_add_btn->setProperty("class", "iconbtn");
 	auto *css_del_btn = new QToolButton(css_frame);
 	css_del_btn->setObjectName(QStringLiteral("tbCssDel"));
 	css_del_btn->setFixedSize(btn_sz, btn_sz);
-	css_del_btn->setAutoRaise(true);
 	css_del_btn->setIcon(theme_icon("trash.svg"));
-	css_del_btn->setIconSize(QSize(16, 16));
+	css_del_btn->setIconSize(QSize(22, 22));
 	css_del_btn->setToolTip(QStringLiteral("Letzte CSS-Regel entfernen"));
 	css_del_btn->setAccessibleName(QStringLiteral("Letzte CSS-Regel entfernen"));
 	css_del_btn->setProperty("class", "iconbtn");
@@ -1607,7 +1596,7 @@ QListWidgetItem *TextboxDock::create_row_item(const TextboxCard &card)
 			auto *pick = new QPushButton(row);
 			pick->setFixedSize(fh + 2, fh + 2);
 			pick->setIcon(theme_icon("download.svg"));
-			pick->setIconSize(QSize(16, 16));
+			pick->setIconSize(QSize(22, 22));
 			pick->setToolTip(QStringLiteral("Animationsdatei auswählen"));
 			hl->addWidget(edit, 1);
 			hl->addWidget(pick);
@@ -1826,7 +1815,7 @@ QListWidgetItem *TextboxDock::create_row_item(const TextboxCard &card)
 	tpl_pick->setObjectName(QStringLiteral("tbTemplatePick"));
 	tpl_pick->setFixedSize(btn_sz, btn_sz);
 	tpl_pick->setIcon(theme_icon("download.svg"));
-	tpl_pick->setIconSize(QSize(16, 16));
+	tpl_pick->setIconSize(QSize(22, 22));
 	tpl_pick->setToolTip(QStringLiteral("Vorlagen-Datei (.html) auswählen"));
 	tpl_pick->setAccessibleName(QStringLiteral("Vorlagen-Datei (.html) auswählen"));
 	tpl_pick->setProperty("class", "iconbtn");
@@ -2608,7 +2597,7 @@ void TextboxDock::on_open_import_dialog()
 	auto *api_btn = new QPushButton(QStringLiteral("Daten von URL holen"), google_group);
 	api_btn->setObjectName(QStringLiteral("tbBtnApiImport"));
 	api_btn->setIcon(theme_icon("download.svg"));
-	api_btn->setIconSize(QSize(16, 16));
+	api_btn->setIconSize(QSize(22, 22));
 
 	auto *status_lbl = new QLabel(QStringLiteral("Bereit."), google_group);
 	status_lbl->setObjectName(QStringLiteral("tbImportStatus"));
@@ -2652,7 +2641,7 @@ void TextboxDock::on_open_import_dialog()
 	kopf_edit_btn->setObjectName(QStringLiteral("tbBtnKopfEdit"));
 	kopf_edit_btn->setFixedSize(fontMetrics().height() + 12, fontMetrics().height() + 12);
 	kopf_edit_btn->setIcon(theme_icon("rename.svg"));
-	kopf_edit_btn->setIconSize(QSize(16, 16));
+	kopf_edit_btn->setIconSize(QSize(22, 22));
 	kopf_edit_btn->setToolTip(QStringLiteral("Anzuzeigende Kopfdaten-Felder auswählen"));
 
 	kopf_fields_row->addWidget(kopf_fields_box, 1);
@@ -3531,7 +3520,7 @@ void TextboxDock::on_open_quick_profiles_dialog()
 	auto *del_btn = new QPushButton(QStringLiteral("Löschen"), list_group);
 	del_btn->setObjectName(QStringLiteral("tbBtnQuickDelete"));
 	del_btn->setIcon(theme_icon("trash.svg"));
-	del_btn->setIconSize(QSize(16, 16));
+	del_btn->setIconSize(QSize(22, 22));
 	del_btn->setProperty("tbDanger", true);
 	action_row->addWidget(apply_btn, 1);
 	action_row->addWidget(del_btn, 1);
@@ -3857,7 +3846,7 @@ void TextboxDock::on_open_settings_dialog()
 	auto *del_prof_btn = new QPushButton(QStringLiteral("Löschen"), profiles_group);
 	del_prof_btn->setObjectName(QStringLiteral("tbBtnDeleteProfile"));
 	del_prof_btn->setIcon(theme_icon("trash.svg"));
-	del_prof_btn->setIconSize(QSize(16, 16));
+	del_prof_btn->setIconSize(QSize(22, 22));
 	del_prof_btn->setProperty("tbDanger", true);
 	del_prof_btn->setEnabled(false);
 
