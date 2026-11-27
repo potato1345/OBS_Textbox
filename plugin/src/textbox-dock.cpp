@@ -91,7 +91,7 @@ public:
 	explicit DragBar(int btn_sz, QWidget *parent = nullptr)
 		: QPushButton(parent)
 	{
-		setFixedSize(btn_sz, btn_sz * 2);
+		setFixedSize(btn_sz, btn_sz); // Square, auf Zeilenhöhe — DOM-Striche dominieren die Zeile nicht
 		setCursor(Qt::OpenHandCursor);
 		setAccessibleName(QStringLiteral("Zeile per Drag verschieben"));
 		setToolTip(QStringLiteral("Ziehen: nach oben oder unten verschieben"));
@@ -124,7 +124,7 @@ protected:
 		 * (Striche dichter zusammen + dünner — Johann, 27.11). */
 		const int bar_w = 22;
 		const int bar_h = 2;
-		const int gap = 8; // Abstand der Strich-Mittelpunkte
+		const int gap = 6; // Abstand der Strich-Mittelpunkte (enger — Johann, 27.11)
 		const int x = (w - bar_w) / 2;
 		p.drawRect(x, h / 2 - gap / 2 - bar_h / 2, bar_w, bar_h);
 		p.drawRect(x, h / 2 + gap / 2 - bar_h / 2, bar_w, bar_h);
@@ -710,10 +710,10 @@ TextboxDock::TextboxDock(const std::string &state_path, QWidget *parent) : QFram
 	profil_del_btn_ = new QPushButton(tbTopRow);
 	profil_del_btn_->setAttribute(Qt::WA_StyledBackground, true);
 	profil_del_btn_->setObjectName(QStringLiteral("tbProfilDelBtn"));
-	const int btn_icon_sz = qMax(28, fontMetrics().height() + 12);
+	const int btn_icon_sz = qMax(24, fontMetrics().height() + 8);
 	profil_del_btn_->setFixedSize(btn_icon_sz, btn_icon_sz);
 	profil_del_btn_->setIcon(theme_icon("trash.svg"));
-	profil_del_btn_->setIconSize(QSize(22, 22));
+	profil_del_btn_->setIconSize(QSize(18, 18));
 	profil_del_btn_->setToolTip(QStringLiteral("Gewähltes Schnell-Profil löschen"));
 	profil_del_btn_->setAccessibleName(QStringLiteral("Gewähltes Schnell-Profil löschen"));
 	profil_del_btn_->setEnabled(false);
@@ -815,7 +815,7 @@ TextboxDock::TextboxDock(const std::string &state_path, QWidget *parent) : QFram
 		btn->setObjectName(obj_name);
 		btn->setFixedSize(btn_icon_sz, btn_icon_sz);
 		btn->setIcon(theme_icon(icon_name));
-		btn->setIconSize(QSize(22, 22));
+		btn->setIconSize(QSize(18, 18));
 		btn->setToolTip(tooltip);
 		btn->setAccessibleName(tooltip);
 		btn->setProperty("class", "iconbtn");
@@ -863,14 +863,14 @@ TextboxDock::TextboxDock(const std::string &state_path, QWidget *parent) : QFram
 				      QStringLiteral("Karte nach oben verschieben"));
 	tool_up_->setText(QString());
 	tool_up_->setIcon(theme_icon("arrow_up.svg"));
-	tool_up_->setIconSize(QSize(22, 22));
+	tool_up_->setIconSize(QSize(18, 18));
 	tool_up_->setEnabled(false);
 
 	tool_down_ = make_text_tool_btn(QStringLiteral("tbToolDown"), QStringLiteral("↓"),
 				      QStringLiteral("Karte nach unten verschieben"));
 	tool_down_->setText(QString());
 	tool_down_->setIcon(theme_icon("arrow_down.svg"));
-	tool_down_->setIconSize(QSize(22, 22));
+	tool_down_->setIconSize(QSize(18, 18));
 	tool_down_->setEnabled(false);
 
 	auto move_selected = [this](int direction) {
@@ -1243,23 +1243,23 @@ QIcon TextboxDock::theme_icon(const char *name) const
 
 QListWidgetItem *TextboxDock::create_row_item(const TextboxCard &card)
 {
-	const int btn_sz = qMax(28, fontMetrics().height() + 12);
-	const int fh = fontMetrics().height() + 10; // Zeilen-Höhe für Textfelder
+	const int btn_sz = qMax(24, fontMetrics().height() + 8);
+	const int fh = fontMetrics().height() + 8; // Zeilen-Höhe für Textfelder (kompakter)
 	auto *card_widget = new QWidget(this);
 	card_widget->setProperty("tbCardId", QString::fromUtf8(card.id.c_str()));
 	card_widget->setMinimumWidth(fontMetrics().averageCharWidth() * 28);
 	card_widget->setAttribute(Qt::WA_TransparentForMouseEvents);
 
 	auto *inner_layout = new QVBoxLayout(card_widget);
-	inner_layout->setContentsMargins(10, 10, 10, 10);
-	inner_layout->setSpacing(8);
+	inner_layout->setContentsMargins(8, 8, 8, 8);
+	inner_layout->setSpacing(6);
 
 	auto *id_bar = new QFrame(card_widget);
 	id_bar->setObjectName(QStringLiteral("tbIdBar"));
 	id_bar->setAttribute(Qt::WA_StyledBackground, true);
 	auto *id_layout = new QHBoxLayout(id_bar);
-	id_layout->setContentsMargins(8, 4, 8, 4);
-	id_layout->setSpacing(8);
+	id_layout->setContentsMargins(6, 2, 6, 2);
+	id_layout->setSpacing(6);
 
 	auto *id_prefix = new QLabel(QStringLiteral("ID"), id_bar);
 	id_prefix->setObjectName(QStringLiteral("tbIdPrefix"));
@@ -1277,7 +1277,7 @@ QListWidgetItem *TextboxDock::create_row_item(const TextboxCard &card)
 	style_toggle_btn->setObjectName(QStringLiteral("tbStyleToggle"));
 	style_toggle_btn->setFixedSize(btn_sz, btn_sz);
 	style_toggle_btn->setIcon(theme_icon("chevron_down.svg"));
-	style_toggle_btn->setIconSize(QSize(22, 22));
+	style_toggle_btn->setIconSize(QSize(18, 18));
 	style_toggle_btn->setToolTip(QStringLiteral("Stil-Optionen einklappen"));
 	style_toggle_btn->setAccessibleName(QStringLiteral("Stil-Optionen einklappen"));
 	style_toggle_btn->setProperty("class", "iconbtn");
@@ -1286,7 +1286,7 @@ QListWidgetItem *TextboxDock::create_row_item(const TextboxCard &card)
 	dup_btn->setObjectName(QStringLiteral("tbDupBtn"));
 	dup_btn->setFixedSize(btn_sz, btn_sz);
 	dup_btn->setIcon(theme_icon("copy.svg"));
-	dup_btn->setIconSize(QSize(22, 22));
+	dup_btn->setIconSize(QSize(18, 18));
 	dup_btn->setToolTip(QStringLiteral("Karte duplizieren (neue ID, gleicher Inhalt + Stil)"));
 	dup_btn->setAccessibleName(QStringLiteral("Karte duplizieren (neue ID, gleicher Inhalt + Stil)"));
 	dup_btn->setProperty("class", "iconbtn");
@@ -1295,7 +1295,7 @@ QListWidgetItem *TextboxDock::create_row_item(const TextboxCard &card)
 	del_btn->setObjectName(QStringLiteral("tbDelBtn"));
 	del_btn->setFixedSize(btn_sz, btn_sz);
 	del_btn->setIcon(theme_icon("trash.svg"));
-	del_btn->setIconSize(QSize(22, 22));
+	del_btn->setIconSize(QSize(18, 18));
 	del_btn->setToolTip(QStringLiteral("Karte löschen"));
 	del_btn->setAccessibleName(QStringLiteral("Karte löschen"));
 	del_btn->setProperty("tbDanger", true);
@@ -1328,8 +1328,8 @@ QListWidgetItem *TextboxDock::create_row_item(const TextboxCard &card)
 	rows_frame->setAttribute(Qt::WA_StyledBackground, true);
 	rows_frame->setAttribute(Qt::WA_TransparentForMouseEvents);
 	auto *rows_layout = new QVBoxLayout(rows_frame);
-	rows_layout->setContentsMargins(4, 2, 4, 4);
-	rows_layout->setSpacing(4);
+	rows_layout->setContentsMargins(4, 1, 4, 3);
+	rows_layout->setSpacing(2);
 
 	auto *rows_bar = new QHBoxLayout();
 	rows_bar->setContentsMargins(0, 0, 0, 0);
@@ -1341,7 +1341,7 @@ QListWidgetItem *TextboxDock::create_row_item(const TextboxCard &card)
 	row_add_btn->setObjectName(QStringLiteral("tbRowAdd"));
 	row_add_btn->setFixedSize(btn_sz, btn_sz);
 	row_add_btn->setIcon(theme_icon("plus.svg"));
-	row_add_btn->setIconSize(QSize(22, 22));
+	row_add_btn->setIconSize(QSize(18, 18));
 	row_add_btn->setToolTip(QStringLiteral("Zeile hinzufügen (max 8)"));
 	row_add_btn->setAccessibleName(QStringLiteral("Zeile hinzufügen (max 8)"));
 	row_add_btn->setProperty("class", "iconbtn");
@@ -1349,7 +1349,7 @@ QListWidgetItem *TextboxDock::create_row_item(const TextboxCard &card)
 	row_del_btn->setObjectName(QStringLiteral("tbRowDel"));
 	row_del_btn->setFixedSize(btn_sz, btn_sz);
 	row_del_btn->setIcon(theme_icon("trash.svg"));
-	row_del_btn->setIconSize(QSize(22, 22));
+	row_del_btn->setIconSize(QSize(18, 18));
 	row_del_btn->setToolTip(QStringLiteral("Letzte Zeile entfernen (min 1)"));
 	row_del_btn->setAccessibleName(QStringLiteral("Letzte Zeile entfernen (min 1)"));
 	row_del_btn->setProperty("class", "iconbtn");
@@ -1386,7 +1386,7 @@ QListWidgetItem *TextboxDock::create_row_item(const TextboxCard &card)
 			     btn_sz](const QString &label, const QString &value) {
 		auto *row = new QHBoxLayout();
 		row->setContentsMargins(0, 0, 0, 0);
-		row->setSpacing(6);
+		row->setSpacing(4);
 		auto *ledit = new QLineEdit(label, card_widget);
 		ledit->setPlaceholderText(QStringLiteral("--zeile-N"));
 		ledit->setToolTip(QStringLiteral(
@@ -3772,7 +3772,7 @@ void TextboxDock::on_open_quick_profiles_dialog()
 	auto *del_btn = new QPushButton(QStringLiteral("Löschen"), list_group);
 	del_btn->setObjectName(QStringLiteral("tbBtnQuickDelete"));
 	del_btn->setIcon(theme_icon("trash.svg"));
-	del_btn->setIconSize(QSize(22, 22));
+	del_btn->setIconSize(QSize(18, 18));
 	del_btn->setProperty("tbDanger", true);
 	action_row->addWidget(apply_btn, 1);
 	action_row->addWidget(del_btn, 1);
