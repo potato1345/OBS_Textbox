@@ -645,7 +645,7 @@ TextboxDock::TextboxDock(const std::string &state_path, QWidget *parent) : QFram
 
 	auto *root_layout = new QVBoxLayout(this);
 	root_layout->setContentsMargins(4, 4, 4, 4);
-	root_layout->setSpacing(4);
+	root_layout->setSpacing(2);
 	/* No custom QSS paints — the OBS theme renders QFrame#OBSDock,
 	 * QPushButton, QComboBox, QLineEdit, QListWidget, QGroupBox natively. */
 
@@ -661,10 +661,14 @@ TextboxDock::TextboxDock(const std::string &state_path, QWidget *parent) : QFram
 	tb_layout->setSpacing(0);
 
 	auto *top_row = new QHBoxLayout();
-	top_row->setContentsMargins(4, 0, 4, 2);
+	top_row->setContentsMargins(4, 0, 4, 0);
 	top_row->setSpacing(8);
 
+	// Top-Zeile auf einheitliche Button-Höhe wie die ID-Zeile (Johann 27.11: scaling off).
+	const int tb_btn_sz = qMax(24, fontMetrics().height() + 8);
+
 	profil_select_ = new QComboBox(tbTopRow);
+	profil_select_->setFixedHeight(tb_btn_sz);
 	profil_select_->setAttribute(Qt::WA_StyledBackground, true);
 	profil_select_->setEditable(true);
 	profil_select_->setInsertPolicy(QComboBox::NoInsert);
@@ -684,6 +688,7 @@ TextboxDock::TextboxDock(const std::string &state_path, QWidget *parent) : QFram
 	}
 
 	card_search_ = new QComboBox(tbTopRow);
+	card_search_->setFixedHeight(tb_btn_sz);
 	card_search_->setAttribute(Qt::WA_StyledBackground, true);
 	card_search_->setEditable(true);
 	card_search_->setInsertPolicy(QComboBox::NoInsert);
@@ -769,6 +774,8 @@ TextboxDock::TextboxDock(const std::string &state_path, QWidget *parent) : QFram
 	tbCardList_->setUniformItemSizes(false);
 	tbCardList_->setSpacing(4);
 	tbCardList_->setContentsMargins(0, 0, 0, 0);
+	// Style-Default-Viewport-Margins (4,2) weg: sonst extra Luft über der ID-Zeile (Johann 27.11).
+	tbCardList_->set_viewport_margins(0, 0, 0, 0);
 	tbCardList_->setObjectName(QStringLiteral("tbCardList"));
 
 	auto reorder_cards = [this](const std::string &id, int target_row) {
@@ -1245,20 +1252,24 @@ QListWidgetItem *TextboxDock::create_row_item(const TextboxCard &card)
 {
 	const int btn_sz = qMax(24, fontMetrics().height() + 8);
 	const int fh = fontMetrics().height() + 8; // Zeilen-Höhe für Textfelder (kompakter)
+	auto *item = new QListWidgetItem(); // früh deklariert: refresh_item capturen ihn
 	auto *card_widget = new QWidget(this);
 	card_widget->setProperty("tbCardId", QString::fromUtf8(card.id.c_str()));
 	card_widget->setMinimumWidth(fontMetrics().averageCharWidth() * 28);
 	card_widget->setAttribute(Qt::WA_TransparentForMouseEvents);
 
 	auto *inner_layout = new QVBoxLayout(card_widget);
-	inner_layout->setContentsMargins(8, 8, 8, 8);
-	inner_layout->setSpacing(6);
+	inner_layout->setContentsMargins(6, 0, 6, 4);
+	inner_layout->setSpacing(3);
 
 	auto *id_bar = new QFrame(card_widget);
 	id_bar->setObjectName(QStringLiteral("tbIdBar"));
 	id_bar->setAttribute(Qt::WA_StyledBackground, true);
+	// ID-Bar exakt auf Button-Höhe — listen-item-stretch darf sie nicht aufblähen
+	// (Johann 27.11: Luft oben/unten der ID-Eingabe).
+	id_bar->setFixedHeight(btn_sz);
 	auto *id_layout = new QHBoxLayout(id_bar);
-	id_layout->setContentsMargins(6, 2, 6, 2);
+	id_layout->setContentsMargins(6, 0, 6, 0);
 	id_layout->setSpacing(6);
 
 	auto *id_prefix = new QLabel(QStringLiteral("ID"), id_bar);
@@ -1271,7 +1282,7 @@ QListWidgetItem *TextboxDock::create_row_item(const TextboxCard &card)
 	id_edit->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
 	/* ID-Eingabe auf Button-Höhe begrenzen — sonst ragt das Feld über die
 	 * ID-Zeile hinaus und wirkt zu hoch (Johann, 27.11). */
-	id_edit->setFixedHeight(btn_sz);
+	id_edit->setFixedHeight(btn_sz - 2); // fast bündig mit Buttons — kein Luft oben/unten (Johann 27.11)
 
 	auto *style_toggle_btn = new QPushButton(id_bar);
 	style_toggle_btn->setObjectName(QStringLiteral("tbStyleToggle"));
@@ -1307,8 +1318,8 @@ QListWidgetItem *TextboxDock::create_row_item(const TextboxCard &card)
 	drag_handle->installEventFilter(tbCardList_);
 
 	id_layout->addWidget(drag_handle);
-	id_layout->addWidget(id_prefix);
-	id_layout->addWidget(id_edit, 1);
+	id_layout->addWidget(id_prefix, 0, Qt::AlignVCenter);
+		id_layout->addWidget(id_edit, 1, Qt::AlignVCenter);
 	id_layout->addWidget(style_toggle_btn);
 	id_layout->addWidget(dup_btn);
 	id_layout->addWidget(del_btn);
@@ -1320,15 +1331,28 @@ QListWidgetItem *TextboxDock::create_row_item(const TextboxCard &card)
 	auto schedule_save = [this, card_id]() {
 		if (const TextboxCard *c = find_card_mut(card_id)) {
 			push_card_live(*c, state_.settings);
-		}
-		mark_card_dirty_and_schedule(this, card_id);
-	};
+				}
+				mark_card_dirty_and_schedule(this, card_id);
+			};
 
-	auto *rows_frame = new QGroupBox(QStringLiteral("▼ SPEZIFISCHE CSS-REGELN"), card_widget);
+			auto refresh_item = [card_widget, item]() {
+				// Item-Höhe nach Expand/Collapse/Row-Änderung neu berechnen — sonst bleibt das
+				// Listen-Item auf alter Größe stehen und stretcht den Content (ID-Luft, Johann 27.11).
+				item->setSizeHint(card_widget->sizeHint());
+			};
+
+	// Titel leer: der Header ist lbl_rows (mit Buttons). Der QGroupBox-Titel war ein
+	// Duplikat der Zeile und blähte den Bereich unter der ID-Eingabe (Johann 27.11).
+	auto *rows_frame = new QGroupBox(QString(), card_widget);
+	// OBS-Theme reserviert QGroupBox padding-top für den (hier leeren) Titel —
+	// lokal auf 0 setzen, sonst bleibt die Luft unter der ID-Eingabe (Johann 27.11).
+	rows_frame->setStyleSheet(QStringLiteral("QGroupBox { padding-top: 0px; }"));
+	// Vertikal nie über sizeHint wachsen — Item-Stretch darf Zeilen nicht auseinanderziehen.
+	rows_frame->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Maximum);
 	rows_frame->setAttribute(Qt::WA_StyledBackground, true);
 	rows_frame->setAttribute(Qt::WA_TransparentForMouseEvents);
 	auto *rows_layout = new QVBoxLayout(rows_frame);
-	rows_layout->setContentsMargins(4, 1, 4, 3);
+	rows_layout->setContentsMargins(4, 0, 4, 2);
 	rows_layout->setSpacing(2);
 
 	auto *rows_bar = new QHBoxLayout();
@@ -1368,18 +1392,18 @@ QListWidgetItem *TextboxDock::create_row_item(const TextboxCard &card)
 	auto move_row = std::make_shared<std::function<void(QLineEdit *, int)>>();
 
 	connect(lbl_rows, &QToolButton::clicked, rows_frame,
-		[rows_collapsed, label_edits, value_edits, move_btns, lbl_rows, rows_frame]() {
+		[rows_collapsed, label_edits, value_edits, move_btns, lbl_rows, rows_frame, refresh_item]() {
 			*rows_collapsed = !*rows_collapsed;
 			const QString title = *rows_collapsed ? QStringLiteral("▶ SPEZIFISCHE CSS-REGELN")
 							      : QStringLiteral("▼ SPEZIFISCHE CSS-REGELN");
 			lbl_rows->setText(title);
-			rows_frame->setTitle(title);
 			for (auto *e : *label_edits)
 				e->setVisible(!*rows_collapsed);
 			for (auto *e : *value_edits)
 				e->setVisible(!*rows_collapsed);
 			for (auto *b : *move_btns)
 				b->setVisible(!*rows_collapsed);
+			refresh_item();
 		});
 
 	auto add_row_edit = [this, card_widget, rows_layout, rows_collapsed, move_row, move_btns, fh,
@@ -1473,7 +1497,7 @@ QListWidgetItem *TextboxDock::create_row_item(const TextboxCard &card)
 	}
 
 	connect(row_add_btn, &QPushButton::clicked, this,
-		[this, label_edits, value_edits, add_row_edit, wire_row_edits, collect_rows, schedule_save]() {
+		[this, label_edits, value_edits, add_row_edit, wire_row_edits, collect_rows, schedule_save, refresh_item]() {
 			if (label_edits->size() >= kMaxCardRows)
 				return;
 			const size_t idx = label_edits->size();
@@ -1484,10 +1508,11 @@ QListWidgetItem *TextboxDock::create_row_item(const TextboxCard &card)
 			wire_row_edits(pr.first, pr.second);
 			if (collect_rows())
 				schedule_save();
-		});
+			refresh_item();
+			});
 
 	connect(row_del_btn, &QPushButton::clicked, this,
-		[label_edits, value_edits, move_btns, rows_layout, collect_rows, schedule_save]() {
+		[label_edits, value_edits, move_btns, rows_layout, collect_rows, schedule_save, refresh_item]() {
 			if (label_edits->size() <= 1)
 				return;
 			// Letzte Zeilen-HLayout entfernen (Header-Layout bleibt index 0).
@@ -1507,7 +1532,8 @@ QListWidgetItem *TextboxDock::create_row_item(const TextboxCard &card)
 				move_btns->pop_back();
 			if (collect_rows())
 				schedule_save();
-		});
+			refresh_item();
+			});
 
 	// Zeilen-Umordnung: vertauscht Inhalte zweier Reihen und die Edit-Pointer.
 	*move_row = [this, card_id, label_edits, value_edits, schedule_save, collect_rows](QLineEdit *ledit, int dir) {
@@ -2104,9 +2130,10 @@ QListWidgetItem *TextboxDock::create_row_item(const TextboxCard &card)
 	}
 
 	style_section->setVisible(true);
+	style_section->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Maximum);
 	inner_layout->addWidget(style_section);
 
-	connect(style_toggle_btn, &QPushButton::clicked, this, [this, style_section, style_toggle_btn]() {
+	connect(style_toggle_btn, &QPushButton::clicked, this, [this, style_section, style_toggle_btn, refresh_item]() {
 		// M7-2: isHidden() statt isVisible() — isVisible() ist auch bei
 		// verstecktem Dock-Parent false und flippt das Chevron-Icon vor dem
 		// echten State-Change.
@@ -2114,7 +2141,8 @@ QListWidgetItem *TextboxDock::create_row_item(const TextboxCard &card)
 		style_section->setVisible(expand);
 		style_toggle_btn->setIcon(theme_icon(expand ? "chevron_down.svg" : "chevron_right.svg"));
 		style_toggle_btn->setToolTip(expand ? QStringLiteral("Stil-Optionen einklappen")
-						    : QStringLiteral("Stil-Optionen ausklappen"));
+					    : QStringLiteral("Stil-Optionen ausklappen"));
+		refresh_item();
 	});
 
 	auto *actions_layout = new QHBoxLayout();
@@ -2136,6 +2164,9 @@ QListWidgetItem *TextboxDock::create_row_item(const TextboxCard &card)
 	actions_layout->addWidget(to_scene_btn, 1);
 	actions_layout->addWidget(clear_src_btn, 1);
 	inner_layout->addLayout(actions_layout);
+
+	// Überschuss vom Listen-Item sammelt sich unten — Content bleibt oben bündig.
+	inner_layout->addStretch(1);
 
 	// activated fires only on USER selection — programmatic setCurrentIndex
 	// during UI rebuild must not re-apply the profile over baked card colors.
@@ -2400,7 +2431,6 @@ QListWidgetItem *TextboxDock::create_row_item(const TextboxCard &card)
 	});
 
 	// Als QListWidgetItem in die Liste einfügen
-	auto *item = new QListWidgetItem();
 	item->setData(Qt::UserRole, QString::fromUtf8(card.id.c_str()));
 	item->setSizeHint(card_widget->sizeHint());
 	tbCardList_->addItem(item);

@@ -66,6 +66,7 @@ class CardListWidget : public QListWidget {
 public:
 	explicit CardListWidget(QWidget *parent = nullptr) : QListWidget(parent) {}
 	std::function<void(const std::string &card_id, int target_row)> reorder_cb;
+	void set_viewport_margins(int l, int t, int r, int b) { setViewportMargins(l, t, r, b); }
 	bool eventFilter(QObject *obj, QEvent *event) override;
 
 protected:
