@@ -100,31 +100,17 @@ public:
 protected:
 	void paintEvent(QPaintEvent *) override
 	{
-		static int last_hover = -1;
-		static int seq = 0;
-		const int hov = int(underMouse());
-		if (hov != last_hover || seq == 0) {
-			seq++;
-			last_hover = hov;
-			const QPoint g = mapToGlobal(QPoint(0, 0));
-			QString chain;
-			for (QWidget *w = qobject_cast<QWidget *>(parent()); w && w != w->window(); w = qobject_cast<QWidget *>(w->parent()))
-				chain += QStringLiteral("<%1>").arg(w->objectName().isEmpty() ? QString::fromLatin1(w->metaObject()->className()) : w->objectName());
-			tb_log(QStringLiteral("[DragBar#%1] paint gx=%2 gy=%3 w=%4 h=%5 hover=%6 chain=%7 winId=%8 topGlobal=%9")
-				       .arg(seq).arg(g.x()).arg(g.y()).arg(width()).arg(height()).arg(hov).arg(chain)
-				       .arg((quintptr)winId())
-				       .arg(window() ? QStringLiteral("(%1,%2 %3x%4)").arg(window()->geometry().x()).arg(window()->geometry().y()).arg(window()->geometry().width()).arg(window()->geometry().height()) : QStringLiteral("?")).toStdString());
-		}
 		QPainter p(this);
 		const bool dark = qApp && qApp->palette().color(QPalette::Window).red() +
-					    qApp->palette().color(QPalette::Window).green() +
-					    qApp->palette().color(QPalette::Window).blue() < 384;
-		const bool hover = underMouse();
+				    qApp->palette().color(QPalette::Window).green() +
+				    qApp->palette().color(QPalette::Window).blue() < 384;
+		/* Keine Hover-Farbe auf den Drag-Strichen (Johann, 27.11): sie bleiben
+		 * immer in der Basisfarbe; der OpenHand-Cursor ist die Rückmeldung. */
 		QColor line_color;
 		if (dark) {
-			line_color = hover ? QColor(QStringLiteral("#C8CED8")) : QColor(QStringLiteral("#969696"));
+			line_color = QColor(QStringLiteral("#969696"));
 		} else {
-			line_color = hover ? QColor(QStringLiteral("#333333")) : QColor(QStringLiteral("#6B6B6B"));
+			line_color = QColor(QStringLiteral("#6B6B6B"));
 		}
 		p.setPen(Qt::NoPen);
 		p.setBrush(line_color);
@@ -1273,6 +1259,9 @@ QListWidgetItem *TextboxDock::create_row_item(const TextboxCard &card)
 	id_edit->setToolTip(QStringLiteral("ID umbenennen (Enter); nur Buchstaben/Zahlen/-/_"));
 	id_edit->setAccessibleName(QStringLiteral("Karten-ID"));
 	id_edit->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
+	/* ID-Eingabe auf Button-Höhe begrenzen — sonst ragt das Feld über die
+	 * ID-Zeile hinaus und wirkt zu hoch (Johann, 27.11). */
+	id_edit->setFixedHeight(btn_sz);
 
 	auto *style_toggle_btn = new QPushButton(id_bar);
 	style_toggle_btn->setObjectName(QStringLiteral("tbStyleToggle"));
