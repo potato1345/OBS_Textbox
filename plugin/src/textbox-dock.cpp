@@ -116,13 +116,15 @@ protected:
 		p.setBrush(line_color);
 		const int w = width();
 		const int h = height();
-		const int bar_w = 20;
-		const int bar_h = 3;
+		/* Drag-Handle-Glyph: zwei dünne Striche eng um die vertikale Mitte.
+		 * Die Mitte der Striche liegt auf der Mitte der Text-Inputs der Zeile
+		 * (Striche dichter zusammen + dünner — Johann, 27.11). */
+		const int bar_w = 22;
+		const int bar_h = 2;
+		const int gap = 8; // Abstand der Strich-Mittelpunkte
 		const int x = (w - bar_w) / 2;
-		// Oberer Strich bei ~25% Höhe
-		p.drawRect(x, h / 4 - bar_h / 2, bar_w, bar_h);
-		// Unterer Strich bei ~75% Höhe
-		p.drawRect(x, h * 3 / 4 - bar_h / 2, bar_w, bar_h);
+		p.drawRect(x, h / 2 - gap / 2 - bar_h / 2, bar_w, bar_h);
+		p.drawRect(x, h / 2 + gap / 2 - bar_h / 2, bar_w, bar_h);
 	}
 
 	void mousePressEvent(QMouseEvent *event) override
@@ -1393,9 +1395,9 @@ QListWidgetItem *TextboxDock::create_row_item(const TextboxCard &card)
 			vedit->setVisible(false);
 			drag_bar->setVisible(false);
 		}
-		row->addWidget(ledit);
-		row->addWidget(vedit, 1);
-		row->addWidget(drag_bar);
+		row->addWidget(ledit, 0, Qt::AlignVCenter);
+		row->addWidget(vedit, 1, Qt::AlignVCenter);
+		row->addWidget(drag_bar, 0, Qt::AlignVCenter);
 		rows_layout->addLayout(row);
 		move_btns->push_back(drag_bar);
 		return std::make_pair(ledit, vedit);
