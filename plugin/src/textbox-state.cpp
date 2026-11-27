@@ -75,6 +75,13 @@ TextboxCard card_from_json(const nlohmann::json &item)
 			c.rows.push_back(row);
 		}
 	}
+	// rows sind authoritative; externe State-Edits dürfen zeile1..3 nicht gegen
+	// rows vertauschen (Mirror wird bei Load repariert).
+	if (!c.rows.empty()) {
+		c.zeile1 = c.rows.size() > 0 ? c.rows[0].value : std::string();
+		c.zeile2 = c.rows.size() > 1 ? c.rows[1].value : std::string();
+		c.zeile3 = c.rows.size() > 2 ? c.rows[2].value : std::string();
+	}
 	if (item.contains("style") && item["style"].is_array()) {
 		for (const auto &s : item["style"]) {
 			if (!s.is_object())

@@ -950,6 +950,88 @@ colors:
 		      "30. IMP-X5 tb_event_log: ISO-UTC-Format, Append und >1-MB-Trim auf <= 400 Zeilen");
 	}
 
+	// 31a. Legacy-Mirror-Heal: rows überschreiben vertauschte zeile1..3 bei Load
+	{
+		const std::string json = R"({
+  "version": 1,
+  "next_id": 42,
+  "cards": [
+    {
+      "id": "box_t1",
+      "zeile1": "t2",
+      "zeile2": "1-2",
+      "zeile3": "102",
+      "rows": [
+        {"label": "--zeile-1", "value": "102"},
+        {"label": "--zeile-2", "value": "1-2"},
+        {"label": "--zeile-3", "value": "t2"}
+      ]
+    }
+  ]
+})";
+		TextboxState s;
+		const std::string err = s.deserialize_json(json);
+		bool ok = err.empty() && s.cards.size() == 1 &&
+			  s.cards[0].zeile1 == "102" &&
+			  s.cards[0].zeile2 == "1-2" &&
+			  s.cards[0].zeile3 == "t2";
+		check(ok, "31a. Legacy-Mirror-Heal: rows überschreiben vertauschte zeile1..3 bei Load", err);
+	}
+
+	// 31b. Legacy-Mirror-Heal: ohne rows bleiben zeile1..3 authoritative
+	{
+		const std::string json = R"({
+  "version": 1,
+  "next_id": 43,
+  "cards": [
+    {
+      "id": "box_t2",
+      "zeile1": "x1",
+      "zeile2": "x2",
+      "zeile3": "x3"
+    }
+  ]
+})";
+		TextboxState s;
+		const std::string err = s.deserialize_json(json);
+		bool ok = err.empty() && s.cards.size() == 1 &&
+			  s.cards[0].zeile1 == "x1" &&
+			  s.cards[0].zeile2 == "x2" &&
+			  s.cards[0].zeile3 == "x3";
+		check(ok, "31b. Legacy-Mirror-Heal: ohne rows bleiben zeile1..3 authoritative", err);
+	}
+
+	// 31c. Legacy-Mirror-Heal Roundtrip: card_from_json(swapped) -> card_to_json -> card_from_json stabil
+	{
+		const std::string json = R"({
+  "version": 1,
+  "next_id": 44,
+  "cards": [
+    {
+      "id": "box_t3",
+      "zeile1": "t2",
+      "zeile2": "1-2",
+      "zeile3": "102",
+      "rows": [
+        {"label": "--zeile-1", "value": "102"},
+        {"label": "--zeile-2", "value": "1-2"},
+        {"label": "--zeile-3", "value": "t2"}
+      ]
+    }
+  ]
+})";
+		TextboxState s1;
+		s1.deserialize_json(json);
+		const std::string s1_json = s1.serialize_json();
+		TextboxState s2;
+		const std::string err2 = s2.deserialize_json(s1_json);
+		bool ok = err2.empty() && s2.cards.size() == 1 &&
+			  s2.cards[0].zeile1 == "102" &&
+			  s2.cards[0].zeile2 == "1-2" &&
+			  s2.cards[0].zeile3 == "t2";
+		check(ok, "31c. Legacy-Mirror-Heal Roundtrip: Werte stabil nach card_from_json -> card_to_json -> card_from_json", err2);
+	}
+
 	std::error_code ec;
 	std::filesystem::remove_all(temp_dir, ec);
 
@@ -957,6 +1039,6 @@ colors:
 		std::cerr << g_failures << " test(s) failed.\n";
 		return 1;
 	}
-	std::cout << "All 30 checks passed.\n";
+	std::cout << "All 33 checks passed.\n";
 	return 0;
 }
