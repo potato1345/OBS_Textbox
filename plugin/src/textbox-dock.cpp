@@ -105,12 +105,15 @@ protected:
 				    qApp->palette().color(QPalette::Window).green() +
 				    qApp->palette().color(QPalette::Window).blue() < 384;
 		/* Keine Hover-Farbe auf den Drag-Strichen (Johann, 27.11): sie bleiben
-		 * immer in der Basisfarbe; der OpenHand-Cursor ist die Rückmeldung. */
+		 * im Idle immer in der Basisfarbe; der OpenHand-Cursor ist die Rückmeldung.
+		 * Registry-Guidance (open-design ui-animation / emil-design-eng): Pressed-
+		 * State braucht Feedback — die Striche hellen nur NUR während des Ziehens
+		 * auf (Press != Hover). */
 		QColor line_color;
 		if (dark) {
-			line_color = QColor(QStringLiteral("#969696"));
+			line_color = pressed_ ? QColor(QStringLiteral("#C8CED8")) : QColor(QStringLiteral("#969696"));
 		} else {
-			line_color = QColor(QStringLiteral("#6B6B6B"));
+			line_color = pressed_ ? QColor(QStringLiteral("#3A3A3A")) : QColor(QStringLiteral("#6B6B6B"));
 		}
 		p.setPen(Qt::NoPen);
 		p.setBrush(line_color);
@@ -135,6 +138,8 @@ protected:
 		if (event->button() == Qt::LeftButton) {
 			setCursor(Qt::ClosedHandCursor);
 			press_y_ = rel_y;
+			pressed_ = true;
+			update();
 		}
 		QPushButton::mousePressEvent(event);
 	}
@@ -179,11 +184,14 @@ protected:
 		}
 		setCursor(Qt::OpenHandCursor);
 		press_y_ = 0;
+		pressed_ = false;
+		update();
 		QPushButton::mouseReleaseEvent(event);
 	}
 
 private:
 	float press_y_ = 0;
+	bool pressed_ = false;
 };
 
 // Normalisiert eine template_id: liegt ein absoluter Pfad innerhalb des
