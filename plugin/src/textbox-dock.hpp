@@ -27,6 +27,8 @@
 #include <vector>
 
 #include <QListWidget>
+#include <QTimeLine>
+#include <QWheelEvent>
 
 // Globaler Zähler aktiver Hintergrund-Jobs zur Synchronisation beim Entladen des Plugins.
 extern std::atomic<int> g_active_jobs;
@@ -70,10 +72,12 @@ protected:
 	void mousePressEvent(QMouseEvent *event) override;
 	void mouseMoveEvent(QMouseEvent *event) override;
 	void mouseReleaseEvent(QMouseEvent *event) override;
+	void wheelEvent(QWheelEvent *event) override;
 
 private:
 	int drag_row_ = -1;
 	QPoint drag_press_pos;
+	QTimeLine *scroll_anim_ = nullptr;
 };
 
 /**

@@ -53,14 +53,25 @@
 #include <QLabel>
 #include <QLineEdit>
 #include <QListWidget>
+#include <QListView>
 #include <QMenu>
 #include <QMessageBox>
+#include <QMouseEvent>
 #include <QMetaObject>
+#ifdef _WIN32
+#define WIN32_LEAN_AND_MEAN
+#define NOMINMAX
+#include <windows.h>
+#endif
+#include <QPainter>
 #include <QPlainTextEdit>
 #include <QPointer>
 #include <QPushButton>
 #include <QRegularExpression>
 #include <QScrollArea>
+#include <QScrollBar>
+#include <QEasingCurve>
+#include <QWheelEvent>
 
 namespace {
 // QScrollArea::minimumSizeHint() = qMax(widget-minimumSizeHint, own minimum):
@@ -70,6 +81,121 @@ class CappedScrollArea : public QScrollArea {
 public:
 	explicit CappedScrollArea(QWidget *parent = nullptr) : QScrollArea(parent) { setMinimumSize(0, 0); }
 	QSize minimumSizeHint() const override { return QSize(0, 0); }
+};
+
+// DragBar — Drag-fähige Leiste zum Verschieben von CSS-Variablen-Zeilen.
+// Ersetzt die Pfeil-Buttons up/down in add_row_edit.
+class DragBar : public QPushButton {
+public:
+	std::function<void(int)> move_cb; // -1 = nach oben, +1 = nach unten
+	explicit DragBar(int btn_sz, QWidget *parent = nullptr)
+		: QPushButton(parent)
+	{
+		setFixedSize(btn_sz, btn_sz * 2);
+		setCursor(Qt::OpenHandCursor);
+		setAccessibleName(QStringLiteral("Zeile per Drag verschieben"));
+		setToolTip(QStringLiteral("Ziehen: nach oben oder unten verschieben"));
+	}
+
+protected:
+	void paintEvent(QPaintEvent *) override
+	{
+		static int last_hover = -1;
+		static int seq = 0;
+		const int hov = int(underMouse());
+		if (hov != last_hover || seq == 0) {
+			seq++;
+			last_hover = hov;
+			const QPoint g = mapToGlobal(QPoint(0, 0));
+			QString chain;
+			for (QWidget *w = qobject_cast<QWidget *>(parent()); w && w != w->window(); w = qobject_cast<QWidget *>(w->parent()))
+				chain += QStringLiteral("<%1>").arg(w->objectName().isEmpty() ? QString::fromLatin1(w->metaObject()->className()) : w->objectName());
+			tb_log(QStringLiteral("[DragBar#%1] paint gx=%2 gy=%3 w=%4 h=%5 hover=%6 chain=%7 winId=%8 topGlobal=%9")
+				       .arg(seq).arg(g.x()).arg(g.y()).arg(width()).arg(height()).arg(hov).arg(chain)
+				       .arg((quintptr)winId())
+				       .arg(window() ? QStringLiteral("(%1,%2 %3x%4)").arg(window()->geometry().x()).arg(window()->geometry().y()).arg(window()->geometry().width()).arg(window()->geometry().height()) : QStringLiteral("?")).toStdString());
+		}
+		QPainter p(this);
+		const bool dark = qApp && qApp->palette().color(QPalette::Window).red() +
+					    qApp->palette().color(QPalette::Window).green() +
+					    qApp->palette().color(QPalette::Window).blue() < 384;
+		const bool hover = underMouse();
+		QColor line_color;
+		if (dark) {
+			line_color = hover ? QColor(QStringLiteral("#C8CED8")) : QColor(QStringLiteral("#969696"));
+		} else {
+			line_color = hover ? QColor(QStringLiteral("#333333")) : QColor(QStringLiteral("#6B6B6B"));
+		}
+		p.setPen(Qt::NoPen);
+		p.setBrush(line_color);
+		const int w = width();
+		const int h = height();
+		const int bar_w = 20;
+		const int bar_h = 3;
+		const int x = (w - bar_w) / 2;
+		// Oberer Strich bei ~25% Höhe
+		p.drawRect(x, h / 4 - bar_h / 2, bar_w, bar_h);
+		// Unterer Strich bei ~75% Höhe
+		p.drawRect(x, h * 3 / 4 - bar_h / 2, bar_w, bar_h);
+	}
+
+	void mousePressEvent(QMouseEvent *event) override
+	{
+		// Qt-Cache ist bei Synthetic-Input stale — Win32-Cursor als Quelle.
+		const int rel_y = win_cursor_rel_y();
+		tb_log(QStringLiteral("[DragBar] press y=%1 cursor_rel=%2 gx=%3 gy=%4").arg(event->position().y()).arg(rel_y).arg(mapToGlobal(QPoint(0,0)).x()).arg(mapToGlobal(QPoint(0,0)).y()).toStdString());
+		if (event->button() == Qt::LeftButton) {
+			setCursor(Qt::ClosedHandCursor);
+			press_y_ = rel_y;
+		}
+		QPushButton::mousePressEvent(event);
+	}
+
+	int win_cursor_rel_y() const
+	{
+#ifdef _WIN32
+		POINT p;
+		if (GetCursorPos(&p)) {
+			const QPoint g = mapToGlobal(QPoint(0, 0));
+			return p.y - g.y();
+		}
+#endif
+		return mapFromGlobal(QCursor::pos()).y();
+	}
+
+	void mouseMoveEvent(QMouseEvent *event) override
+	{
+		if (event->buttons() & Qt::LeftButton) {
+			const float dy = event->position().y() - press_y_;
+			if (std::abs(dy) >= 20.0f) {
+				if (move_cb)
+					move_cb(dy < 0 ? -1 : +1);
+				press_y_ = event->position().y();
+			}
+		}
+		QWidget::mouseMoveEvent(event);
+	}
+
+	void mouseReleaseEvent(QMouseEvent *event) override
+	{
+		// Qt6 auf Windows speist Bewegungen über RawInput; Posting/relative Moves
+		// erreichen das Widget nicht. echten Cursor-Position als Quelle verwenden.
+		const int rel_y = win_cursor_rel_y();
+		tb_log(QStringLiteral("[DragBar] release y=%1 press_y=%2 cursor_dy=%3").arg(rel_y).arg(press_y_).arg(rel_y - press_y_).toStdString());
+		if (event->button() == Qt::LeftButton) {
+			const float dy = rel_y - press_y_;
+			if (std::abs(dy) >= 20.0f) {
+				if (move_cb)
+					move_cb(dy < 0 ? -1 : +1);
+			}
+		}
+		setCursor(Qt::OpenHandCursor);
+		press_y_ = 0;
+		QPushButton::mouseReleaseEvent(event);
+	}
+
+private:
+	float press_y_ = 0;
 };
 
 // Normalisiert eine template_id: liegt ein absoluter Pfad innerhalb des
@@ -295,6 +421,61 @@ TextboxCard make_default_card(std::size_t i)
 	return c;
 }
 
+// SearchReorderView — Drag-Reorder im Karten-Suche-Popup (QComboBox Dropdown).
+class SearchReorderView : public QListView {
+public:
+	std::function<void(const std::string &, int)> reorder_cb;
+
+protected:
+	void mousePressEvent(QMouseEvent *event) override
+	{
+		if (event->button() == Qt::LeftButton) {
+			drag_row_ = indexAt(event->pos()).row();
+			drag_press_pos_ = event->pos();
+			drag_active_ = false;
+		}
+		QListView::mousePressEvent(event);
+	}
+
+	void mouseMoveEvent(QMouseEvent *event) override
+	{
+		if (drag_row_ >= 0 && (event->buttons() & Qt::LeftButton)) {
+			if ((event->pos() - drag_press_pos_).manhattanLength() > 6) {
+				drag_active_ = true;
+				int target = indexAt(event->pos()).row();
+				if (target < 0)
+					target = (event->pos().y() < 0) ? 0 : model()->rowCount() - 1;
+				if (target >= 0 && target != drag_row_) {
+					const QString id_str = model()->index(drag_row_, 0)
+								       .data(Qt::UserRole)
+								       .toString();
+					const std::string id = id_str.toStdString();
+					if (reorder_cb && !id.empty())
+						reorder_cb(id, target);
+					drag_row_ = target;
+				}
+			}
+			return; // Basis NICHT aufrufen während Drag
+		}
+		QListView::mouseMoveEvent(event);
+	}
+
+	void mouseReleaseEvent(QMouseEvent *event) override
+	{
+		if (drag_active_) {
+			drag_active_ = false;
+			drag_row_ = -1;
+			return;
+		}
+		QListView::mouseReleaseEvent(event);
+	}
+
+private:
+	int drag_row_ = -1;
+	QPoint drag_press_pos_;
+	bool drag_active_ = false;
+};
+
 // Prüft, ob zeile1 der Karte i einem Standard-Eintrag entspricht.
 bool is_standard_card(const TextboxCard &c, std::size_t i)
 {
@@ -357,6 +538,38 @@ void CardListWidget::mouseMoveEvent(QMouseEvent *event)
 		return;
 	}
 	QListWidget::mouseMoveEvent(event);
+}
+
+void CardListWidget::wheelEvent(QWheelEvent *event)
+{
+	QScrollBar *bar = verticalScrollBar();
+	const int target = std::clamp(bar->value() - (event->angleDelta().y() / 120) * 60,
+				      bar->minimum(), bar->maximum());
+	if (!scroll_anim_) {
+		scroll_anim_ = new QTimeLine(220, this);
+		scroll_anim_->setFrameRange(0, 100);
+		scroll_anim_->setEasingCurve(QEasingCurve::OutCubic);
+	}
+	if (scroll_anim_->state() == QTimeLine::Running)
+		scroll_anim_->stop();
+	if (bar->value() == target) {
+		bar->setValue(target);
+		return;
+	}
+	const int start_v = bar->value();
+	// Vorherige Verbindungen trennen und neue mit aktuellem start_v anlegen
+	scroll_anim_->disconnect();
+	connect(scroll_anim_, &QTimeLine::frameChanged, this,
+		[start_v, target, bar](int frame) {
+			const int v = start_v + (target - start_v) * frame / 100;
+			bar->setValue(v);
+		});
+	connect(scroll_anim_, &QTimeLine::finished, this,
+		[bar, target]() {
+			bar->setValue(target);
+		});
+	scroll_anim_->start();
+	event->accept();
 }
 
 bool CardListWidget::eventFilter(QObject *obj, QEvent *event)
@@ -488,6 +701,14 @@ TextboxDock::TextboxDock(const std::string &state_path, QWidget *parent) : QFram
 		card_search_->lineEdit()->setPlaceholderText(QStringLiteral("Karte suchen…"));
 		card_search_->lineEdit()->setAccessibleName(QStringLiteral("Karten-Suche"));
 	}
+	{
+		auto *order_view = new SearchReorderView();
+		order_view->setUniformItemSizes(true);
+		order_view->setSelectionBehavior(QAbstractItemView::SelectRows);
+		order_view->setAccessibleName(QStringLiteral("Kartenreihenfolge — Listeneinträge ziehen zum Verschieben"));
+		card_search_->setView(order_view);
+		// reorder_cb wird später gesetzt (nach Definition des shared reorder_cards Lambdas)
+	}
 
 	top_row->addWidget(profil_select_, 1);
 	profil_del_btn_ = new QPushButton(tbTopRow);
@@ -554,7 +775,7 @@ TextboxDock::TextboxDock(const std::string &state_path, QWidget *parent) : QFram
 	tbCardList_->setContentsMargins(0, 0, 0, 0);
 	tbCardList_->setObjectName(QStringLiteral("tbCardList"));
 
-	tbCardList_->reorder_cb = [this](const std::string &id, int target_row) {
+	auto reorder_cards = [this](const std::string &id, int target_row) {
 		// Karte mit id von ihrem aktuellen Index nach target_row verschieben
 		const int sz = static_cast<int>(state_.cards.size());
 		if (sz < 2)
@@ -580,6 +801,11 @@ TextboxDock::TextboxDock(const std::string &state_path, QWidget *parent) : QFram
 		save_state();
 		rebuild_rows();
 	};
+	tbCardList_->reorder_cb = reorder_cards;
+	// SearchReorderView reorder_cb jetzt setzen (View wurde schon vorher erstellt)
+	// static_cast ist safe, da wir den View selbst erstellt haben.
+	if (auto *ov = static_cast<SearchReorderView *>(card_search_->view()))
+		ov->reorder_cb = reorder_cards;
 
 	root_layout->addWidget(tbCardList_, 1);
 
@@ -956,7 +1182,10 @@ void TextboxDock::refreshTheme()
 			"QLineEdit:focus { border-color: #5B6273; }"
 			"QListWidget { background-color: transparent; border: none; }"
 			"QListWidget QLineEdit { background-color: #1D1F26;"
-			" border: 1px solid #5B6273; }"));
+			" border: 1px solid #5B6273; }"
+			"QComboBox QAbstractItemView { background-color: #1D1F26; color: #FFFFFF;"
+			" border: 1px solid #5B6273; selection-background-color: #464B59;"
+			" selection-color: #FFFFFF; }"));
 	} else {
 		setStyleSheet(QString());
 	}
@@ -1136,7 +1365,7 @@ QListWidgetItem *TextboxDock::create_row_item(const TextboxCard &card)
 	// shared_ptr: die connect-Lambdas leben nach Funktionsende weiter.
 	auto label_edits = std::make_shared<std::vector<QLineEdit *>>();
 	auto value_edits = std::make_shared<std::vector<QLineEdit *>>();
-	auto move_btns = std::make_shared<std::vector<QPushButton *>>();
+	auto move_btns = std::make_shared<std::vector<QWidget *>>();
 	auto move_row = std::make_shared<std::function<void(QLineEdit *, int)>>();
 
 	connect(lbl_rows, &QToolButton::clicked, rows_frame,
@@ -1168,39 +1397,18 @@ QListWidgetItem *TextboxDock::create_row_item(const TextboxCard &card)
 		auto *vedit = new QLineEdit(value, card_widget);
 		vedit->setPlaceholderText(QStringLiteral("Text dieser Zeile"));
 		vedit->setFixedHeight(fh);
-		auto *up_btn = new QPushButton(card_widget);
-		up_btn->setObjectName(QStringLiteral("tbRowUp"));
-		up_btn->setFixedSize(btn_sz, btn_sz);
-		up_btn->setIcon(theme_icon("arrow_up.svg"));
-		up_btn->setIconSize(QSize(22, 22));
-		up_btn->setToolTip(QStringLiteral("Zeile nach oben verschieben"));
-		up_btn->setAccessibleName(QStringLiteral("Zeile nach oben verschieben"));
-		up_btn->setProperty("class", "iconbtn");
-		auto *down_btn = new QPushButton(card_widget);
-		down_btn->setObjectName(QStringLiteral("tbRowDown"));
-		down_btn->setFixedSize(btn_sz, btn_sz);
-		down_btn->setIcon(theme_icon("arrow_down.svg"));
-		down_btn->setIconSize(QSize(22, 22));
-		down_btn->setToolTip(QStringLiteral("Zeile nach unten verschieben"));
-		down_btn->setAccessibleName(QStringLiteral("Zeile nach unten verschieben"));
-		down_btn->setProperty("class", "iconbtn");
-		QObject::connect(up_btn, &QPushButton::clicked, card_widget,
-				 [move_row, ledit]() { (*move_row)(ledit, -1); });
-		QObject::connect(down_btn, &QPushButton::clicked, card_widget,
-				 [move_row, ledit]() { (*move_row)(ledit, +1); });
+		auto *drag_bar = new DragBar(btn_sz, card_widget);
+		drag_bar->move_cb = [move_row, ledit](int dir) { (*move_row)(ledit, dir); };
 		if (*rows_collapsed) {
 			ledit->setVisible(false);
 			vedit->setVisible(false);
-			up_btn->setVisible(false);
-			down_btn->setVisible(false);
+			drag_bar->setVisible(false);
 		}
 		row->addWidget(ledit);
 		row->addWidget(vedit, 1);
-		row->addWidget(up_btn);
-		row->addWidget(down_btn);
+		row->addWidget(drag_bar);
 		rows_layout->addLayout(row);
-		move_btns->push_back(up_btn);
-		move_btns->push_back(down_btn);
+		move_btns->push_back(drag_bar);
 		return std::make_pair(ledit, vedit);
 	};
 
@@ -1296,10 +1504,8 @@ QListWidgetItem *TextboxDock::create_row_item(const TextboxCard &card)
 			}
 			label_edits->pop_back();
 			value_edits->pop_back();
-			if (move_btns->size() >= 2) {
+			if (!move_btns->empty())
 				move_btns->pop_back();
-				move_btns->pop_back();
-			}
 			if (collect_rows())
 				schedule_save();
 		});
