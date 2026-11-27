@@ -134,6 +134,9 @@ void send_to_current_scene(const TextboxCard &card, const TextboxSettings &setti
 	const std::string name = source_name(card.id);
 	obs_sceneitem_t *item = find_card_sceneitem(scene, card.id, true);
 	if (item) {
+		// Live-Push: Karten-Item wird beim Senden sichtbar gemacht — aus Crash-/Disk-Restores
+		// kommen Items gem mit enabled=false und würden sonst unsichtbar gepusht.
+		obs_sceneitem_set_visible(item, true);
 		obs_source_t *src = obs_sceneitem_get_source(item);
 		if (is_browser_source(src)) {
 			// IMP-S: ältere Quellen ohne "Listen for events" selbst-heilen,
@@ -175,6 +178,9 @@ void send_to_current_scene(const TextboxCard &card, const TextboxSettings &setti
 		if (src) {
 			item = obs_scene_add(scene, src);
 			if (item) {
+				// Live-Push: Karten-Item wird beim Senden sichtbar gemacht — aus Crash-/Disk-Restores
+				// kommen Items gem mit enabled=false und würden sonst unsichtbar gepusht.
+				obs_sceneitem_set_visible(item, true);
 				struct vec2 pos = {0.0f, 0.0f};
 				struct obs_video_info ovi;
 				if (obs_get_video_info(&ovi)) {
