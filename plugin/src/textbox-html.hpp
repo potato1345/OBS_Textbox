@@ -28,6 +28,12 @@ std::string cards_dir();
 // Pfad-Traversierung aus geladenem oder importiertem JSON.
 std::string sanitize_card_id(const std::string &id);
 
+// Live-Update-Listener-Script (javascript_event → CustomEvent): zwei getrennte
+// Loops — erst positionell (--zeile-N), dann label-gebunden (d.vn); die
+// Labelbindung gewinnt nach Drag-Reorder. Öffentliche Deklaration für den
+// Regressionstest repo_listener_two_pass (test-textbox-html.cpp).
+std::string build_repo_listener_script();
+
 // Verzeichnis der user-Templates: <plugin_config>/textbox-studio/templates/
 // Basis wie cards_dir() (obs_module_config_path("textbox-state.json").parent_path()),
 // im Test-Modus (TEXTBOX_TEST_NO_OBS) temp_directory_path()/textbox_templates_test.

@@ -61,6 +61,8 @@ constexpr const char *kRepoTextboxPath = "";
 // Fallback-Template) und wird über --tb-rainbow / --triangle-background
 // gesteuert; das Plugin injectiert nur noch Variablen.
 
+} // namespace (anon — endet hier; Listener ist public für den Regressionstest)
+
 std::string build_repo_listener_script()
 {
 	std::string s =
@@ -120,6 +122,8 @@ std::string build_repo_listener_script()
 	     "</script>\n";
 	return s;
 }
+
+namespace {
 
 // Escaped HTML-Sonderzeichen (& < > " ').
 std::string escape_html(const std::string &input)
