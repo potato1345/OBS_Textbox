@@ -798,9 +798,8 @@ TextboxDock::TextboxDock(const std::string &state_path, QWidget *parent) : QFram
 			return;
 		TextboxCard card = std::move(state_.cards[src]);
 		state_.cards.erase(state_.cards.begin() + src);
-		// Nach dem Löschen verschiebt sich target_row um 1, falls nötig
-		if (target_row > src)
-			--target_row;
+		// Zielreihe ist eine Zeile im sichtbaren Modell: das Item soll am
+		// Drop-Ziel landen -> direkt an target_row einfügen (kein Dekrement).
 		state_.cards.insert(state_.cards.begin() + target_row, std::move(card));
 		save_state();
 		rebuild_rows();
