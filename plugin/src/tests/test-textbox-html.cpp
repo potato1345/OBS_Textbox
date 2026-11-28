@@ -462,6 +462,26 @@ int main()
 		std::filesystem::remove_all(tmp_dir, ec);
 	}
 
+	// 7. repo_listener_two_pass: build_repo_listener_script() hat zwei getrennte Loops
+	{
+		const std::string script = textbox_html::build_repo_listener_script();
+		bool has_old_bug = script.find("if (d.vn && d.vn[i]) setVar(d.vn[i]") != std::string::npos;
+		bool has_separate_vn_loop = script.find("for (var i = 0; i < d.vn.length && i < 8; i++)") != std::string::npos;
+		// Find index of first positional setVar and vn-loop
+		std::size_t pos_first_setvar = script.find("setVar(\"--zeile-\" + (i + 1)");
+		std::size_t pos_vn_loop = script.find("for (var i = 0; i < d.vn.length && i < 8; i++)");
+		bool positional_before_vn = pos_first_setvar != std::string::npos &&
+			pos_vn_loop != std::string::npos && pos_first_setvar < pos_vn_loop;
+		check(!has_old_bug,
+		      "7a. repo_listener_two_pass: alter Bug-Anker 'if (d.vn && d.vn[i]) setVar(d.vn[i]' NICHT enthalten");
+		check(has_separate_vn_loop,
+		      "7b. repo_listener_two_pass: separater vn-Loop 'for (var i = 0; i < d.vn.length && i < 8; i++)' ist enthalten");
+		check(positional_before_vn,
+		      "7c. repo_listener_two_pass: positionelles setVar vor vn-Loop (erster Durchlauf vor zweitem)",
+		      "pos_first_setvar=" + std::to_string(pos_first_setvar) +
+		      " pos_vn_loop=" + std::to_string(pos_vn_loop));
+	}
+
 	if (g_failures > 0) {
 		std::cerr << g_failures << " check(s) failed.\n";
 		return 1;
