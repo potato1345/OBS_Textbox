@@ -418,17 +418,62 @@ TextboxCard make_default_card(std::size_t i)
 }
 
 // SearchReorderView — Drag-Reorder im Karten-Suche-Popup (QComboBox Dropdown).
+// Jede Zeile hat rechts ein Drag-Handle (zwei horizontale Striche). Drag startet
+// NUR, wenn mousePressEvent in der Handle-Spalte (x >= rect.right() - 34) liegt.
+// Klick außerhalb = normale Auswahl.
 class SearchReorderView : public QListView {
 public:
 	std::function<void(const std::string &, int)> reorder_cb;
 
 protected:
+	void paintEvent(QPaintEvent *event) override
+	{
+		QListView::paintEvent(event);
+		QPainter p(viewport()); // Qt 6.11: visualRect liefert Viewport-Koordinaten
+		p.setRenderHint(QPainter::Antialiasing);
+		const bool dark = qApp && qApp->palette().color(QPalette::Window).red() +
+				  qApp->palette().color(QPalette::Window).green() +
+				  qApp->palette().color(QPalette::Window).blue() < 384;
+		p.setPen(Qt::NoPen);
+		const int handle_w = 22;
+		const int handle_h = 2;
+		const int gap = 6;
+		const int margin_right = 10;
+		for (int i = 0; i < model()->rowCount(); ++i) {
+			QRect r = visualRect(model()->index(i, 0));
+			if (!r.isValid() || r.bottom() < 0 || r.top() > viewport()->height())
+				continue;
+			const bool is_dragged = (i == drag_row_ && drag_active_);
+			QColor line_color;
+			if (dark) {
+				line_color = is_dragged ? QColor(QStringLiteral("#C8CED8"))
+							: QColor(QStringLiteral("#969696"));
+			} else {
+				line_color = is_dragged ? QColor(QStringLiteral("#3A3A3A"))
+							: QColor(QStringLiteral("#6B6B6B"));
+			}
+			p.setBrush(line_color);
+			const int x = r.right() - margin_right - handle_w;
+			const int cy = r.center().y();
+			p.drawRect(x, cy - gap / 2 - handle_h / 2, handle_w, handle_h);
+			p.drawRect(x, cy + gap / 2 - handle_h / 2, handle_w, handle_h);
+		}
+	}
+
 	void mousePressEvent(QMouseEvent *event) override
 	{
 		if (event->button() == Qt::LeftButton) {
-			drag_row_ = indexAt(event->pos()).row();
-			drag_press_pos_ = event->pos();
-			drag_active_ = false;
+			const int row = indexAt(event->pos()).row();
+			if (row >= 0) {
+				QRect r = visualRect(model()->index(row, 0));
+				if (event->pos().x() >= r.right() - 34) {
+					// Handle-Spalte: Drag starten, Basis nicht aufrufen
+					drag_row_ = row;
+					drag_press_pos_ = event->pos();
+					drag_active_ = false;
+					return;
+				}
+			}
 		}
 		QListView::mousePressEvent(event);
 	}
@@ -451,7 +496,21 @@ protected:
 					drag_row_ = target;
 				}
 			}
-			return; // Basis NICHT aufrufen während Drag
+			return;
+		}
+		// Ohne Buttons: Cursor über Handle-Spalte = OpenHand
+		if (!(event->buttons() & Qt::LeftButton)) {
+			const int row = indexAt(event->pos()).row();
+			if (row >= 0) {
+				QRect r = visualRect(model()->index(row, 0));
+				if (event->pos().x() >= r.right() - 34) {
+					viewport()->setCursor(Qt::OpenHandCursor);
+				} else {
+					viewport()->setCursor(Qt::ArrowCursor);
+				}
+			} else {
+				viewport()->setCursor(Qt::ArrowCursor);
+			}
 		}
 		QListView::mouseMoveEvent(event);
 	}
@@ -461,6 +520,7 @@ protected:
 		if (drag_active_) {
 			drag_active_ = false;
 			drag_row_ = -1;
+			update(); // Handle-Farben zurücksetzen
 			return;
 		}
 		QListView::mouseReleaseEvent(event);
@@ -499,42 +559,7 @@ bool reconcile_profiles_after_delete(TextboxState &state)
 
 // ── CardListWidget method implementations ──────────────────────────────────
 
-void CardListWidget::mousePressEvent(QMouseEvent *event)
-{
-	if (event->button() == Qt::LeftButton) {
-		const int row = indexAt(event->pos()).row();
-		if (row >= 0) {
-			drag_row_ = row;
-			drag_press_pos = event->pos();
-		}
-	}
-	QListWidget::mousePressEvent(event); // native selection beibehalten
-}
-
-void CardListWidget::mouseReleaseEvent(QMouseEvent *event)
-{
-	drag_row_ = -1;
-	QListWidget::mouseReleaseEvent(event);
-}
-
-void CardListWidget::mouseMoveEvent(QMouseEvent *event)
-{
-	if (drag_row_ >= 0 && (event->buttons() & Qt::LeftButton)) {
-		int target = indexAt(event->pos()).row();
-		if (target < 0)
-			target = (event->pos().y() < 0) ? 0 : count() - 1;
-		if (target != drag_row_) {
-			QListWidgetItem *it = takeItem(drag_row_);
-			insertItem(target, it);
-			drag_row_ = target;
-			const std::string id = it->data(Qt::UserRole).toString().toStdString();
-			if (reorder_cb)
-				reorder_cb(id, target);
-		}
-		return;
-	}
-	QListWidget::mouseMoveEvent(event);
-}
+// CardListWidget drag-reorder ENTFERNT — Sortierung nur noch über SearchReorderView.
 
 void CardListWidget::wheelEvent(QWheelEvent *event)
 {
@@ -566,30 +591,6 @@ void CardListWidget::wheelEvent(QWheelEvent *event)
 		});
 	scroll_anim_->start();
 	event->accept();
-}
-
-bool CardListWidget::eventFilter(QObject *obj, QEvent *event)
-{
-	QWidget *w = qobject_cast<QWidget *>(obj);
-	if (!w || w->objectName() != QStringLiteral("tbDragHandle"))
-		return QListWidget::eventFilter(obj, event);
-
-	if (event->type() == QEvent::MouseButtonPress) {
-		auto *me = static_cast<QMouseEvent *>(event);
-		if (me->buttons() & Qt::LeftButton) {
-			// Walk parent chain to the top-level row widget inside the viewport
-			QWidget *parent = w;
-			while (parent && parent->parentWidget() != viewport())
-				parent = parent->parentWidget();
-			if (parent) {
-				const QPoint vp_origin = parent->mapTo(viewport(), QPoint(0, 0));
-				drag_row_ = indexAt(vp_origin).row();
-				drag_press_pos = viewport()->mapFromGlobal(me->globalPosition()).toPoint();
-			}
-		}
-		return false; // let event propagate to mousePressEvent etc.
-	}
-	return QListWidget::eventFilter(obj, event);
 }
 
 #ifdef ENABLE_FRONTEND_API
@@ -804,7 +805,6 @@ TextboxDock::TextboxDock(const std::string &state_path, QWidget *parent) : QFram
 		save_state();
 		rebuild_rows();
 	};
-	tbCardList_->reorder_cb = reorder_cards;
 	// SearchReorderView reorder_cb jetzt setzen (View wurde schon vorher erstellt)
 	// static_cast ist safe, da wir den View selbst erstellt haben.
 	if (auto *ov = static_cast<SearchReorderView *>(card_search_->view()))
@@ -854,79 +854,7 @@ TextboxDock::TextboxDock(const std::string &state_path, QWidget *parent) : QFram
 	QAction *act_restore = settings_menu->addAction(QStringLiteral("Backup wiederherstellen"));
 	tool_settings->setMenu(settings_menu);
 
-	auto make_text_tool_btn = [this, btn_icon_sz](const QString &obj_name, const QString &text,
-						     const QString &tooltip) -> QPushButton * {
-		auto *btn = new QPushButton(this);
-		btn->setObjectName(obj_name);
-		btn->setFixedSize(btn_icon_sz, btn_icon_sz);
-		btn->setText(text);
-		btn->setToolTip(tooltip);
-		btn->setAccessibleName(tooltip);
-		btn->setProperty("class", "iconbtn");
-		return btn;
-	};
-
-	tool_up_ = make_text_tool_btn(QStringLiteral("tbToolUp"), QStringLiteral("↑"),
-				      QStringLiteral("Karte nach oben verschieben"));
-	tool_up_->setText(QString());
-	tool_up_->setIcon(theme_icon("arrow_up.svg"));
-	tool_up_->setIconSize(QSize(18, 18));
-	tool_up_->setEnabled(false);
-
-	tool_down_ = make_text_tool_btn(QStringLiteral("tbToolDown"), QStringLiteral("↓"),
-				      QStringLiteral("Karte nach unten verschieben"));
-	tool_down_->setText(QString());
-	tool_down_->setIcon(theme_icon("arrow_down.svg"));
-	tool_down_->setIconSize(QSize(18, 18));
-	tool_down_->setEnabled(false);
-
-	auto move_selected = [this](int direction) {
-		const auto sel = tbCardList_->selectionModel()->selectedIndexes();
-		if (sel.isEmpty())
-			return;
-		const int row = sel.first().row();
-		const int sz = static_cast<int>(state_.cards.size());
-		const int target = row + direction;
-		if (target < 0 || target >= sz)
-			return;
-		const std::string id = state_.cards[row].id;
-		// Use the same reorder path as reorder_cb
-		TextboxCard card = std::move(state_.cards[row]);
-		state_.cards.erase(state_.cards.begin() + row);
-		state_.cards.insert(state_.cards.begin() + target, std::move(card));
-		save_state();
-		rebuild_rows();
-		// Keep selection on the moved card
-		for (int i = 0; i < tbCardList_->count(); ++i) {
-			QListWidgetItem *it = tbCardList_->item(i);
-			if (it && it->data(Qt::UserRole).toString() == QString::fromUtf8(id.c_str())) {
-				tbCardList_->setCurrentItem(it);
-				break;
-			}
-		}
-	};
-
-	connect(tool_up_, &QPushButton::clicked, this, [move_selected]() { move_selected(-1); });
-	connect(tool_down_, &QPushButton::clicked, this, [move_selected]() { move_selected(1); });
-
-	// Enable/disable up/down based on current selection
-	connect(tbCardList_->selectionModel(), &QItemSelectionModel::selectionChanged, this,
-		[this]() {
-			const auto sel = tbCardList_->selectionModel()->selectedIndexes();
-			if (sel.isEmpty()) {
-				tool_up_->setEnabled(false);
-				tool_down_->setEnabled(false);
-				return;
-			}
-			const int row = sel.first().row();
-			const int sz = static_cast<int>(state_.cards.size());
-			tool_up_->setEnabled(row > 0);
-			tool_down_->setEnabled(row < sz - 1);
-		});
-
 	bottom_toolbar->addWidget(tool_add);
-	bottom_toolbar->addWidget(tool_up_);
-	bottom_toolbar->addWidget(tool_down_);
 	bottom_toolbar->addWidget(tool_undo);
 	bottom_toolbar->addWidget(tool_import);
 	bottom_toolbar->addWidget(tool_settings);
@@ -1311,15 +1239,8 @@ QListWidgetItem *TextboxDock::create_row_item(const TextboxCard &card)
 	del_btn->setAccessibleName(QStringLiteral("Karte löschen"));
 	del_btn->setProperty("tbDanger", true);
 
-	auto *drag_handle = new QLabel(QStringLiteral("⋮"), id_bar);
-	drag_handle->setObjectName(QStringLiteral("tbDragHandle"));
-	drag_handle->setCursor(Qt::SizeAllCursor);
-	drag_handle->setToolTip(QStringLiteral("Karte per Drag verschieben"));
-	drag_handle->installEventFilter(tbCardList_);
-
-	id_layout->addWidget(drag_handle);
 	id_layout->addWidget(id_prefix, 0, Qt::AlignVCenter);
-		id_layout->addWidget(id_edit, 1, Qt::AlignVCenter);
+	id_layout->addWidget(id_edit, 1, Qt::AlignVCenter);
 	id_layout->addWidget(style_toggle_btn);
 	id_layout->addWidget(dup_btn);
 	id_layout->addWidget(del_btn);
