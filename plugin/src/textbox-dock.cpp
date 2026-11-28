@@ -132,28 +132,13 @@ protected:
 
 	void mousePressEvent(QMouseEvent *event) override
 	{
-		// Qt-Cache ist bei Synthetic-Input stale — Win32-Cursor als Quelle.
-		const int rel_y = win_cursor_rel_y();
-		tb_log(QStringLiteral("[DragBar] press y=%1 cursor_rel=%2 gx=%3 gy=%4").arg(event->position().y()).arg(rel_y).arg(mapToGlobal(QPoint(0,0)).x()).arg(mapToGlobal(QPoint(0,0)).y()).toStdString());
 		if (event->button() == Qt::LeftButton) {
 			setCursor(Qt::ClosedHandCursor);
-			press_y_ = rel_y;
+			press_y_ = event->position().y();
 			pressed_ = true;
 			update();
 		}
 		QPushButton::mousePressEvent(event);
-	}
-
-	int win_cursor_rel_y() const
-	{
-#ifdef _WIN32
-		POINT p;
-		if (GetCursorPos(&p)) {
-			const QPoint g = mapToGlobal(QPoint(0, 0));
-			return p.y - g.y();
-		}
-#endif
-		return mapFromGlobal(QCursor::pos()).y();
 	}
 
 	void mouseMoveEvent(QMouseEvent *event) override
@@ -171,17 +156,9 @@ protected:
 
 	void mouseReleaseEvent(QMouseEvent *event) override
 	{
-		// Qt6 auf Windows speist Bewegungen über RawInput; Posting/relative Moves
-		// erreichen das Widget nicht. echten Cursor-Position als Quelle verwenden.
-		const int rel_y = win_cursor_rel_y();
-		tb_log(QStringLiteral("[DragBar] release y=%1 press_y=%2 cursor_dy=%3").arg(rel_y).arg(press_y_).arg(rel_y - press_y_).toStdString());
-		if (event->button() == Qt::LeftButton) {
-			const float dy = rel_y - press_y_;
-			if (std::abs(dy) >= 20.0f) {
-				if (move_cb)
-					move_cb(dy < 0 ? -1 : +1);
-			}
-		}
+		// Verschieben erfolgt ausschließlich über mouseMoveEvent (>=20px pro
+		// Schritt). Release-Auswertung per Win32-Cursor war unter deskflow
+		// unzuverlässig (echter Cursor snappt zurück) und doppelt firete.
 		setCursor(Qt::OpenHandCursor);
 		press_y_ = 0;
 		pressed_ = false;
@@ -423,9 +400,32 @@ TextboxCard make_default_card(std::size_t i)
 // Klick außerhalb = normale Auswahl.
 class SearchReorderView : public QListView {
 public:
-	std::function<void(const std::string &, int)> reorder_cb;
+	std::function<void(const std::string &, int)> reorder_cb; // (id, target_row)
+	std::function<void()> end_cb; // Release nach aktivem Drag → save + Rebuild
+	bool drag_pending = false; // Drag fand statt, Save noch offen
 
 protected:
+	void showEvent(QShowEvent *event) override
+	{
+		// Filter auf den Popup-Container: dessen Hide-Event ist garantiert,
+		// wenn das Popup geschlossen wird (Kind-Views bekommen kein HideEvent).
+		if (auto *cont = parentWidget())
+			cont->installEventFilter(this);
+		QListView::showEvent(event);
+	}
+
+	bool eventFilter(QObject *obj, QEvent *ev) override
+	{
+		if (ev->type() == QEvent::Hide && obj == parentWidget() && drag_pending) {
+			drag_pending = false;
+			drag_active_ = false;
+			drag_row_ = -1;
+			if (end_cb)
+				end_cb();
+		}
+		return QListView::eventFilter(obj, ev);
+	}
+
 	void paintEvent(QPaintEvent *event) override
 	{
 		QListView::paintEvent(event);
@@ -488,11 +488,16 @@ protected:
 					target = (event->pos().y() < 0) ? 0 : model()->rowCount() - 1;
 				if (target >= 0 && target != drag_row_) {
 					const QString id_str = model()->index(drag_row_, 0)
-								       .data(Qt::UserRole)
-								       .toString();
+						       .data(Qt::UserRole)
+						       .toString();
 					const std::string id = id_str.toStdString();
-					if (reorder_cb && !id.empty())
+					if (reorder_cb && !id.empty()) {
 						reorder_cb(id, target);
+						// QComboBox-Popup-Container frisst die Release-Event,
+						// darum sieht der View evtl. kein mouseReleaseEvent:
+						// Save wird im hideEvent nachgeholt.
+						drag_pending = true;
+					}
 					drag_row_ = target;
 				}
 			}
@@ -517,13 +522,34 @@ protected:
 
 	void mouseReleaseEvent(QMouseEvent *event) override
 	{
-		if (drag_active_) {
+		if (drag_active_ || drag_pending) {
+			const bool was_drag = drag_active_ || drag_pending;
 			drag_active_ = false;
 			drag_row_ = -1;
+			drag_pending = false;
 			update(); // Handle-Farben zurücksetzen
+			// Nach echtem Drag erst jetzt speichern + Liste neu bauen.
+			// Während des Drags baut reorder_cards nur inplace um, damit die
+			// Karte dem Cursor sofort folgt statt erst nach Sekunden.
+			if (was_drag && end_cb)
+				end_cb();
 			return;
 		}
 		QListView::mouseReleaseEvent(event);
+	}
+
+	void hideEvent(QHideEvent *event) override
+	{
+		// Der QComboBox-Popup-Container verschluckt die Release-Event —
+		// wenn das Popup schließt, ist der Save spätestens hier fällig.
+		if (drag_pending) {
+			drag_pending = false;
+			drag_active_ = false;
+			drag_row_ = -1;
+			if (end_cb)
+				end_cb();
+		}
+		QListView::hideEvent(event);
 	}
 
 private:
@@ -563,20 +589,51 @@ bool reconcile_profiles_after_delete(TextboxState &state)
 
 void CardListWidget::wheelEvent(QWheelEvent *event)
 {
-	QScrollBar *bar = verticalScrollBar();
-	const int target = std::clamp(bar->value() - (event->angleDelta().y() / 120) * 60,
-				      bar->minimum(), bar->maximum());
+	// Der Dock-ScrollArea (OBS-Dock-Wrapper) scrollt den sichtbaren Inhalt —
+	// die Liste selbst hat nur einen Mini-Scroll (Johann 28.11: Scroll sprang
+	// über die Dock-Bar ans Ende). Wheel immer an die animierte Dock-Bar geben.
+	QScrollBar *bar = nullptr;
+	QWidget *w = parentWidget();
+	while (w) {
+		if (auto *sa = qobject_cast<QScrollArea *>(w)) {
+			QScrollBar *ab = sa->verticalScrollBar();
+			if (ab->maximum() > 0) {
+				bar = ab;
+				break;
+			}
+		}
+		w = w->parentWidget();
+	}
+	if (!bar)
+		bar = verticalScrollBar();
+	if (bar->maximum() == 0) {
+		QListWidget::wheelEvent(event); // nichts scrollbar → normal durchreichen
+		return;
+	}
+	const int delta = event->angleDelta().y();
+	const QPointF pd = event->pixelDelta();
+	const int step = (pd.y() != 0.0) ? static_cast<int>(pd.y()) : (delta / 120) * 60;
+	if (delta == 0) {
+		QListWidget::wheelEvent(event);
+		return;
+	}
+	// Kumulierter Target: schnelle Wheel-Bursts ketten an der laufenden
+	// Animation weiter (simple glide), statt aus dem Zwischenwert neu zu
+	// springen — sonst wirkt jeder Burst als Sprung ans Ende (Johann 28.11).
+	const int base = (scroll_anim_ && scroll_anim_->state() == QTimeLine::Running)
+	               ? scroll_target_
+	               : bar->value();
+	const int target = std::clamp(base - step, bar->minimum(), bar->maximum());
+	scroll_target_ = target;
 	if (!scroll_anim_) {
-		scroll_anim_ = new QTimeLine(220, this);
+		scroll_anim_ = new QTimeLine(240, this);
 		scroll_anim_->setFrameRange(0, 100);
 		scroll_anim_->setEasingCurve(QEasingCurve::OutCubic);
 	}
 	if (scroll_anim_->state() == QTimeLine::Running)
 		scroll_anim_->stop();
-	if (bar->value() == target) {
-		bar->setValue(target);
+	if (bar->value() == target)
 		return;
-	}
 	const int start_v = bar->value();
 	// Vorherige Verbindungen trennen und neue mit aktuellem start_v anlegen
 	scroll_anim_->disconnect();
@@ -778,6 +835,8 @@ TextboxDock::TextboxDock(const std::string &state_path, QWidget *parent) : QFram
 	// Style-Default-Viewport-Margins (4,2) weg: sonst extra Luft über der ID-Zeile (Johann 27.11).
 	tbCardList_->set_viewport_margins(0, 0, 0, 0);
 	tbCardList_->setObjectName(QStringLiteral("tbCardList"));
+	// Eigene Mini-Scrollbar weg: scrollen läuft über die Dock-ScrollArea (Johann 28.11).
+	tbCardList_->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
 
 	auto reorder_cards = [this](const std::string &id, int target_row) {
 		// Karte mit id von ihrem aktuellen Index nach target_row verschieben
@@ -797,17 +856,34 @@ TextboxDock::TextboxDock(const std::string &state_path, QWidget *parent) : QFram
 		if (src == target_row)
 			return;
 		TextboxCard card = std::move(state_.cards[src]);
-		state_.cards.erase(state_.cards.begin() + src);
-		// Zielreihe ist eine Zeile im sichtbaren Modell: das Item soll am
-		// Drop-Ziel landen -> direkt an target_row einfügen (kein Dekrement).
-		state_.cards.insert(state_.cards.begin() + target_row, std::move(card));
-		save_state();
-		rebuild_rows();
-	};
+			state_.cards.erase(state_.cards.begin() + src);
+			// Zielreihe ist eine Zeile im sichtbaren Modell: das Item soll am
+			// Drop-Ziel landen -> direkt an target_row einfügen (kein Dekrement).
+			state_.cards.insert(state_.cards.begin() + target_row, std::move(card));
+			// Live-Feedback während des Drags: Popup-Zeilen inplace umbauen
+			// (setItemText statt clear()+rebuild — sonst ~Sekunden pro Hover,
+			// weil jedes Reorder die ganze Liste + das Popup neu baut).
+			if (card_search_) {
+				const QSignalBlocker blocker(card_search_);
+				for (int i = 0; i < static_cast<int>(state_.cards.size()); ++i) {
+					if (i < card_search_->count()) {
+						const QString id_q = QString::fromUtf8(state_.cards[i].id.c_str());
+						card_search_->setItemText(i, card_search_label(id_q,
+						                               QString::fromUtf8(state_.cards[i].zeile3.c_str())));
+						// UserRole muss mitziehen, sonst greift der Drag beim
+						// zweiten Move die alte ID der Zeile (Kaskaden-Reorder).
+						card_search_->setItemData(i, id_q, Qt::UserRole);
+					}
+				}
+			}
+		};
 	// SearchReorderView reorder_cb jetzt setzen (View wurde schon vorher erstellt)
 	// static_cast ist safe, da wir den View selbst erstellt haben.
-	if (auto *ov = static_cast<SearchReorderView *>(card_search_->view()))
+	if (auto *ov = static_cast<SearchReorderView *>(card_search_->view())) {
 		ov->reorder_cb = reorder_cards;
+		// Release nach Drag: jetzt erst speichern + Kartenliste neu bauen.
+		ov->end_cb = [this]() { save_state(); rebuild_rows(); };
+	}
 
 	root_layout->addWidget(tbCardList_, 1);
 
@@ -1115,7 +1191,15 @@ void TextboxDock::refreshTheme()
 			" border: 1px solid #5B6273; }"
 			"QComboBox QAbstractItemView { background-color: #1D1F26; color: #FFFFFF;"
 			" border: 1px solid #5B6273; selection-background-color: #464B59;"
-			" selection-color: #FFFFFF; }"));
+			" selection-color: #FFFFFF; }"
+			/* Johann 28.11: nichts färbt sich blau — Zeilen sind immer grau;
+			 * Theme-Hover und Selection-Blau sind neutralisiert. */
+			"QListWidget::item { background-color: #464B59; color: #FFFFFF; border: none; }"
+			"QListWidget::item:hover { background-color: #464B59; border: none; }"
+			"QListWidget::item:selected { background-color: #464B59; color: #FFFFFF; border: none; }"
+			"QComboBox QAbstractItemView::item { background-color: #464B59; color: #FFFFFF; }"
+			"QComboBox QAbstractItemView::item:hover { background-color: #464B59; }"
+			"QComboBox QAbstractItemView::item:selected { background-color: #464B59; color: #FFFFFF; }"));
 	} else {
 		setStyleSheet(QString());
 	}
@@ -1128,6 +1212,7 @@ void TextboxDock::refreshTheme()
 	rebuild_rows();
 	blog(LOG_INFO, "[textbox] Theme refresh%s", dark ? " (dark)" : " (light)");
 }
+
 
 TextboxDock::~TextboxDock()
 {
@@ -1183,10 +1268,12 @@ QListWidgetItem *TextboxDock::create_row_item(const TextboxCard &card)
 	auto *card_widget = new QWidget(this);
 	card_widget->setProperty("tbCardId", QString::fromUtf8(card.id.c_str()));
 	card_widget->setMinimumWidth(fontMetrics().averageCharWidth() * 28);
-	card_widget->setAttribute(Qt::WA_TransparentForMouseEvents);
+	// KEIN WA_TransparentForMouseEvents: sonst fallen alle Clicks durch die
+	// Karte durch in den Viewport (QListWidget-Selektion = blau, Edit-Felder
+	// und DragBars empfangen nie Mouse-Events — genau die gemeldeten Bugs).
 
 	auto *inner_layout = new QVBoxLayout(card_widget);
-	inner_layout->setContentsMargins(6, 0, 6, 4);
+	inner_layout->setContentsMargins(6, 0, 6, 2);
 	inner_layout->setSpacing(3);
 
 	auto *id_bar = new QFrame(card_widget);
@@ -1270,7 +1357,6 @@ QListWidgetItem *TextboxDock::create_row_item(const TextboxCard &card)
 	// Vertikal nie über sizeHint wachsen — Item-Stretch darf Zeilen nicht auseinanderziehen.
 	rows_frame->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Maximum);
 	rows_frame->setAttribute(Qt::WA_StyledBackground, true);
-	rows_frame->setAttribute(Qt::WA_TransparentForMouseEvents);
 	auto *rows_layout = new QVBoxLayout(rows_frame);
 	rows_layout->setContentsMargins(4, 0, 4, 2);
 	rows_layout->setSpacing(2);
@@ -1567,7 +1653,6 @@ QListWidgetItem *TextboxDock::create_row_item(const TextboxCard &card)
 	auto *css_frame = new QGroupBox(QStringLiteral("▶ GENERELLE CSS-REGELN"), style_section);
 	css_frame->setObjectName(QStringLiteral("tbCssRules"));
 	css_frame->setAttribute(Qt::WA_StyledBackground, true);
-	css_frame->setAttribute(Qt::WA_TransparentForMouseEvents);
 	auto *css_layout = new QVBoxLayout(css_frame);
 	css_layout->setContentsMargins(4, 2, 4, 4);
 	css_layout->setSpacing(4);
@@ -1652,6 +1737,7 @@ QListWidgetItem *TextboxDock::create_row_item(const TextboxCard &card)
 		QLineEdit *name_edit = nullptr;
 		QComboBox *type_combo = nullptr;
 		QWidget *value_widget = nullptr;
+		QWidget *drag_bar = nullptr;
 		QHBoxLayout *row_layout = nullptr;
 		std::function<QString()> getter;
 	};
@@ -1668,6 +1754,8 @@ QListWidgetItem *TextboxDock::create_row_item(const TextboxCard &card)
 			r.name_edit->setVisible(!*css_collapsed);
 			r.type_combo->setVisible(!*css_collapsed);
 			r.value_widget->setVisible(!*css_collapsed);
+			if (r.drag_bar)
+				r.drag_bar->setVisible(!*css_collapsed);
 		}
 	});
 
@@ -1825,7 +1913,7 @@ QListWidgetItem *TextboxDock::create_row_item(const TextboxCard &card)
 			}};
 	};
 
-	auto make_rule_row = [this, fh, css_frame, css_layout, css_rows, css_var_model, build_value_widget, collect_css,
+	auto make_rule_row = [this, fh, btn_sz, css_frame, css_layout, css_rows, css_var_model, build_value_widget, collect_css,
 			      schedule_save,
 			      css_collapsed](const QString &name, const QString &type, const QString &value) {
 		auto *row = new QHBoxLayout();
@@ -1876,17 +1964,57 @@ QListWidgetItem *TextboxDock::create_row_item(const TextboxCard &card)
 		row->addWidget(r.name_edit, 3);
 		row->addWidget(r.value_widget, 4);
 		row->addWidget(r.type_combo);
+		// Drag-Handle für Regelzeilen (Johann 28.11: verschiebbar machen).
+		auto *css_drag = new DragBar(btn_sz, css_frame);
+		css_drag->setToolTip(QStringLiteral("Ziehen: CSS-Regel nach oben oder unten verschieben"));
+		css_drag->move_cb = [css_rows, css_layout, nedit, collect_css, schedule_save](int dir) {
+			// Index immer per Widget-Zeiger suchen — er ändert sich nach jedem Tausch.
+			size_t i = 0;
+			bool found = false;
+			for (; i < css_rows->size(); ++i)
+				if ((*css_rows)[i].name_edit == nedit) {
+					found = true;
+					break;
+				}
+			if (!found)
+				return;
+			const int j = static_cast<int>(i) + dir;
+			if (j < 0 || j >= static_cast<int>(css_rows->size()))
+				return;
+			std::swap((*css_rows)[i], (*css_rows)[j]);
+			// Layout-Zeilen physisch tauschen (Index 0 = Kopfbar, Zeilen ab 1).
+			QLayoutItem *a = css_layout->takeAt(static_cast<int>(i) + 1);
+			QLayoutItem *b = css_layout->takeAt(static_cast<int>(i) + 1);
+			css_layout->insertItem(static_cast<int>(i) + 1, b);
+			css_layout->insertItem(static_cast<int>(i) + 2, a);
+			if (collect_css())
+				schedule_save();
+		};
+		r.drag_bar = css_drag;
+		if (*css_collapsed)
+			css_drag->hide();
+		row->addWidget(css_drag);
 		css_layout->addLayout(row);
 		css_rows->push_back(r);
-		const int idx = static_cast<int>(css_rows->size()) - 1;
 
 		QObject::connect(nedit, &QLineEdit::textChanged, css_frame,
 				 [onchange](const QString &) { onchange(); });
 
 		// Typ-Wechsel: Wert-Widget neu aufbauen, bisherigen Wert übernehmen.
 		QObject::connect(tcombo, &QComboBox::textActivated, css_frame,
-				 [css_rows, build_value_widget, collect_css, schedule_save, idx]() {
-					 CssRuleRow &rr = css_rows->at(idx);
+			 [css_rows, build_value_widget, collect_css, schedule_save, nedit]() {
+				 // Zeiger-Suche statt captured idx — nach Drag-Tausch ist der
+				 // alte Index stale und würde die falsche Zeile neu aufbauen.
+				 size_t k = 0;
+				 bool found = false;
+				 for (; k < css_rows->size(); ++k)
+					 if ((*css_rows)[k].name_edit == nedit) {
+						found = true;
+						break;
+					}
+				 if (!found)
+					return;
+				 CssRuleRow &rr = css_rows->at(k);
 					 const QString old = rr.getter();
 					 QWidget *oldw = rr.value_widget;
 					 QHBoxLayout *lay = rr.row_layout;
@@ -2066,7 +2194,7 @@ QListWidgetItem *TextboxDock::create_row_item(const TextboxCard &card)
 	});
 
 	auto *actions_layout = new QHBoxLayout();
-	actions_layout->setContentsMargins(0, 4, 0, 0);
+	actions_layout->setContentsMargins(0, 2, 0, 0);
 	actions_layout->setSpacing(8);
 
 	auto *to_scene_btn = new QPushButton(QStringLiteral("Zu Szene"), card_widget);
@@ -2085,8 +2213,8 @@ QListWidgetItem *TextboxDock::create_row_item(const TextboxCard &card)
 	actions_layout->addWidget(clear_src_btn, 1);
 	inner_layout->addLayout(actions_layout);
 
-	// Überschuss vom Listen-Item sammelt sich unten — Content bleibt oben bündig.
-	inner_layout->addStretch(1);
+	// Kein Spacer unter den Buttons — Item-Höhe = Content-SizeHint, damit unter
+	// „Zu Szene“/„Leeren“ kein Rest-Spacing steht (Johann 28.11).
 
 	// activated fires only on USER selection — programmatic setCurrentIndex
 	// during UI rebuild must not re-apply the profile over baked card colors.

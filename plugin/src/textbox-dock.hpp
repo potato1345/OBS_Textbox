@@ -27,6 +27,7 @@
 #include <vector>
 
 #include <QListWidget>
+#include <QPointer>
 #include <QTimeLine>
 #include <QWheelEvent>
 
@@ -64,7 +65,9 @@ class QToolButton;
 class CardListWidget : public QListWidget {
 	Q_OBJECT
 public:
-	explicit CardListWidget(QWidget *parent = nullptr) : QListWidget(parent) {}
+	explicit CardListWidget(QWidget *parent = nullptr) : QListWidget(parent)
+	{
+	}
 	void set_viewport_margins(int l, int t, int r, int b) { setViewportMargins(l, t, r, b); }
 
 protected:
@@ -72,6 +75,7 @@ protected:
 
 private:
 	QTimeLine *scroll_anim_ = nullptr;
+	int scroll_target_ = 0;
 };
 
 /**
@@ -85,6 +89,8 @@ class TextboxDock : public QFrame {
 public:
 	explicit TextboxDock(const std::string &state_path, QWidget *parent = nullptr);
 	~TextboxDock() override;
+
+
 
 	// Self-healing: Karten mit Inhalt garantiert eine Browser-Quelle in der
 	// aktuellen Szene haben (läuft, sobald das Frontend geladen ist).
