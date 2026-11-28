@@ -439,11 +439,18 @@ protected:
 		const int handle_h = 2;
 		const int gap = 6;
 		const int margin_right = 10;
+		// Gezogene Zeile: helleres Grau als Flächen-Highlight (Johann 28.11).
+		const QColor drag_bg = dark ? QColor(QStringLiteral("#5A6172"))
+		                           : QColor(QStringLiteral("#C2C8D4"));
 		for (int i = 0; i < model()->rowCount(); ++i) {
 			QRect r = visualRect(model()->index(i, 0));
 			if (!r.isValid() || r.bottom() < 0 || r.top() > viewport()->height())
 				continue;
-			const bool is_dragged = (i == drag_row_ && drag_active_);
+			const bool is_dragged = (i == drag_row_ && drag_row_ >= 0);
+			if (is_dragged) {
+				p.setBrush(drag_bg);
+				p.drawRoundedRect(r.adjusted(2, 1, -2, -1), 3, 3);
+			}
 			QColor line_color;
 			if (dark) {
 				line_color = is_dragged ? QColor(QStringLiteral("#C8CED8"))
@@ -2037,8 +2044,18 @@ QListWidgetItem *TextboxDock::create_row_item(const TextboxCard &card)
 	auto rebuild_css_rows = [this, card_id, css_layout, css_frame, css_rows, make_rule_row, css_collapsed]() {
 		while (css_layout->count() > 1) {
 			QLayoutItem *it = css_layout->takeAt(1);
-			if (QWidget *w = it->widget())
+			// Die Regelzeilen sind SUB-LAYOUTS (QHBoxLayout) — nur die Hülle zu
+			// löschen ließ alle Widgets als Waisen im Frame stapeln (Johann 28.11:
+			// "ohne Abstand, Elemente ineinander"). Contents recursive entsorgen.
+			if (QLayout *sub = it->layout()) {
+				while (QLayoutItem *si = sub->takeAt(0)) {
+					if (QWidget *w = si->widget())
+						w->deleteLater();
+					delete si;
+				}
+			} else if (QWidget *w = it->widget()) {
 				w->deleteLater();
+			}
 			delete it;
 		}
 		css_rows->clear();
